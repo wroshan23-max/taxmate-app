@@ -1,0 +1,159 @@
+import { useEffect, useState } from 'react';
+import { supabase, fmtDate } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
+import { Plus, Bell, X, Trash2, Eye, EyeOff } from 'lucide-react';
+
+const tagColors = {
+  general: 'badge-blue',
+  deadline: 'badge-red',
+  rate_change: 'badge-yellow',
+  new_regulation: 'badge-green',
+};
+
+export default function TaxUpdates() {
+  const { user } = useAuth();
+  const [updates, setUpdates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modal, setModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ title: '', body: '', tag: 'general', published: true });
+
+  useEffect(() => { loadUpdates(); }, []);
+
+  const loadUpdates = async () => {
+    const { data } = await supabase
+      .from('tax_updates')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setUpdates(data ?? []);
+    setLoading(false);
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim() || !form.body.trim()) return toast.error('Title and body required');
+    setSaving(true);
+    const { error } = await supabase.from('tax_updates').insert({ ...form, created_by: user.id });
+    setSaving(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success('Update published!');
+    setModal(false);
+    setForm({ title: '', body: '', tag: 'general', published: true });
+    loadUpdates();
+  };
+
+  const togglePublished = async (id, current) => {
+    await supabase.from('tax_updates').update({ published: !current }).eq('id', id);
+    toast.success(!current ? 'Published' : 'Unpublished');
+    loadUpdates();
+  };
+
+  const deleteUpdate = async (id) => {
+    if (!confirm('Delete this update?')) return;
+    await supabase.from('tax_updates').delete().eq('id', id);
+    toast.success('Deleted');
+    loadUpdates();
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-primary-800">Tax Updates</h1>
+          <p className="text-sm text-gray-500">Notices visible to clients</p>
+        </div>
+        <button onClick={() => setModal(true)} className="btn-primary ml-auto">
+          <Plus size={16} /> Post Update
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {loading ? (
+          <div className="card p-8 text-center text-gray-400">Loading...</div>
+        ) : updates.length === 0 ? (
+          <div className="card p-12 text-center">
+            <Bell size={40} className="mx-auto text-gray-200 mb-3" />
+            <div className="text-gray-400">No updates posted yet</div>
+          </div>
+        ) : updates.map(u => (
+          <div key={u.id} className={`card p-4 ${!u.published ? 'opacity-60' : ''}`}>
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${tagColors[u.tag] ?? 'badge-gray'}`}>
+                    {u.tag?.replace('_', ' ')}
+                  </span>
+                  {!u.published && <span className="text-xs text-gray-400 italic">Draft</span>}
+                  <span className="text-xs text-gray-400 ml-auto">{fmtDate(u.created_at)}</span>
+                </div>
+                <h3 className="font-bold text-gray-800 mb-1">{u.title}</h3>
+                <p className="text-sm text-gray-600 whitespace-pre-line">{u.body}</p>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => togglePublished(u.id, u.published)}
+                  title={u.published ? 'Unpublish' : 'Publish'}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600 transition-colors"
+                >
+                  {u.published ? <Eye size={16} /> : <EyeOff size={16} />}
+                </button>
+                <button
+                  onClick={() => deleteUpdate(u.id)}
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {modal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b">
+              <h3 className="font-bold text-primary-800">Post Tax Update</h3>
+              <button onClick={() => setModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <form onSubmit={save} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Title *</label>
+                <input className="input" placeholder="e.g. IIT Filing Deadline Extended" value={form.title}
+                  onChange={e => setForm({...form, title: e.target.value})} required />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Body *</label>
+                <textarea className="input resize-none" rows={5} placeholder="Full update details..." value={form.body}
+                  onChange={e => setForm({...form, body: e.target.value})} required />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Category</label>
+                  <select className="input" value={form.tag} onChange={e => setForm({...form, tag: e.target.value})}>
+                    <option value="general">General</option>
+                    <option value="deadline">Deadline</option>
+                    <option value="rate_change">Rate Change</option>
+                    <option value="new_regulation">New Regulation</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Visibility</label>
+                  <select className="input" value={form.published ? 'yes' : 'no'} onChange={e => setForm({...form, published: e.target.value === 'yes'})}>
+                    <option value="yes">Published (visible to clients)</option>
+                    <option value="no">Draft (hidden)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setModal(false)} className="btn-secondary flex-1 justify-center">Cancel</button>
+                <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Posting...' : 'Post Update'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
