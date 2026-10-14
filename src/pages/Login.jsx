@@ -1,27 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
-  const { signIn, isAdmin, isClient } = useAuth();
+  const { signIn, user, profile, loading: authLoading, isAdmin, isClient } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Redirect when auth state is ready
+  useEffect(() => {
+    if (!authLoading && user && profile) {
+      if (isAdmin) navigate('/admin', { replace: true });
+      else if (isClient) navigate('/client', { replace: true });
+    }
+  }, [authLoading, user, profile, isAdmin, isClient, navigate]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const { error, data } = await signIn(email, password);
+    const { error } = await signIn(email, password);
     setLoading(false);
     if (error) {
       toast.error('Email හෝ Password වැරදිය: ' + error.message);
-      return;
     }
-    // Navigation handled by RootRedirect after auth state updates
+    // Navigation handled by useEffect above when auth state updates
   };
 
   return (
