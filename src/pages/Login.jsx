@@ -26,7 +26,7 @@ export default function Login() {
     const { error } = await signIn(email, password);
     setLoading(false);
     if (error) {
-      toast.error('Email හෝ Password වැරදිය: ' + error.message);
+      toast.error('Email හෛ Password වැරේ්ේ්: ' + error.message);
     }
     // Navigation handled by useEffect above when auth state updates
   };
