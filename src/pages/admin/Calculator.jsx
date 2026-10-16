@@ -33,10 +33,43 @@ function calcForeignTax(taxable) {
   };
 }
 
+// IRD Y/A 2024/25 (1 Apr 2024 – 31 Mar 2025) — Asmt_IIT_004_2024_2025 Annexure 7
+const PR_2425 = 1_200_000;
+const SLABS_2425 = [
+  { limit: 500_000, rate: 0.06 },
+  { limit: 500_000, rate: 0.12 },
+  { limit: 500_000, rate: 0.18 },
+  { limit: 500_000, rate: 0.24 },
+  { limit: 500_000, rate: 0.30 },
+  { limit: Infinity, rate: 0.36 },
+];
+
+// Year-specific rules used by the IIT Calculator
+const TAX_YEARS = {
+  '2024/25': { pr: PR_2425, slabs: SLABS_2425, foreignBankExempt: true,  slabText: '6% · 12% · 18% · 24% · 30% · 36% (Rs.500,000 bands)' },
+  '2025/26': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%' },
+  '2026/27': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%' },
+};
+
+// Concessionary terminal benefits (gratuity, pension commutation, ETF on retirement)
+// Annexure 6: 0% first Rs.10M, 6% next Rs.10M, 12% balance
+function terminalBenefitTax(amount) {
+  const a = Math.max(0, amount);
+  const b1 = Math.min(a, 10_000_000);
+  const b2 = Math.min(Math.max(0, a - 10_000_000), 10_000_000);
+  const b3 = Math.max(0, a - 20_000_000);
+  const bands = [
+    { label: 'First Rs.10,000,000 @ 0%', taxed: b1, tax: 0 },
+    { label: 'Next Rs.10,000,000 @ 6%', taxed: b2, tax: Math.round(b2 * 0.06) },
+    { label: 'Balance @ 12%', taxed: b3, tax: Math.round(b3 * 0.12) },
+  ].filter(x => x.taxed > 0);
+  return { tax: bands.reduce((s, x) => s + x.tax, 0), bands };
+}
+
 // Progressive graduated tax
-function graduatedTax(taxable) {
+function graduatedTax(taxable, slabs = SLABS) {
   let remaining = Math.max(0, taxable), tax = 0, detail = [];
-  for (const s of SLABS) {
+  for (const s of slabs) {
     if (remaining <= 0) break;
     const taxed = Math.min(remaining, s.limit);
     const t = Math.round(taxed * s.rate);
@@ -77,13 +110,14 @@ export default function Calculator() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-primary-800">Tax Calculator</h1>
-        <p className="text-sm text-gray-500">IRD Sri Lanka | Y/A 2025/26 &amp; 2026/27 | Personal Relief Rs. 1,800,000</p>
+        <p className="text-sm text-gray-500">IRD Sri Lanka | Y/A 2024/25 (PR Rs. 1,200,000) · 2025/26 &amp; 2026/27 (PR Rs. 1,800,000)</p>
       </div>
 
       {/* Main tab bar */}
-      <div className="flex gap-0 border-b border-gray-200">
+      <div className="flex gap-0 border-b border-gray-200 overflow-x-auto">
         {[
           { id: 'iit',     label: '🧮 IIT Calculator' },
+          { id: 'ret2425', label: '📑 IIT Return 2024/25' },
           { id: 'apit',    label: '📊 APIT/IIT 2026/27' },
           { id: 'monthly', label: '📅 Monthly Income' },
         ].map(t => (
@@ -102,6 +136,7 @@ export default function Calculator() {
       </div>
 
       {mainTab === 'iit'     && <IITTab clients={clients} user={user} />}
+      {mainTab === 'ret2425' && <Return2425Tab clients={clients} user={user} />}
       {mainTab === 'apit'    && <APitTab />}
       {mainTab === 'monthly' && <MonthlyTab />}
     </div>
@@ -144,19 +179,27 @@ function IITTab({ clients, user }) {
   const [qPaid,    setQPaid]    = useState('');
   const [qNo,      setQNo]      = useState('1');
 
+  // ── Year-specific rules ──
+  const cfg        = TAX_YEARS[year] ?? TAX_YEARS['2026/27'];
+  const yPR        = cfg.pr;
+  const fbExempt   = cfg.foreignBankExempt;          // 2024/25: foreign income remitted via bank is exempt
+  const forBankTx  = fbExempt ? 0 : v(forBank);
+  const startY     = parseInt(year.slice(0, 4), 10);
+  const prevYear   = `${startY - 1}/${String(startY).slice(2)}`;
+
   // ── Annual calculation ──
   const rentRel    = Math.round(v(rentGross) * 0.25);
   const rentNet    = v(rentGross) - rentRel;
   const stdIncome  = v(emp) + v(bonus) + v(biz) + v(cons) + rentNet + v(forOth) + v(othInc);
-  const totalAss   = stdIncome + v(forBank);
+  const totalAss   = stdIncome + forBankTx;
   const donAllowed = Math.min(v(donations), 75000, stdIncome > 0 ? stdIncome / 3 : 0);
   const solarAllow = Math.min(v(solar), 600000);
   const totalQP    = donAllowed + solarAllow + v(govtDon);
-  const totalDed   = PR + totalQP;
+  const totalDed   = yPR + totalQP;
   const taxableStd = Math.max(0, stdIncome - totalDed);
   const unusedDed  = Math.max(0, totalDed - stdIncome);
-  const taxableFB  = Math.max(0, v(forBank) - unusedDed);
-  const stdResult  = graduatedTax(taxableStd);
+  const taxableFB  = Math.max(0, forBankTx - unusedDed);
+  const stdResult  = graduatedTax(taxableStd, cfg.slabs);
   const fbResult   = calcForeignTax(taxableFB);
   const grossTax   = stdResult.tax + fbResult.tax;
   const totalWHT   = v(whtApit) + v(whtRent) + v(whtProf) + v(whtOth);
@@ -174,9 +217,15 @@ function IITTab({ clients, user }) {
     const inputData = mode === 'annual'
       ? { emp: v(emp), bonus: v(bonus), biz: v(biz), cons: v(cons), rentGross: v(rentGross), forBank: v(forBank), forOth: v(forOth), othInc: v(othInc), donations: v(donations), solar: v(solar), govtDon: v(govtDon), whtApit: v(whtApit), whtRent: v(whtRent), whtProf: v(whtProf), whtOth: v(whtOth) }
       : { prevTax: v(qPrevTax), paid: v(qPaid), quarter: qNo };
+    // camelCase keys are what the client portal (ClientCalculations.jsx) reads
     const resultData = mode === 'annual'
-      ? { gross_tax: grossTax, net_tax: netTax, eff_rate: effRate, total_assessable: totalAss }
-      : { instalment: qInstalment, quarter: qNo, b: B };
+      ? {
+          gross_tax: grossTax, net_tax: netTax, eff_rate: effRate, total_assessable: totalAss,
+          totalAssessable: totalAss, totalQP, taxableStd, grossTax, totalWHT, netTax,
+          personalRelief: Math.min(yPR, stdIncome), foreignBankExempt: fbExempt ? v(forBank) : 0,
+          stdResult: { slabs: stdResult.detail.filter(s => s.taxed > 0).map(s => ({ label: `${fmtRs(s.taxed)} @ ${(s.rate * 100).toFixed(0)}%`, tax: s.tax })) },
+        }
+      : { instalment: qInstalment, quarter: qNo, b: B, A: v(qPrevTax), C: v(qPaid), B };
 
     const { error } = await supabase.from('iit_calculations').insert({
       client_id: clientId, year, calc_type: mode, input_data: inputData,
@@ -204,6 +253,7 @@ function IITTab({ clients, user }) {
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Year of Assessment</label>
           <select className="input" value={year} onChange={e => setYear(e.target.value)}>
+            <option value="2024/25">2024/25</option>
             <option value="2025/26">2025/26</option>
             <option value="2026/27">2026/27</option>
           </select>
@@ -215,6 +265,11 @@ function IITTab({ clients, user }) {
             <button onClick={() => setMode('quarterly')} className={`px-4 py-2 text-sm font-medium ${mode==='quarterly' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>Quarterly IIT</button>
           </div>
         </div>
+      </div>
+
+      <div className={`rounded-lg p-3 text-xs border ${fbExempt ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+        <strong>Y/A {year} rules:</strong> Personal Relief {fmtRs(yPR)} · Slabs {cfg.slabText}
+        {fbExempt && <> · Foreign income remitted via bank in foreign currency = <strong>EXEMPT</strong>. For a full mixed-income return (cage-wise), use the <strong>📑 IIT Return 2024/25</strong> tab.</>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -255,13 +310,21 @@ function IITTab({ clients, user }) {
             {/* Foreign */}
             <div className="card p-5">
               <SectionHead>🌏 Foreign Income</SectionHead>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 mb-3">
-                <strong>Two separate categories — taxed differently:</strong><br />
-                ① Foreign Bank Remitted → 6% on first Rs.1,000,000 taxable; 15% on balance (IRD Table 08)<br />
-                ② Other foreign income (not via bank) → Normal graduated rates 6%–36%
-              </div>
+              {fbExempt ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 mb-3">
+                  <strong>Y/A 2024/25 — Third Schedule exemption:</strong><br />
+                  ① Foreign-source income earned in foreign currency &amp; remitted through a bank → <strong>EXEMPT</strong> (declare as exempt income, Cage 210)<br />
+                  ② Other foreign income (not in FC / not via bank) → Normal graduated rates
+                </div>
+              ) : (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 mb-3">
+                  <strong>Two separate categories — taxed differently:</strong><br />
+                  ① Foreign Bank Remitted → 6% on first Rs.1,000,000 taxable; 15% on balance (IRD Table 08)<br />
+                  ② Other foreign income (not via bank) → Normal graduated rates 6%–36%
+                </div>
+              )}
               <div className="space-y-3">
-                <RsField label="① Foreign Bank Remitted" hint="Remitted to SL bank in foreign currency (IRD APIT Table 08)" value={forBank} onChange={setForBank} tag="6%+15% Tiered" tagColor="blue" />
+                <RsField label="① Foreign Bank Remitted" hint={fbExempt ? 'Remitted to SL bank in foreign currency — exempt for 2024/25' : 'Remitted to SL bank in foreign currency (IRD APIT Table 08)'} value={forBank} onChange={setForBank} tag={fbExempt ? 'Exempt 2024/25' : '6%+15% Tiered'} tagColor={fbExempt ? 'green' : 'blue'} />
                 <RsField label="② Other Foreign Income" hint="Not in foreign currency / not via bank — graduated rates apply" value={forOth} onChange={setForOth} tag="Graduated Rates" tagColor="red" />
               </div>
             </div>
@@ -278,7 +341,7 @@ function IITTab({ clients, user }) {
             <div className="card p-5">
               <SectionHead>📋 Qualifying Payments &amp; Reliefs</SectionHead>
               <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mb-3">
-                🚫 Life Insurance, EPF, Rent Payments — NOT qualifying payments for Y/A 2025/26 (IRD SET 2025/26 confirmed)
+                🚫 Life Insurance, EPF, Rent Payments — NOT qualifying payments for Y/A {year}
               </div>
               <div className="space-y-3">
                 <RsField label="Approved Donations" hint="IRD-approved charitable / religious institutions" value={donations} onChange={setDon} tag="Max Rs.75,000" tagColor="amber" />
@@ -305,18 +368,18 @@ function IITTab({ clients, user }) {
               <strong>A</strong> = Preceding year gross tax &nbsp;|&nbsp;
               <strong>C</strong> = Credits + prior instalments paid &nbsp;|&nbsp;
               <strong>B</strong> = Remaining quarters<br />
-              <span className="opacity-80 mt-1 block">Statement of Estimated Tax (SET) abolished effective Y/A 2026/27</span>
+              {year === '2026/27' && <span className="opacity-80 mt-1 block">Statement of Estimated Tax (SET) abolished effective Y/A 2026/27</span>}
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 mb-1 block">Current Quarter (Q{qNo})</label>
               <select className="input" value={qNo} onChange={e => setQNo(e.target.value)}>
-                <option value="1">Q1 — Due 15 August 2026 (Apr · May · Jun)</option>
-                <option value="2">Q2 — Due 15 November 2026 (Jul · Aug · Sep)</option>
-                <option value="3">Q3 — Due 15 February 2027 (Oct · Nov · Dec)</option>
-                <option value="4">Q4 — Due 15 May 2027 (Jan · Feb · Mar)</option>
+                <option value="1">Q1 — Due 15 August {startY} (Apr · May · Jun)</option>
+                <option value="2">Q2 — Due 15 November {startY} (Jul · Aug · Sep)</option>
+                <option value="3">Q3 — Due 15 February {startY + 1} (Oct · Nov · Dec)</option>
+                <option value="4">Q4 — Due 15 May {startY + 1} (Jan · Feb · Mar)</option>
               </select>
             </div>
-            <RsField label="Preceding Year Gross Tax (A) — Y/A 2025/26" hint="Gross IIT before credits from the 2025/26 return" value={qPrevTax} onChange={setQPrevTax} required />
+            <RsField label={`Preceding Year Gross Tax (A) — Y/A ${prevYear}`} hint={`Gross IIT before credits from the ${prevYear} return`} value={qPrevTax} onChange={setQPrevTax} required />
             <RsField label="Credits & Prior Instalments Paid (C)" hint="Include APIT/WHT deducted + quarterly instalments already paid this Y/A" value={qPaid} onChange={setQPaid} />
           </div>
         )}
@@ -327,7 +390,7 @@ function IITTab({ clients, user }) {
             <div className="card overflow-hidden">
               <div className="bg-primary-700 text-white px-5 py-3 text-sm font-semibold flex items-center gap-2">
                 <CalcIcon size={15} /> Live Tax Computation
-                <span className="ml-auto text-xs opacity-70">IRD 2025/26 | PR Rs.1,800,000</span>
+                <span className="ml-auto text-xs opacity-70">IRD {year} | PR {fmtRs(yPR)}</span>
               </div>
               <div className="p-5 space-y-2 text-sm">
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Assessable Income</div>
@@ -340,11 +403,12 @@ function IITTab({ clients, user }) {
                 {v(forOth) > 0 && <Row label="Other Foreign Income" value={fmtRs(v(forOth))} />}
                 {v(othInc) > 0 && <Row label="Other Income" value={fmtRs(v(othInc))} />}
                 <Row label="Standard Assessable Income" value={fmtRs(stdIncome)} bold />
-                {v(forBank) > 0 && <Row label="+ Foreign Bank Income (6%+15%)" value={fmtRs(v(forBank))} className="text-blue-700" />}
+                {forBankTx > 0 && <Row label="+ Foreign Bank Income (6%+15%)" value={fmtRs(forBankTx)} className="text-blue-700" />}
                 <Row label="Total Assessable Income" value={fmtRs(totalAss)} bold className="border-t border-gray-100 pt-2 mt-1" />
+                {fbExempt && v(forBank) > 0 && <Row label="Exempt: Foreign income via bank (not taxed)" value={fmtRs(v(forBank))} className="text-amber-700 text-xs" />}
 
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-3">Deductions</div>
-                <Row label="Personal Relief (Resident)" value={`(${fmtRs(Math.min(PR, stdIncome))})`} className="text-green-700" />
+                <Row label="Personal Relief (Resident)" value={`(${fmtRs(Math.min(yPR, stdIncome))})`} className="text-green-700" />
                 {totalQP > 0 && <Row label="Qualifying Payments" value={`(${fmtRs(totalQP)})`} className="text-green-700" />}
                 <Row label="Taxable Standard Income" value={fmtRs(taxableStd)} bold />
                 {taxableFB > 0 && <Row label="Taxable Foreign Bank Income" value={fmtRs(taxableFB)} className="text-blue-700" />}
@@ -413,6 +477,307 @@ function IITTab({ clients, user }) {
               <Save size={15} />
               {saving ? 'Saving...' : shareWithClient ? 'Save & Share with Client' : 'Save Calculation'}
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TAB — IIT RETURN Y/A 2024/25 (mixed income, cage-wise)
+//  Source: IRD "Guide to fill the Return of Income" Asmt_IIT_004_2024_2025
+// ═══════════════════════════════════════════════════════════
+function Return2425Tab({ clients, user }) {
+  const [clientId, setClientId]     = useState('');
+  const [shareWithClient, setShare] = useState(false);
+  const [saving, setSaving]         = useState(false);
+  const [f, setF]                   = useState({});
+  const bind = (k) => ({ value: f[k] ?? '', onChange: (val) => setF(p => ({ ...p, [k]: val })) });
+
+  const c = useMemo(() => {
+    const n = (k) => v(f[k]);
+
+    // Schedule 1 — Employment income → Cage 10
+    const cage10 = n('empPrimary') + n('empSecondary') + n('empBenefits') + n('empBonus');
+
+    // Schedule 2 — Business income → Cage 20 (loss b/f set off against business income only)
+    const bizGross    = n('bizProfit') + n('bizPartner');
+    const bizLossUsed = Math.min(n('bizLossBF'), bizGross);
+    const cage20      = bizGross - bizLossUsed;
+
+    // Schedule 3 — Investment income → Cage 30 (rent GROSS; 25% relief goes to Cage 60)
+    const cage30 = n('interest') + n('rentGross') + n('othInv');
+
+    // Schedule 4 — Other income → Cage 40
+    const cage40 = n('othInc') + n('forTaxable');
+
+    const cage50 = cage10 + cage20 + cage30 + cage40;   // Total assessable income
+
+    // Reliefs — capped at assessable income
+    const rentRelief = Math.min(Math.round(n('rentGross') * 0.25), cage50);                  // Cage 60
+    const prUsed     = Math.min(PR_2425, Math.max(0, cage50 - rentRelief));                    // Personal relief
+    const solarUsed  = Math.min(n('solar'), 600_000, Math.max(0, cage50 - rentRelief - prUsed));
+    const reliefs    = rentRelief + prUsed + solarUsed;
+    const afterRel   = Math.max(0, cage50 - reliefs);
+
+    // Qualifying payments → Cage 100
+    const donCap   = Math.min(75_000, afterRel / 3);
+    const donUsed  = Math.min(n('donCharity'), donCap);
+    const qpRaw    = donUsed + n('donGovt') + n('qpOther');
+    const cage100  = Math.min(qpRaw, afterRel);
+
+    const cage120  = Math.max(0, afterRel - cage100);          // Taxable income
+    const prog     = graduatedTax(cage120, SLABS_2425);        // Progressive tax
+    const term     = terminalBenefitTax(n('termBen'));         // Cage 130
+    const gainTax  = Math.round(n('invGain') * 0.10);          // Cage 140 — 10% on investment asset gains
+    const cage170  = prog.tax + term.tax + gainTax;            // Total tax payable
+
+    // Schedule 9 — Tax credits → Cage 180
+    const credits = [
+      { cage: '901', label: 'Foreign tax credit', amt: n('ftc') },
+      { cage: '903', label: 'APIT — primary employment', amt: n('apitPrimary') },
+      { cage: '904', label: 'APIT — secondary employment', amt: n('apitSecondary') },
+      { cage: '905', label: 'Tax deducted on terminal benefits', amt: n('termTaxDed') },
+      { cage: '908', label: 'AIT/WHT deducted (interest, rent, fees, other)', amt: n('whtInterest') + n('whtRent') + n('whtService') + n('whtOther') },
+      { cage: '909/910', label: 'Investment gain tax paid', amt: n('gainTaxPaid') },
+      { cage: '911', label: 'Self-assessment instalments paid', amt: n('instalments') },
+    ];
+    const cage180 = credits.reduce((s, x) => s + x.amt, 0);
+    const balance = cage170 - cage180;
+
+    const sources = [
+      cage10 > 0 && 'Employment', cage20 > 0 && 'Business', n('interest') > 0 && 'Interest',
+      n('rentGross') > 0 && 'Rent', n('othInv') > 0 && 'Other investment', cage40 > 0 && 'Other',
+      n('termBen') > 0 && 'Terminal benefits', n('invGain') > 0 && 'Capital gains',
+      n('forExempt') > 0 && 'Foreign (exempt)',
+    ].filter(Boolean);
+
+    return {
+      cage10, cage20, bizLossUsed, cage30, cage40, cage50, rentRelief, prUsed, solarUsed, reliefs,
+      donUsed, donCap, cage100, cage120, prog, term, gainTax, cage170, credits, cage180, balance,
+      cage210: n('forExempt') + n('othExempt'), sources,
+      effRate: cage50 > 0 ? (cage170 / cage50 * 100).toFixed(2) : '0.00',
+    };
+  }, [f]);
+
+  const status = c.balance > 0.5 ? 'payable' : c.balance < -0.5 ? 'refund' : 'nil';
+  const clientName = clients.find(x => x.id === clientId)?.full_name ?? '';
+
+  const cageLines = () => [
+    `TaxMate Solutions — IIT Return Y/A 2024/25${clientName ? ` — ${clientName}` : ''}`,
+    `Cage 10  Employment income: ${fmtRs(c.cage10)}`,
+    `Cage 20  Business income: ${fmtRs(c.cage20)}`,
+    `Cage 30  Investment income: ${fmtRs(c.cage30)}`,
+    `Cage 40  Other income: ${fmtRs(c.cage40)}`,
+    `Cage 50  Total assessable income: ${fmtRs(c.cage50)}`,
+    `Cage 60  Rent relief (25%): ${fmtRs(c.rentRelief)}`,
+    `         Personal relief: ${fmtRs(c.prUsed)}`,
+    `         Solar relief: ${fmtRs(c.solarUsed)}`,
+    `Cage 100 Qualifying payments: ${fmtRs(c.cage100)}`,
+    `Cage 120 Taxable income: ${fmtRs(c.cage120)}`,
+    `         Tax at progressive rates: ${fmtRs(c.prog.tax)}`,
+    `Cage 130 Terminal benefit tax: ${fmtRs(c.term.tax)}`,
+    `Cage 140 Investment gain tax (10%): ${fmtRs(c.gainTax)}`,
+    `Cage 170 Total tax payable: ${fmtRs(c.cage170)}`,
+    `Cage 180 Total credits: ${fmtRs(c.cage180)}`,
+    ...c.credits.filter(x => x.amt > 0).map(x => `         ${x.cage} ${x.label}: ${fmtRs(x.amt)}`),
+    c.balance >= 0 ? `Cage 190 Balance tax payable: ${fmtRs(c.balance)}` : `Cage 200 Refund claimed: ${fmtRs(-c.balance)}`,
+    `Cage 210 Exempt income: ${fmtRs(c.cage210)}`,
+  ].join('\n');
+
+  const copySummary = async () => {
+    try { await navigator.clipboard.writeText(cageLines()); toast.success('Cage summary copied'); }
+    catch { toast.error('Could not copy — select and copy manually'); }
+  };
+
+  const saveCalc = async () => {
+    if (!clientId) return toast.error('Select a client first');
+    setSaving(true);
+    const inputData = { form: 'IIT_RETURN_2425', ...Object.fromEntries(Object.entries(f).map(([k, val]) => [k, v(val)])) };
+    const resultData = {
+      totalAssessable: c.cage50, totalQP: c.cage100, taxableStd: c.cage120, grossTax: c.cage170,
+      totalWHT: c.cage180, netTax: c.balance, effRate: c.effRate,
+      net_tax: c.balance, gross_tax: c.cage170, total_assessable: c.cage50,
+      stdResult: { slabs: [
+        ...c.prog.detail.filter(s => s.taxed > 0).map(s => ({ label: `${fmtRs(s.taxed)} @ ${(s.rate * 100).toFixed(0)}%`, tax: s.tax })),
+        ...(c.term.tax > 0 ? [{ label: 'Terminal benefits tax', tax: c.term.tax }] : []),
+        ...(c.gainTax > 0 ? [{ label: 'Investment gains @ 10%', tax: c.gainTax }] : []),
+      ] },
+      cages: { 10: c.cage10, 20: c.cage20, 30: c.cage30, 40: c.cage40, 50: c.cage50, 60: c.rentRelief, 100: c.cage100, 120: c.cage120, 130: c.term.tax, 140: c.gainTax, 170: c.cage170, 180: c.cage180, 190: Math.max(0, c.balance), 200: Math.max(0, -c.balance), 210: c.cage210 },
+      personalRelief: c.prUsed, solarRelief: c.solarUsed, sources: c.sources,
+    };
+    const { error } = await supabase.from('iit_calculations').insert({
+      client_id: clientId, year: '2024/25', calc_type: 'annual', input_data: inputData,
+      result_data: resultData, shared_with_client: shareWithClient, created_by: user.id,
+    });
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success(shareWithClient ? 'Return saved & shared with client!' : 'Return computation saved!');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Deadline / rules banner */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+        <div><strong>📑 Y/A 2024/25</strong> (1 Apr 2024 – 31 Mar 2025) · Personal Relief <strong>Rs. 1,200,000</strong> · Slabs 6% · 12% · 18% · 24% · 30% · 36% (Rs. 500,000 bands)</div>
+        <div>⏰ Return due <strong>30 Nov 2025</strong> · Balance tax due <strong>30 Sep 2025</strong>. Filing now is late — IRD penalty &amp; interest may apply. File via RAMIS e-filing.</div>
+      </div>
+
+      {/* Client */}
+      <div className="card p-5 flex flex-wrap gap-4 items-end">
+        <div className="flex-1 min-w-48">
+          <label className="block text-xs font-semibold text-gray-500 mb-1">Client</label>
+          <div className="relative">
+            <Users size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select className="input pl-9" value={clientId} onChange={e => setClientId(e.target.value)}>
+              <option value="">— Select Client —</option>
+              {clients.map(x => <option key={x.id} value={x.id}>{x.full_name}{x.tin ? ` (${x.tin})` : ''}</option>)}
+            </select>
+          </div>
+        </div>
+        <button onClick={() => setF({})} className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">Clear all</button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* ── Inputs ── */}
+        <div className="space-y-4">
+          <div className="card p-5">
+            <SectionHead>Schedule 1 — Employment Income (Cage 10)</SectionHead>
+            <div className="space-y-3">
+              <RsField label="Primary employment — salary & allowances" hint="Per T10 certificate from main employer" {...bind('empPrimary')} />
+              <RsField label="Secondary employment" hint="Second job / directorship fees (T10 from each employer)" {...bind('empSecondary')} />
+              <RsField label="Non-cash benefits" hint="Vehicle, housing, etc. at IRD valuation" {...bind('empBenefits')} />
+              <RsField label="Bonus / other employment lump sums" hint="Taxed at progressive rates" {...bind('empBonus')} />
+              <RsField label="Terminal benefits — concessionary" hint="Retiring gratuity, pension commutation, ETF/approved-scheme compensation at retirement" tag="0% / 6% / 12%" tagColor="amber" {...bind('termBen')} />
+            </div>
+          </div>
+
+          <div className="card p-5">
+            <SectionHead>Schedule 2 — Business Income (Cage 20)</SectionHead>
+            <div className="space-y-3">
+              <RsField label="Sole proprietorship — net profit" hint="After allowable expenses & capital allowances" {...bind('bizProfit')} />
+              <RsField label="Share of partnership income" hint="Partnership tax paid → credit Cage 906 (not modelled)" {...bind('bizPartner')} />
+              <RsField label="Business loss brought forward" hint="Set off against business income only (Schedule 10)" tag="Deduction" tagColor="green" {...bind('bizLossBF')} />
+              <p className="text-xs text-gray-400">40% special rate (betting, gaming, liquor, tobacco) is not handled here.</p>
+            </div>
+          </div>
+
+          <div className="card p-5">
+            <SectionHead>Schedule 3 — Investment Income (Cage 30)</SectionHead>
+            <div className="space-y-3">
+              <RsField label="Interest income (gross)" hint={`Before 5% AIT/WHT${v(f.interest) ? ` · 5% = ${fmtRs(Math.round(v(f.interest) * 0.05))}` : ''}`} {...bind('interest')} />
+              <RsField label="Rental income (gross)" hint="25% rent relief auto-applied at Cage 60" tag="25% Relief" tagColor="green" {...bind('rentGross')} />
+              <RsField label="Other investment income" hint="Royalties, annuities, etc." {...bind('othInv')} />
+              <RsField label="Gains on realisation of investment assets" hint="Land, buildings, shares — taxed separately at 10%; personal relief not applicable" tag="10%" tagColor="amber" {...bind('invGain')} />
+              <div className="bg-gray-50 border border-gray-200 rounded p-2 text-xs text-gray-600">Dividends from resident companies (15% final WHT) are <strong>excluded</strong> from assessable income.</div>
+            </div>
+          </div>
+
+          <div className="card p-5">
+            <SectionHead>Schedule 4 — Other Income (Cage 40) &amp; Foreign Income</SectionHead>
+            <div className="space-y-3">
+              <RsField label="Other income" hint="Income not falling under employment, business or investment" {...bind('othInc')} />
+              <RsField label="Foreign income NOT remitted via bank in FC" hint="Taxable — report under the relevant schedule" tag="Taxable" tagColor="red" {...bind('forTaxable')} />
+              <RsField label="Foreign income remitted via bank in foreign currency" hint="Exempt for 2024/25 — declare as exempt income (Cage 210)" tag="Exempt" tagColor="green" {...bind('forExempt')} />
+              <RsField label="Other exempt income" hint="e.g. Govt pension, FC account interest, injury compensation" tag="Exempt" tagColor="green" {...bind('othExempt')} />
+            </div>
+          </div>
+
+          <div className="card p-5">
+            <SectionHead>Reliefs &amp; Qualifying Payments (Cage 100)</SectionHead>
+            <div className="space-y-3">
+              <RsField label="Solar panel relief" hint="Grid-connected panels installed after 1 Apr 2021 — cost or bank loan repayments" tag="Max Rs.600,000" tagColor="green" {...bind('solar')} />
+              <RsField label="Donations to approved charities" hint={`Lowest of amount, Rs.75,000, or ⅓ of taxable income · allowed now: ${fmtRs(c.donCap)}`} tag="Max Rs.75,000" tagColor="amber" {...bind('donCharity')} />
+              <RsField label="Donations to Government / specified funds" hint="Fifth Schedule institutions — President's Fund, etc." {...bind('donGovt')} />
+              <RsField label="Other qualifying payments" hint="Film/cinema expenditure, Samurdhi shop, brought-forward QP" {...bind('qpOther')} />
+            </div>
+          </div>
+
+          <div className="card p-5">
+            <SectionHead>Schedule 9 — Tax Credits (Cage 180)</SectionHead>
+            <div className="space-y-3">
+              <RsField label="APIT — primary employment (903)" hint="Per T10" {...bind('apitPrimary')} />
+              <RsField label="APIT — secondary employment (904)" {...bind('apitSecondary')} />
+              <RsField label="AIT/WHT on interest (908)" hint="5% deducted by banks" {...bind('whtInterest')} />
+              <RsField label="WHT on rent (908)" hint="10% where rent exceeds Rs.100,000/month" {...bind('whtRent')} />
+              <RsField label="WHT on service fees (908)" hint="5% on professional/commission fees over Rs.100,000/month" {...bind('whtService')} />
+              <RsField label="Other AIT/WHT (908)" {...bind('whtOther')} />
+              <RsField label="Tax deducted on terminal benefits (905)" {...bind('termTaxDed')} />
+              <RsField label="Investment gain tax paid (909/910)" {...bind('gainTaxPaid')} />
+              <RsField label="Self-assessment instalments paid (911)" hint="Quarterly payments made for Y/A 2024/25" {...bind('instalments')} />
+              <RsField label="Foreign tax credit (901)" hint="Cannot exceed SL tax on the same income" {...bind('ftc')} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Results ── */}
+        <div className="space-y-4 lg:sticky lg:top-4 self-start">
+          <div className="card overflow-hidden">
+            <div className="bg-primary-700 text-white px-5 py-3 text-sm font-semibold flex items-center gap-2">
+              <CalcIcon size={15} /> Return Computation — Y/A 2024/25
+            </div>
+            <div className="p-5 space-y-1.5 text-sm">
+              {c.sources.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {c.sources.map(s => <span key={s} className="text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 border border-primary-100">{s}</span>)}
+                  {c.sources.length > 1 && <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Mixed income</span>}
+                </div>
+              )}
+              <Row label="Cage 10 · Employment" value={fmtRs(c.cage10)} />
+              <Row label="Cage 20 · Business" value={fmtRs(c.cage20)} />
+              {c.bizLossUsed > 0 && <Row label="  (after loss b/f set-off)" value={`(${fmtRs(c.bizLossUsed)})`} className="text-xs text-green-700" />}
+              <Row label="Cage 30 · Investment" value={fmtRs(c.cage30)} />
+              <Row label="Cage 40 · Other" value={fmtRs(c.cage40)} />
+              <Row label="Cage 50 · Total assessable income" value={fmtRs(c.cage50)} bold className="border-t border-gray-100 pt-2" />
+              <Row label="Cage 60 · Rent relief (25%)" value={`(${fmtRs(c.rentRelief)})`} className="text-green-700" />
+              <Row label="Personal relief" value={`(${fmtRs(c.prUsed)})`} className="text-green-700" />
+              {c.solarUsed > 0 && <Row label="Solar relief" value={`(${fmtRs(c.solarUsed)})`} className="text-green-700" />}
+              <Row label="Cage 100 · Qualifying payments" value={`(${fmtRs(c.cage100)})`} className="text-green-700" />
+              <Row label="Cage 120 · Taxable income" value={fmtRs(c.cage120)} bold className="border-t border-gray-100 pt-2" />
+
+              <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-2">Tax computation</div>
+              {c.prog.detail.filter(s => s.taxed > 0).map((s, i) => (
+                <div key={i} className="flex justify-between text-xs text-gray-500">
+                  <span>{fmtRs(s.taxed)} @ {(s.rate * 100).toFixed(0)}%</span><span>{fmtRs(s.tax)}</span>
+                </div>
+              ))}
+              <Row label="Tax at progressive rates" value={fmtRs(c.prog.tax)} />
+              {c.term.bands.map((b, i) => (
+                <div key={i} className="flex justify-between text-xs text-amber-700"><span>Terminal: {b.label}</span><span>{fmtRs(b.tax)}</span></div>
+              ))}
+              {c.term.tax > 0 && <Row label="Cage 130 · Terminal benefit tax" value={fmtRs(c.term.tax)} />}
+              {c.gainTax > 0 && <Row label="Cage 140 · Investment gain tax (10%)" value={fmtRs(c.gainTax)} />}
+              <Row label="Cage 170 · Total tax payable" value={fmtRs(c.cage170)} bold className="border-t border-gray-100 pt-2 text-orange-700" />
+              {c.credits.filter(x => x.amt > 0).map(x => (
+                <div key={x.cage} className="flex justify-between text-xs text-green-700"><span>{x.cage} · {x.label}</span><span>({fmtRs(x.amt)})</span></div>
+              ))}
+              <Row label="Cage 180 · Total credits" value={`(${fmtRs(c.cage180)})`} className="text-green-700" />
+
+              <div className={`rounded-lg p-3 mt-3 border ${status === 'payable' ? 'bg-red-50 border-red-200' : status === 'refund' ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                <div className={`text-xs font-bold mb-1 ${status === 'payable' ? 'text-red-600' : status === 'refund' ? 'text-green-600' : 'text-gray-500'}`}>
+                  {status === 'payable' ? '⚠️ Cage 190 · BALANCE TAX PAYABLE' : status === 'refund' ? '✅ Cage 200 · REFUND CLAIMED' : '✅ NIL TAX'}
+                </div>
+                <div className={`text-3xl font-black ${status === 'payable' ? 'text-red-700' : status === 'refund' ? 'text-green-700' : 'text-gray-700'}`}>{fmtRs(Math.abs(c.balance))}</div>
+                <div className="text-xs text-gray-400 mt-1">Effective rate {c.effRate}% of assessable income</div>
+              </div>
+              {c.cage210 > 0 && <Row label="Cage 210 · Exempt income (declare only)" value={fmtRs(c.cage210)} className="text-xs text-amber-700 pt-2" />}
+            </div>
+          </div>
+
+          <div className="card p-4 space-y-3">
+            <button onClick={copySummary} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50">📋 Copy cage summary (for RAMIS)</button>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <div className={`relative w-10 h-5 rounded-full transition-colors ${shareWithClient ? 'bg-green-500' : 'bg-gray-200'}`} onClick={() => setShare(!shareWithClient)}>
+                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${shareWithClient ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </div>
+              <span className="text-sm text-gray-700">Share with client immediately</span>
+            </label>
+            <button onClick={saveCalc} disabled={saving || !clientId} className="btn-primary w-full justify-center">
+              <Save size={15} />
+              {saving ? 'Saving...' : shareWithClient ? 'Save & Share with Client' : 'Save Return Computation'}
+            </button>
+            <p className="text-xs text-gray-400">Based on IRD guide Asmt_IIT_004_2024_2025. Verify figures against source documents before filing.</p>
           </div>
         </div>
       </div>
