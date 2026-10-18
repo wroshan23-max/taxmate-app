@@ -24,7 +24,7 @@ export default function ClientDashboard() {
       const [{ data: calcs }, { data: returns }, { data: invoices }, { data: updates }] = await Promise.all([
         supabase.from('iit_calculations').select('*').eq('client_id', cid).eq('shared_with_client', true).order('created_at', { ascending: false }).limit(3),
         supabase.from('tax_returns').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(3),
-        supabase.from('invoices').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(3),
+        supabase.from('invoices').select('*').eq('client_id', cid).neq('status', 'draft').order('created_at', { ascending: false }).limit(3),
         supabase.from('tax_updates').select('*').eq('published', true).order('created_at', { ascending: false }).limit(3),
       ]);
       setData({ calcs: calcs ?? [], returns: returns ?? [], invoices: invoices ?? [], updates: updates ?? [] });
@@ -35,7 +35,7 @@ export default function ClientDashboard() {
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
 
-  const unpaidTotal = data.invoices.filter(i => i.status === 'unpaid').reduce((s, i) => s + (i.total_amount || 0), 0);
+  const unpaidTotal = data.invoices.filter(i => i.status === 'unpaid' || i.status === 'overdue').reduce((s, i) => s + (i.total_amount || 0), 0);
 
   const stats = [
     { label: 'Tax Calculations', value: data.calcs.length, icon: Calculator, color: 'bg-blue-50 text-blue-600', link: '/client/calculations' },
