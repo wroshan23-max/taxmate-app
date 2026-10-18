@@ -1,84 +1,17 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase, fmtRs } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Calculator as CalcIcon, Save, Users } from 'lucide-react';
+import { Calculator as CalcIcon, Save, Users, Printer } from 'lucide-react';
 
-// ─── Tax Constants ────────────────────────────────────────
-const PR = 1_800_000; // Personal Relief
-// IRD Y/A 2025/26 & 2026/27 tax slabs
-const SLABS = [
-  { limit: 1_000_000, rate: 0.06 },
-  { limit:   500_000, rate: 0.18 },
-  { limit:   500_000, rate: 0.24 },
-  { limit:   500_000, rate: 0.30 },
-  { limit: Infinity,  rate: 0.36 },
-];
-
-// Foreign bank income: 6% on first Rs.1,000,000 taxable; 15% on balance (IRD Table 08)
-function calcForeignTax(taxable) {
-  if (taxable <= 0) return { tax: 0, bands: [] };
-  if (taxable <= 1_000_000) {
-    const t = Math.round(taxable * 0.06);
-    return { tax: t, bands: [{ label: `First Rs.${taxable.toLocaleString()} @ 6%`, tax: t }] };
-  }
-  const t1 = Math.round(1_000_000 * 0.06);
-  const t2 = Math.round((taxable - 1_000_000) * 0.15);
-  return {
-    tax: t1 + t2,
-    bands: [
-      { label: 'First Rs.1,000,000 @ 6%', tax: t1 },
-      { label: `Balance Rs.${(taxable - 1_000_000).toLocaleString()} @ 15%`, tax: t2 },
-    ],
-  };
-}
-
-// IRD Y/A 2024/25 (1 Apr 2024 – 31 Mar 2025) — Asmt_IIT_004_2024_2025 Annexure 7
-const PR_2425 = 1_200_000;
-const SLABS_2425 = [
-  { limit: 500_000, rate: 0.06 },
-  { limit: 500_000, rate: 0.12 },
-  { limit: 500_000, rate: 0.18 },
-  { limit: 500_000, rate: 0.24 },
-  { limit: 500_000, rate: 0.30 },
-  { limit: Infinity, rate: 0.36 },
-];
-
-// Year-specific rules used by the IIT Calculator
-const TAX_YEARS = {
-  '2024/25': { pr: PR_2425, slabs: SLABS_2425, foreignBankExempt: true,  slabText: '6% · 12% · 18% · 24% · 30% · 36% (Rs.500,000 bands)' },
-  '2025/26': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%' },
-  '2026/27': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%' },
-};
-
-// Concessionary terminal benefits (gratuity, pension commutation, ETF on retirement)
-// Annexure 6: 0% first Rs.10M, 6% next Rs.10M, 12% balance
-function terminalBenefitTax(amount) {
-  const a = Math.max(0, amount);
-  const b1 = Math.min(a, 10_000_000);
-  const b2 = Math.min(Math.max(0, a - 10_000_000), 10_000_000);
-  const b3 = Math.max(0, a - 20_000_000);
-  const bands = [
-    { label: 'First Rs.10,000,000 @ 0%', taxed: b1, tax: 0 },
-    { label: 'Next Rs.10,000,000 @ 6%', taxed: b2, tax: Math.round(b2 * 0.06) },
-    { label: 'Balance @ 12%', taxed: b3, tax: Math.round(b3 * 0.12) },
-  ].filter(x => x.taxed > 0);
-  return { tax: bands.reduce((s, x) => s + x.tax, 0), bands };
-}
-
-// Progressive graduated tax
-function graduatedTax(taxable, slabs = SLABS) {
-  let remaining = Math.max(0, taxable), tax = 0, detail = [];
-  for (const s of slabs) {
-    if (remaining <= 0) break;
-    const taxed = Math.min(remaining, s.limit);
-    const t = Math.round(taxed * s.rate);
-    detail.push({ rate: s.rate, taxed, tax: t });
-    tax += t;
-    remaining -= taxed;
-  }
-  return { tax, detail };
-}
+// Tax rules & computations live in src/lib/iitCalc.js (shared with saved-calc viewer & PDF)
+import {
+  PR, TAX_YEARS, graduatedTax, calcForeignTax,
+  computeAnnual, computeQuarterly, computeReturn2425, calcKind,
+} from '../../lib/iitCalc';
+import { openStatement } from '../../lib/iitStatement';
+import SavedCalculations from '../../components/SavedCalculations';
 
 const v = (s) => parseFloat(s) || 0;
 
@@ -99,12 +32,34 @@ const MONTHLY_ROWS = [
 // ─── Main Component ───────────────────────────────────────
 export default function Calculator() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [mainTab, setMainTab] = useState('iit');
+  const [loaded, setLoaded]   = useState(null);   // { calc, nonce } — a saved calc opened for editing
 
   useEffect(() => {
-    supabase.from('clients').select('id, full_name, tin').order('full_name').then(({ data }) => setClients(data ?? []));
+    supabase.from('clients').select('id, full_name, tin, nic, address, employer, resident_status').order('full_name').then(({ data }) => setClients(data ?? []));
   }, []);
+
+  // Open a saved calculation in the right calculator tab
+  const openSaved = (calc) => {
+    setMainTab(calcKind(calc) === 'return2425' ? 'ret2425' : 'iit');
+    setLoaded({ calc, nonce: Date.now() });
+  };
+  const startNew = () => setLoaded({ calc: null, nonce: Date.now() });
+
+  // Arriving from Client Detail → "Open in calculator"
+  useEffect(() => {
+    const c = location.state?.loadCalc;
+    if (c) {
+      openSaved(c);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadedIIT = loaded?.calc && calcKind(loaded.calc) !== 'return2425' ? loaded.calc : null;
+  const loadedRet = loaded?.calc && calcKind(loaded.calc) === 'return2425' ? loaded.calc : null;
 
   return (
     <div className="space-y-5">
@@ -118,13 +73,14 @@ export default function Calculator() {
         {[
           { id: 'iit',     label: '🧮 IIT Calculator' },
           { id: 'ret2425', label: '📑 IIT Return 2024/25' },
+          { id: 'saved',   label: '🗂 Saved Calculations' },
           { id: 'apit',    label: '📊 APIT/IIT 2026/27' },
           { id: 'monthly', label: '📅 Monthly Income' },
         ].map(t => (
           <button
             key={t.id}
             onClick={() => setMainTab(t.id)}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px whitespace-nowrap ${
               mainTab === t.id
                 ? 'border-primary-600 text-primary-700 bg-primary-50'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
@@ -135,10 +91,29 @@ export default function Calculator() {
         ))}
       </div>
 
-      {mainTab === 'iit'     && <IITTab clients={clients} user={user} />}
-      {mainTab === 'ret2425' && <Return2425Tab clients={clients} user={user} />}
+      {mainTab === 'iit'     && <IITTab key={`iit-${loaded?.nonce ?? 0}`} clients={clients} user={user} initial={loadedIIT} onNew={startNew} />}
+      {mainTab === 'ret2425' && <Return2425Tab key={`ret-${loaded?.nonce ?? 0}`} clients={clients} user={user} initial={loadedRet} onNew={startNew} />}
+      {mainTab === 'saved'   && <SavedCalculations onOpen={openSaved} />}
       {mainTab === 'apit'    && <APitTab />}
       {mainTab === 'monthly' && <MonthlyTab />}
+    </div>
+  );
+}
+
+// Keep the client's Tax Return row (same Y/A) in step with the latest saved calculation
+async function syncTaxReturn(clientId, year, grossIncome, totalTax) {
+  await supabase.from('tax_returns')
+    .update({ gross_income: Math.round(grossIncome), total_tax: Math.round(totalTax), updated_at: new Date().toISOString() })
+    .eq('client_id', clientId).eq('year', year);
+}
+
+// Banner shown when a saved calculation is open for editing
+function EditingBanner({ editingId, onNew }) {
+  if (!editingId) return null;
+  return (
+    <div className="flex items-center gap-3 bg-primary-50 border border-primary-200 rounded-lg px-4 py-2 text-xs text-primary-800">
+      ✏️ Editing a saved calculation — <strong>Save</strong> updates the same record.
+      <button onClick={onNew} className="ml-auto px-3 py-1 rounded-md bg-white border border-primary-200 hover:bg-primary-100 font-medium">+ Start new calculation</button>
     </div>
   );
 }
@@ -146,98 +121,98 @@ export default function Calculator() {
 // ═══════════════════════════════════════════════════════════
 //  TAB 1 — IIT Calculator (Annual & Quarterly)
 // ═══════════════════════════════════════════════════════════
-function IITTab({ clients, user }) {
-  const [clientId, setClientId]       = useState('');
-  const [year, setYear]               = useState('2026/27');
-  const [shareWithClient, setShare]   = useState(false);
+function IITTab({ clients, user, initial, onNew }) {
+  const ini = initial?.input_data ?? {};
+  const s0  = (k) => (ini[k] ? String(ini[k]) : '');
+  const [editingId, setEditingId]     = useState(initial?.id ?? null);
+  const [clientId, setClientId]       = useState(initial?.client_id ?? '');
+  const [year, setYear]               = useState(initial?.year ?? '2026/27');
+  const [shareWithClient, setShare]   = useState(initial?.shared_with_client ?? false);
   const [saving, setSaving]           = useState(false);
-  const [mode, setMode]               = useState('annual');
+  const [mode, setMode]               = useState(initial?.calc_type ?? 'annual');
 
   // Annual — income
-  const [emp,      setEmp]      = useState('');
-  const [bonus,    setBonus]    = useState('');
-  const [biz,      setBiz]      = useState('');
-  const [cons,     setCons]     = useState('');
-  const [rentGross,setRentG]    = useState('');
-  const [forBank,  setForBank]  = useState('');
-  const [forOth,   setForOth]   = useState('');
-  const [othInc,   setOthInc]   = useState('');
+  const [emp,      setEmp]      = useState(s0('emp'));
+  const [bonus,    setBonus]    = useState(s0('bonus'));
+  const [biz,      setBiz]      = useState(s0('biz'));
+  const [cons,     setCons]     = useState(s0('cons'));
+  const [rentGross,setRentG]    = useState(s0('rentGross'));
+  const [forBank,  setForBank]  = useState(s0('forBank'));
+  const [forOth,   setForOth]   = useState(s0('forOth'));
+  const [othInc,   setOthInc]   = useState(s0('othInc'));
 
   // Annual — deductions
-  const [donations, setDon]    = useState('');
-  const [solar,     setSolar]  = useState('');
-  const [govtDon,   setGovt]   = useState('');
+  const [donations, setDon]    = useState(s0('donations'));
+  const [solar,     setSolar]  = useState(s0('solar'));
+  const [govtDon,   setGovt]   = useState(s0('govtDon'));
 
   // Annual — WHT credits
-  const [whtApit,  setWhtApit]  = useState('');
-  const [whtRent,  setWhtRent]  = useState('');
-  const [whtProf,  setWhtProf]  = useState('');
-  const [whtOth,   setWhtOth]   = useState('');
+  const [whtApit,  setWhtApit]  = useState(s0('whtApit'));
+  const [whtRent,  setWhtRent]  = useState(s0('whtRent'));
+  const [whtProf,  setWhtProf]  = useState(s0('whtProf'));
+  const [whtOth,   setWhtOth]   = useState(s0('whtOth'));
 
   // Quarterly
-  const [qPrevTax, setQPrevTax] = useState('');
-  const [qPaid,    setQPaid]    = useState('');
-  const [qNo,      setQNo]      = useState('1');
+  const [qPrevTax, setQPrevTax] = useState(s0('prevTax'));
+  const [qPaid,    setQPaid]    = useState(s0('paid'));
+  const [qNo,      setQNo]      = useState(String(ini.quarter ?? '1'));
 
   // ── Year-specific rules ──
   const cfg        = TAX_YEARS[year] ?? TAX_YEARS['2026/27'];
   const yPR        = cfg.pr;
   const fbExempt   = cfg.foreignBankExempt;          // 2024/25: foreign income remitted via bank is exempt
-  const forBankTx  = fbExempt ? 0 : v(forBank);
   const startY     = parseInt(year.slice(0, 4), 10);
   const prevYear   = `${startY - 1}/${String(startY).slice(2)}`;
 
-  // ── Annual calculation ──
-  const rentRel    = Math.round(v(rentGross) * 0.25);
-  const rentNet    = v(rentGross) - rentRel;
-  const stdIncome  = v(emp) + v(bonus) + v(biz) + v(cons) + rentNet + v(forOth) + v(othInc);
-  const totalAss   = stdIncome + forBankTx;
-  const donAllowed = Math.min(v(donations), 75000, stdIncome > 0 ? stdIncome / 3 : 0);
-  const solarAllow = Math.min(v(solar), 600000);
-  const totalQP    = donAllowed + solarAllow + v(govtDon);
-  const totalDed   = yPR + totalQP;
-  const taxableStd = Math.max(0, stdIncome - totalDed);
-  const unusedDed  = Math.max(0, totalDed - stdIncome);
-  const taxableFB  = Math.max(0, forBankTx - unusedDed);
-  const stdResult  = graduatedTax(taxableStd, cfg.slabs);
-  const fbResult   = calcForeignTax(taxableFB);
-  const grossTax   = stdResult.tax + fbResult.tax;
-  const totalWHT   = v(whtApit) + v(whtRent) + v(whtProf) + v(whtOth);
-  const netTax     = grossTax - totalWHT;
-  const effRate    = totalAss > 0 ? (grossTax / totalAss * 100).toFixed(2) : '0.00';
-  const taxStatus  = netTax > 0.5 ? 'payable' : netTax < -0.5 ? 'refund' : 'nil';
+  // ── Annual calculation (shared engine: src/lib/iitCalc.js) ──
+  const annualInput = { emp, bonus, biz, cons, rentGross, forBank, forOth, othInc, donations, solar, govtDon, whtApit, whtRent, whtProf, whtOth };
+  const A = computeAnnual(year, annualInput);
+  const { forBankTx, rentRel, rentNet, stdIncome, totalAss, totalQP, taxableStd, taxableFB,
+          stdResult, fbResult, grossTax, totalWHT, netTax, effRate, taxStatus } = A;
 
   // ── Quarterly calculation ──
-  const B = [4, 3, 2, 1][parseInt(qNo) - 1];
-  const qInstalment = Math.max(0, Math.round((v(qPrevTax) - v(qPaid)) / B));
+  const Q = computeQuarterly({ prevTax: qPrevTax, paid: qPaid, quarter: qNo });
+  const B = Q.B;
+  const qInstalment = Q.instalment;
 
-  const saveCalc = async () => {
-    if (!clientId) return toast.error('Select a client first');
-    setSaving(true);
+  const buildRecord = () => {
     const inputData = mode === 'annual'
-      ? { emp: v(emp), bonus: v(bonus), biz: v(biz), cons: v(cons), rentGross: v(rentGross), forBank: v(forBank), forOth: v(forOth), othInc: v(othInc), donations: v(donations), solar: v(solar), govtDon: v(govtDon), whtApit: v(whtApit), whtRent: v(whtRent), whtProf: v(whtProf), whtOth: v(whtOth) }
+      ? Object.fromEntries(Object.entries(annualInput).map(([k, val]) => [k, v(val)]))
       : { prevTax: v(qPrevTax), paid: v(qPaid), quarter: qNo };
-    // camelCase keys are what the client portal (ClientCalculations.jsx) reads
+    // camelCase keys are what the client portal reads; snake_case kept for older screens
     const resultData = mode === 'annual'
       ? {
           gross_tax: grossTax, net_tax: netTax, eff_rate: effRate, total_assessable: totalAss,
           totalAssessable: totalAss, totalQP, taxableStd, grossTax, totalWHT, netTax,
-          personalRelief: Math.min(yPR, stdIncome), foreignBankExempt: fbExempt ? v(forBank) : 0,
+          personalRelief: A.prUsed, foreignBankExempt: fbExempt ? v(forBank) : 0,
           stdResult: { slabs: stdResult.detail.filter(s => s.taxed > 0).map(s => ({ label: `${fmtRs(s.taxed)} @ ${(s.rate * 100).toFixed(0)}%`, tax: s.tax })) },
         }
-      : { instalment: qInstalment, quarter: qNo, b: B, A: v(qPrevTax), C: v(qPaid), B };
+      : { instalment: qInstalment, quarter: qNo, b: B, A: Q.A, C: Q.C, B, net_tax: qInstalment };
+    return { year, calc_type: mode, input_data: inputData, result_data: resultData };
+  };
 
-    const { error } = await supabase.from('iit_calculations').insert({
-      client_id: clientId, year, calc_type: mode, input_data: inputData,
-      result_data: resultData, shared_with_client: shareWithClient, created_by: user.id,
-    });
+  const printPDF = () => {
+    const client = clients.find(c => c.id === clientId) ?? {};
+    if (!openStatement(buildRecord(), client)) toast.error('Pop-up blocked — allow pop-ups for this site to print');
+  };
+
+  const saveCalc = async () => {
+    if (!clientId) return toast.error('Select a client first');
+    setSaving(true);
+    const rec = { ...buildRecord(), client_id: clientId, shared_with_client: shareWithClient };
+    const res = editingId
+      ? await supabase.from('iit_calculations').update(rec).eq('id', editingId).select('id').single()
+      : await supabase.from('iit_calculations').insert({ ...rec, created_by: user.id }).select('id').single();
+    if (res.error) { setSaving(false); return toast.error(res.error.message); }
+    setEditingId(res.data.id);
+    if (mode === 'annual') await syncTaxReturn(clientId, year, totalAss, grossTax);
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success(shareWithClient ? 'Saved & shared with client!' : 'Calculation saved!');
+    toast.success(editingId ? 'Calculation updated!' : shareWithClient ? 'Saved & shared with client!' : 'Calculation saved!');
   };
 
   return (
     <div className="space-y-4">
+      <EditingBanner editingId={editingId} onNew={onNew} />
       {/* Client / Year / Mode */}
       <div className="card p-5 flex flex-wrap gap-4">
         <div className="flex-1 min-w-48">
@@ -475,8 +450,12 @@ function IITTab({ clients, user }) {
             </label>
             <button onClick={saveCalc} disabled={saving || !clientId} className="btn-primary w-full justify-center">
               <Save size={15} />
-              {saving ? 'Saving...' : shareWithClient ? 'Save & Share with Client' : 'Save Calculation'}
+              {saving ? 'Saving...' : editingId ? 'Update Saved Calculation' : shareWithClient ? 'Save & Share with Client' : 'Save Calculation'}
             </button>
+            <button onClick={printPDF} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50 flex items-center justify-center gap-2">
+              <Printer size={15} /> Print / PDF Statement for Client
+            </button>
+            {!clientId && <p className="text-xs text-gray-400">Select a client so the statement shows their name, TIN and address.</p>}
           </div>
         </div>
       </div>
@@ -488,78 +467,17 @@ function IITTab({ clients, user }) {
 //  TAB — IIT RETURN Y/A 2024/25 (mixed income, cage-wise)
 //  Source: IRD "Guide to fill the Return of Income" Asmt_IIT_004_2024_2025
 // ═══════════════════════════════════════════════════════════
-function Return2425Tab({ clients, user }) {
-  const [clientId, setClientId]     = useState('');
-  const [shareWithClient, setShare] = useState(false);
+function Return2425Tab({ clients, user, initial, onNew }) {
+  const iniF = initial?.input_data ? Object.fromEntries(Object.entries(initial.input_data).filter(([k, val]) => k !== 'form' && val).map(([k, val]) => [k, String(val)])) : {};
+  const [editingId, setEditingId]   = useState(initial?.id ?? null);
+  const [clientId, setClientId]     = useState(initial?.client_id ?? '');
+  const [shareWithClient, setShare] = useState(initial?.shared_with_client ?? false);
   const [saving, setSaving]         = useState(false);
-  const [f, setF]                   = useState({});
+  const [f, setF]                   = useState(iniF);
   const bind = (k) => ({ value: f[k] ?? '', onChange: (val) => setF(p => ({ ...p, [k]: val })) });
 
-  const c = useMemo(() => {
-    const n = (k) => v(f[k]);
-
-    // Schedule 1 — Employment income → Cage 10
-    const cage10 = n('empPrimary') + n('empSecondary') + n('empBenefits') + n('empBonus');
-
-    // Schedule 2 — Business income → Cage 20 (loss b/f set off against business income only)
-    const bizGross    = n('bizProfit') + n('bizPartner');
-    const bizLossUsed = Math.min(n('bizLossBF'), bizGross);
-    const cage20      = bizGross - bizLossUsed;
-
-    // Schedule 3 — Investment income → Cage 30 (rent GROSS; 25% relief goes to Cage 60)
-    const cage30 = n('interest') + n('rentGross') + n('othInv');
-
-    // Schedule 4 — Other income → Cage 40
-    const cage40 = n('othInc') + n('forTaxable');
-
-    const cage50 = cage10 + cage20 + cage30 + cage40;   // Total assessable income
-
-    // Reliefs — capped at assessable income
-    const rentRelief = Math.min(Math.round(n('rentGross') * 0.25), cage50);                  // Cage 60
-    const prUsed     = Math.min(PR_2425, Math.max(0, cage50 - rentRelief));                    // Personal relief
-    const solarUsed  = Math.min(n('solar'), 600_000, Math.max(0, cage50 - rentRelief - prUsed));
-    const reliefs    = rentRelief + prUsed + solarUsed;
-    const afterRel   = Math.max(0, cage50 - reliefs);
-
-    // Qualifying payments → Cage 100
-    const donCap   = Math.min(75_000, afterRel / 3);
-    const donUsed  = Math.min(n('donCharity'), donCap);
-    const qpRaw    = donUsed + n('donGovt') + n('qpOther');
-    const cage100  = Math.min(qpRaw, afterRel);
-
-    const cage120  = Math.max(0, afterRel - cage100);          // Taxable income
-    const prog     = graduatedTax(cage120, SLABS_2425);        // Progressive tax
-    const term     = terminalBenefitTax(n('termBen'));         // Cage 130
-    const gainTax  = Math.round(n('invGain') * 0.10);          // Cage 140 — 10% on investment asset gains
-    const cage170  = prog.tax + term.tax + gainTax;            // Total tax payable
-
-    // Schedule 9 — Tax credits → Cage 180
-    const credits = [
-      { cage: '901', label: 'Foreign tax credit', amt: n('ftc') },
-      { cage: '903', label: 'APIT — primary employment', amt: n('apitPrimary') },
-      { cage: '904', label: 'APIT — secondary employment', amt: n('apitSecondary') },
-      { cage: '905', label: 'Tax deducted on terminal benefits', amt: n('termTaxDed') },
-      { cage: '908', label: 'AIT/WHT deducted (interest, rent, fees, other)', amt: n('whtInterest') + n('whtRent') + n('whtService') + n('whtOther') },
-      { cage: '909/910', label: 'Investment gain tax paid', amt: n('gainTaxPaid') },
-      { cage: '911', label: 'Self-assessment instalments paid', amt: n('instalments') },
-    ];
-    const cage180 = credits.reduce((s, x) => s + x.amt, 0);
-    const balance = cage170 - cage180;
-
-    const sources = [
-      cage10 > 0 && 'Employment', cage20 > 0 && 'Business', n('interest') > 0 && 'Interest',
-      n('rentGross') > 0 && 'Rent', n('othInv') > 0 && 'Other investment', cage40 > 0 && 'Other',
-      n('termBen') > 0 && 'Terminal benefits', n('invGain') > 0 && 'Capital gains',
-      n('forExempt') > 0 && 'Foreign (exempt)',
-    ].filter(Boolean);
-
-    return {
-      cage10, cage20, bizLossUsed, cage30, cage40, cage50, rentRelief, prUsed, solarUsed, reliefs,
-      donUsed, donCap, cage100, cage120, prog, term, gainTax, cage170, credits, cage180, balance,
-      cage210: n('forExempt') + n('othExempt'), sources,
-      effRate: cage50 > 0 ? (cage170 / cage50 * 100).toFixed(2) : '0.00',
-    };
-  }, [f]);
+  // Shared engine: src/lib/iitCalc.js
+  const c = useMemo(() => computeReturn2425(f), [f]);
 
   const status = c.balance > 0.5 ? 'payable' : c.balance < -0.5 ? 'refund' : 'nil';
   const clientName = clients.find(x => x.id === clientId)?.full_name ?? '';
@@ -591,6 +509,12 @@ function Return2425Tab({ clients, user }) {
     catch { toast.error('Could not copy — select and copy manually'); }
   };
 
+  const printPDF = () => {
+    const client = clients.find(x => x.id === clientId) ?? {};
+    const calc = { year: '2024/25', calc_type: 'annual', input_data: { form: 'IIT_RETURN_2425', ...f } };
+    if (!openStatement(calc, client)) toast.error('Pop-up blocked — allow pop-ups for this site to print');
+  };
+
   const saveCalc = async () => {
     if (!clientId) return toast.error('Select a client first');
     setSaving(true);
@@ -607,17 +531,22 @@ function Return2425Tab({ clients, user }) {
       cages: { 10: c.cage10, 20: c.cage20, 30: c.cage30, 40: c.cage40, 50: c.cage50, 60: c.rentRelief, 100: c.cage100, 120: c.cage120, 130: c.term.tax, 140: c.gainTax, 170: c.cage170, 180: c.cage180, 190: Math.max(0, c.balance), 200: Math.max(0, -c.balance), 210: c.cage210 },
       personalRelief: c.prUsed, solarRelief: c.solarUsed, sources: c.sources,
     };
-    const { error } = await supabase.from('iit_calculations').insert({
-      client_id: clientId, year: '2024/25', calc_type: 'annual', input_data: inputData,
-      result_data: resultData, shared_with_client: shareWithClient, created_by: user.id,
-    });
+    const rec = { client_id: clientId, year: '2024/25', calc_type: 'annual', input_data: inputData, result_data: resultData, shared_with_client: shareWithClient };
+    const res = editingId
+      ? await supabase.from('iit_calculations').update(rec).eq('id', editingId).select('id').single()
+      : await supabase.from('iit_calculations').insert({ ...rec, created_by: user.id }).select('id').single();
+    if (res.error) { setSaving(false); return toast.error(res.error.message); }
+    const wasEditing = !!editingId;
+    setEditingId(res.data.id);
+    await syncTaxReturn(clientId, '2024/25', c.cage50, c.cage170);
     setSaving(false);
-    if (error) return toast.error(error.message);
+    if (wasEditing) return toast.success('Return computation updated!');
     toast.success(shareWithClient ? 'Return saved & shared with client!' : 'Return computation saved!');
   };
 
   return (
     <div className="space-y-4">
+      <EditingBanner editingId={editingId} onNew={onNew} />
       {/* Deadline / rules banner */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1">
         <div><strong>📑 Y/A 2024/25</strong> (1 Apr 2024 – 31 Mar 2025) · Personal Relief <strong>Rs. 1,200,000</strong> · Slabs 6% · 12% · 18% · 24% · 30% · 36% (Rs. 500,000 bands)</div>
@@ -766,6 +695,7 @@ function Return2425Tab({ clients, user }) {
           </div>
 
           <div className="card p-4 space-y-3">
+            <button onClick={printPDF} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50 flex items-center justify-center gap-2"><Printer size={15} /> Print / PDF Statement for Client</button>
             <button onClick={copySummary} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50">📋 Copy cage summary (for RAMIS)</button>
             <label className="flex items-center gap-3 cursor-pointer">
               <div className={`relative w-10 h-5 rounded-full transition-colors ${shareWithClient ? 'bg-green-500' : 'bg-gray-200'}`} onClick={() => setShare(!shareWithClient)}>
@@ -775,7 +705,7 @@ function Return2425Tab({ clients, user }) {
             </label>
             <button onClick={saveCalc} disabled={saving || !clientId} className="btn-primary w-full justify-center">
               <Save size={15} />
-              {saving ? 'Saving...' : shareWithClient ? 'Save & Share with Client' : 'Save Return Computation'}
+              {saving ? 'Saving...' : editingId ? 'Update Saved Return' : shareWithClient ? 'Save & Share with Client' : 'Save Return Computation'}
             </button>
             <p className="text-xs text-gray-400">Based on IRD guide Asmt_IIT_004_2024_2025. Verify figures against source documents before filing.</p>
           </div>

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, FileText, X, Search } from 'lucide-react';
+import { Plus, FileText, X, Search, Printer } from 'lucide-react';
+import { summarizeCalc } from '../../lib/iitCalc';
+import { openStatement } from '../../lib/iitStatement';
 
 const STATUSES = ['pending', 'in_progress', 'submitted', 'completed'];
 
@@ -15,6 +17,7 @@ const statusBadge = (s) => {
 export default function TaxReturns() {
   const { user } = useAuth();
   const [returns, setReturns] = useState([]);
+  const [calcs, setCalcs] = useState({});   // latest annual calc per `${client_id}|${year}`
   const [clients, setClients] = useState([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -26,11 +29,14 @@ export default function TaxReturns() {
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
-    const [{ data: rets }, { data: cls }] = await Promise.all([
-      supabase.from('tax_returns').select('*, clients(full_name, tin)').order('created_at', { ascending: false }),
+    const [{ data: rets }, { data: cls }, { data: cs }] = await Promise.all([
+      supabase.from('tax_returns').select('*, clients(full_name, tin, nic, address, employer, resident_status)').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, full_name, tin').order('full_name'),
+      supabase.from('iit_calculations').select('id, client_id, year, calc_type, input_data, created_at').eq('calc_type', 'annual').order('created_at', { ascending: false }),
     ]);
-    setReturns(rets ?? []); setClients(cls ?? []); setLoading(false);
+    const latest = {};
+    for (const c of cs ?? []) { const k = `${c.client_id}|${c.year}`; if (!latest[k]) latest[k] = c; }
+    setReturns(rets ?? []); setClients(cls ?? []); setCalcs(latest); setLoading(false);
   };
 
   const filtered = returns.filter(r => {
@@ -100,11 +106,16 @@ export default function TaxReturns() {
                   <th className="table-th hidden md:table-cell">Gross Income</th>
                   <th className="table-th hidden md:table-cell">Tax</th>
                   <th className="table-th">Status</th>
-                  <th className="table-th">Update</th>
+                  <th className="table-th">Statement / Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map(r => (
+                {filtered.map(r => {
+                  const calc = calcs[`${r.client_id}|${r.year}`];
+                  const sm = calc ? summarizeCalc(calc) : null;
+                  const gross = r.gross_income ?? sm?.assessable;
+                  const tax = r.total_tax ?? sm?.grossTax;
+                  return (
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="table-td">
                       <div className="font-semibold text-sm">{r.clients?.full_name ?? '—'}</div>
@@ -112,10 +123,20 @@ export default function TaxReturns() {
                     </td>
                     <td className="table-td text-sm">{r.year}</td>
                     <td className="table-td hidden sm:table-cell text-xs text-gray-500">{fmtDate(r.due_date)}</td>
-                    <td className="table-td hidden md:table-cell text-sm">{r.gross_income ? fmtRs(r.gross_income) : '—'}</td>
-                    <td className="table-td hidden md:table-cell text-sm font-semibold text-primary-700">{r.total_tax ? fmtRs(r.total_tax) : '—'}</td>
+                    <td className="table-td hidden md:table-cell text-sm">{gross != null ? fmtRs(gross) : '—'}</td>
+                    <td className="table-td hidden md:table-cell text-sm font-semibold text-primary-700">
+                      {tax != null ? fmtRs(tax) : '—'}
+                      {sm && <div className={`text-xs font-normal ${sm.status === 'refund' ? 'text-green-700' : 'text-red-600'}`}>{sm.status === 'refund' ? 'Refund' : 'Balance'} {fmtRs(Math.abs(sm.amount))}</div>}
+                    </td>
                     <td className="table-td">{statusBadge(r.status)}</td>
                     <td className="table-td">
+                      <div className="flex items-center gap-2">
+                      {calc ? (
+                        <button onClick={() => openStatement(calc, r.clients ?? {})} title="Print / PDF computation statement"
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50">
+                          <Printer size={12} /> PDF
+                        </button>
+                      ) : <span className="text-xs text-gray-300" title="No saved calculation for this year">no calc</span>}
                       <select
                         value={r.status}
                         onChange={e => updateStatus(r.id, e.target.value)}
@@ -123,9 +144,11 @@ export default function TaxReturns() {
                       >
                         {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                       </select>
+                      </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

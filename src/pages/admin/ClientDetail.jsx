@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Edit2, Save, X, Calculator, FileText, Receipt, Share2, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Calculator, FileText, Receipt, Printer } from 'lucide-react';
+import SavedCalculations from '../../components/SavedCalculations';
+import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
+import { openStatement } from '../../lib/iitStatement';
 
 export default function ClientDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [calculations, setCalculations] = useState([]);
   const [returns, setReturns] = useState([]);
@@ -42,12 +46,6 @@ export default function ClientDetail() {
     if (error) { toast.error(error.message); return; }
     toast.success('Client updated!');
     setClient(form); setEditing(false);
-  };
-
-  const shareCalc = async (calcId, shared) => {
-    await supabase.from('iit_calculations').update({ shared_with_client: !shared }).eq('id', calcId);
-    toast.success(!shared ? 'Shared with client!' : 'Unshared');
-    loadAll();
   };
 
   const statusBadge = (s) => {
@@ -150,48 +148,17 @@ export default function ClientDetail() {
 
       {/* Calculations Tab */}
       {tab === 'calculations' && (
-        <div className="card">
-          <div className="card-header">
-            <Calculator size={16} /> IIT Calculations
-            <Link to="/admin/calculator" className="ml-auto btn-primary text-xs py-1">
-              <Calculator size={13} /> New Calc
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <Link to="/admin/calculator" className="btn-primary text-sm py-1.5">
+              <Calculator size={14} /> New Calculation
             </Link>
           </div>
-          {calculations.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">No calculations yet</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="table-th">Date</th>
-                    <th className="table-th">Year</th>
-                    <th className="table-th">Type</th>
-                    <th className="table-th">Tax</th>
-                    <th className="table-th">Shared</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {calculations.map(c => (
-                    <tr key={c.id} className="hover:bg-gray-50">
-                      <td className="table-td text-xs text-gray-500">{fmtDate(c.created_at)}</td>
-                      <td className="table-td">{c.year}</td>
-                      <td className="table-td capitalize">{c.calc_type}</td>
-                      <td className="table-td font-semibold text-primary-700">{fmtRs(c.result_data?.net_tax)}</td>
-                      <td className="table-td">
-                        <button onClick={() => shareCalc(c.id, c.shared_with_client)}
-                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-colors ${
-                            c.shared_with_client ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600'
-                          }`}>
-                          {c.shared_with_client ? <><CheckCircle size={12} /> Shared</> : <><Share2 size={12} /> Share</>}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <SavedCalculations
+            clientId={id}
+            compact
+            onOpen={(calc) => navigate('/admin/calculator', { state: { loadCalc: calc } })}
+          />
         </div>
       )}
 
@@ -203,15 +170,34 @@ export default function ClientDetail() {
             <div className="p-8 text-center text-gray-400 text-sm">No returns</div>
           ) : (
             <div className="divide-y divide-gray-50">
-              {returns.map(r => (
-                <div key={r.id} className="flex items-center gap-3 px-5 py-3">
-                  <div className="flex-1">
-                    <div className="text-sm font-semibold">Y/A {r.year}</div>
-                    <div className="text-xs text-gray-400">Due: {fmtDate(r.due_date)} · {r.notes ?? ''}</div>
+              {returns.map(r => {
+                const calc = calculations.find(c => c.year === r.year && c.calc_type === 'annual');
+                const sm = calc ? summarizeCalc(calc) : null;
+                return (
+                  <div key={r.id} className="flex items-center gap-3 px-5 py-3 flex-wrap">
+                    <div className="flex-1 min-w-48">
+                      <div className="text-sm font-semibold">Y/A {r.year}</div>
+                      <div className="text-xs text-gray-400">Due: {fmtDate(r.due_date)}{r.notes ? ` · ${r.notes}` : ''}</div>
+                      {sm ? (
+                        <div className="text-xs text-gray-600 mt-0.5">
+                          {KIND_LABEL[sm.kind]} · Assessable {fmtRs(sm.assessable)} · Gross tax {fmtRs(sm.grossTax)} ·{' '}
+                          <span className={sm.status === 'refund' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
+                            {sm.status === 'refund' ? 'Refund' : 'Payable'} {fmtRs(Math.abs(sm.amount))}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-600 mt-0.5">No saved calculation for Y/A {r.year} yet</div>
+                      )}
+                    </div>
+                    {calc && (
+                      <button onClick={() => openStatement(calc, client)} className="btn-secondary text-xs py-1 px-2.5">
+                        <Printer size={13} /> PDF
+                      </button>
+                    )}
+                    {statusBadge(r.status)}
                   </div>
-                  {statusBadge(r.status)}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
