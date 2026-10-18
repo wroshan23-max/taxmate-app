@@ -7,6 +7,7 @@ import { ArrowLeft, Edit2, Save, X, Calculator, FileText, Receipt, Printer } fro
 import SavedCalculations from '../../components/SavedCalculations';
 import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
+import { loadInvoiceForPrint, openInvoice, STATUS_LABEL } from '../../lib/invoice';
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -46,6 +47,14 @@ export default function ClientDetail() {
     if (error) { toast.error(error.message); return; }
     toast.success('Client updated!');
     setClient(form); setEditing(false);
+  };
+
+  const printInvoice = async (invoiceId) => {
+    const w = window.open('', '_blank', 'width=900,height=900');   // open now so the pop-up isn't blocked
+    try {
+      const { inv, items, bank } = await loadInvoiceForPrint(supabase, invoiceId);
+      if (!openInvoice(inv, items, bank, {}, w)) toast.error('Pop-up blocked — allow pop-ups for this site');
+    } catch (e) { if (w) w.close(); toast.error(e.message); }
   };
 
   const statusBadge = (s) => {
@@ -206,7 +215,8 @@ export default function ClientDetail() {
       {/* Invoices Tab */}
       {tab === 'invoices' && (
         <div className="card">
-          <div className="card-header"><Receipt size={16} /> Invoices</div>
+          <div className="card-header"><Receipt size={16} /> Invoices
+            <Link to="/admin/invoices" className="ml-auto btn-primary text-xs py-1"><Receipt size={13} /> New Invoice</Link></div>
           {invoices.length === 0 ? (
             <div className="p-8 text-center text-gray-400 text-sm">No invoices</div>
           ) : (
@@ -218,7 +228,8 @@ export default function ClientDetail() {
                     <div className="text-xs text-gray-400">{fmtDate(inv.issue_date)} · Due: {fmtDate(inv.due_date)}</div>
                   </div>
                   <div className="text-sm font-bold text-primary-700 mr-3">{fmtRs(inv.total_amount)}</div>
-                  {statusBadge(inv.status)}
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">{STATUS_LABEL[inv.status] ?? inv.status}</span>
+                  <button onClick={() => printInvoice(inv.id)} className="btn-secondary text-xs py-1 px-2.5"><Printer size={13} /> Print</button>
                 </div>
               ))}
             </div>
