@@ -24,6 +24,18 @@ export const SERVICE_CATALOG = [
 
 export const DEFAULT_NOTE = 'Thank you for choosing TaxMate Solutions. Please make payment within the due date.';
 
+// Invoice settings (Settings → Invoices). Defaults match V16.
+export const INVOICE_DEFAULTS = { prefix: 'TM-INV', dueDays: 14, defaultNote: DEFAULT_NOTE, catalog: SERVICE_CATALOG };
+export const INVOICE_CFG = { ...INVOICE_DEFAULTS, catalog: [...SERVICE_CATALOG] };
+export function applyInvoiceSettings(v) {
+  Object.assign(INVOICE_CFG, INVOICE_DEFAULTS, { catalog: [...SERVICE_CATALOG] });
+  if (!v) return;
+  if (typeof v.prefix === 'string' && /^[A-Za-z0-9-]{1,16}$/.test(v.prefix.trim())) INVOICE_CFG.prefix = v.prefix.trim().toUpperCase();
+  const d = parseInt(v.dueDays, 10); if (d >= 0 && d <= 365) INVOICE_CFG.dueDays = d;
+  if (typeof v.defaultNote === 'string' && v.defaultNote.trim()) INVOICE_CFG.defaultNote = v.defaultNote.trim();
+  if (Array.isArray(v.catalog)) INVOICE_CFG.catalog = v.catalog.filter(x => x && String(x.name || '').trim()).map(x => ({ name: String(x.name).trim(), price: Number(x.price) || 0 }));
+}
+
 // Status model: draft → unpaid ("Sent") → paid. 'overdue' is a legacy value treated as sent.
 export const isSent = (s) => s === 'unpaid' || s === 'overdue';
 export const STATUS_LABEL = { draft: '📝 Draft', unpaid: '📤 Sent', overdue: '📤 Sent', paid: '✅ Paid' };
@@ -37,14 +49,14 @@ export function computeTotals(items, discountPct) {
   return { subtotal, discount_amt, total: subtotal - discount_amt };
 }
 
-// TM-INV-YYYY-NNNN — NNNN continues across years (same as V16)
+// PREFIX-YYYY-NNNN — NNNN continues across years and prefixes (same as V16)
 export function nextInvoiceNo(existingNos, dateStr) {
   const yr = (dateStr ? new Date(dateStr) : new Date()).getFullYear();
   const max = existingNos.reduce((m, no) => {
-    const k = /^TM-INV-\d{4}-(\d+)$/.exec(no || '');
+    const k = /-\d{4}-(\d+)$/.exec(no || '');
     return k ? Math.max(m, parseInt(k[1], 10)) : m;
   }, 0);
-  return `TM-INV-${yr}-${String(max + 1).padStart(4, '0')}`;
+  return `${INVOICE_CFG.prefix}-${yr}-${String(max + 1).padStart(4, '0')}`;
 }
 
 export const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -121,7 +133,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#111;backgro
   <div><div style="font-size:20pt;font-weight:900;letter-spacing:1px">Tax<span style="color:#e8a020">Mate</span> Solutions</div>
   <div style="font-size:8.5pt;opacity:.8;margin-top:2px">${esc(FIRM.tagline)}</div></div>
   <div style="text-align:right;font-size:8.5pt;line-height:2;opacity:.9">
-    <div>&#x1F4E7; ${FIRM.email}</div><div>&#x1F4F1; ${FIRM.phone}</div><div>&#x1F310; ${FIRM.web}</div><div>&#x1F4D8; TaxMateSolutions.lk</div></div>
+    <div>&#x1F4E7; ${FIRM.email}</div><div>&#x1F4F1; ${FIRM.phone}</div><div>&#x1F310; ${FIRM.web}</div>${FIRM.facebook ? `<div>&#x1F4D8; ${esc(FIRM.facebook)}</div>` : ''}</div>
 </div>
 <div style="background:#f0f4fc;border:1px solid #c8d4e8;border-top:none;padding:10px 24px;display:flex;justify-content:space-between;align-items:center">
   <div><div style="font-size:14pt;font-weight:900;color:#1a3c6e">TAX INVOICE</div>
@@ -164,7 +176,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#111;backgro
 <div style="border:1px solid #c8d4e8;border-top:none;display:grid;grid-template-columns:1fr 1fr">
   <div style="padding:14px 20px;border-right:1px solid #e0e8f8">
     <div style="font-size:7.5pt;font-weight:800;color:#6b7a99;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Notes / Payment Instructions</div>
-    <div style="font-size:9pt;color:#444;line-height:1.7">${esc(inv.notes || DEFAULT_NOTE).replace(/\n/g, '<br>')}${bankHtml}</div>
+    <div style="font-size:9pt;color:#444;line-height:1.7">${esc(inv.notes || INVOICE_CFG.defaultNote).replace(/\n/g, '<br>')}${bankHtml}</div>
   </div>
   <div style="padding:14px 20px;text-align:right">
     <div style="font-size:7.5pt;font-weight:800;color:#6b7a99;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Authorized Signature</div>

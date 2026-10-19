@@ -7,13 +7,24 @@ import {
   calcKind, computeAnnual, computeQuarterly, computeReturn2425, yearCfg, SLABS_2425,
 } from './iitCalc';
 
-export const FIRM = {
+// Firm profile used on every statement, invoice and message.
+// Defaults below; Settings → Firm Profile overrides them (loaded at app start).
+export const FIRM_DEFAULTS = {
   name: 'TaxMate Solutions',
   tagline: 'Your Trusted Tax & Accounting Partner in Sri Lanka',
   email: 'info@taxmatesolutions.com',
   phone: '0719 404 604',
+  whatsapp: '0719 404 604',
   web: 'www.taxmatesolutions.com',
+  facebook: 'TaxMateSolutions.lk',
+  address: '',
+  regNo: '',
 };
+export const FIRM = { ...FIRM_DEFAULTS };
+export function applyFirm(v) {
+  Object.assign(FIRM, FIRM_DEFAULTS);
+  if (v) for (const [k, val] of Object.entries(v)) if (k in FIRM_DEFAULTS && val !== null && val !== undefined && String(val).trim() !== '') FIRM[k] = String(val).trim();
+}
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const m = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
