@@ -6,14 +6,15 @@ import { Receipt, Plus, Trash2, Printer, Save, RotateCcw, Pencil, Download, Sear
 import SignaturePad from '../../components/SignaturePad';
 import SendMenu from '../../components/SendMenu';
 import { invoiceMessage } from '../../lib/share';
+import { FIRM } from '../../lib/iitStatement';
 import {
-  SERVICE_CATALOG, STATUS_LABEL, DEFAULT_NOTE, isSent, isOverdue, itemAmount, computeTotals,
+  INVOICE_CFG, STATUS_LABEL, isSent, isOverdue, itemAmount, computeTotals,
   nextInvoiceNo, todayISO, addDaysISO, billTo, openInvoice, exportInvoicesCSV,
 } from '../../lib/invoice';
 
 const EMPTY_CLIENT = { name: '', tin: '', nic: '', phone: '', email: '', address: '' };
 const blankForm = () => ({
-  issue_date: todayISO(), due_date: addDaysISO(todayISO(), 14), client_id: '', client: { ...EMPTY_CLIENT },
+  issue_date: todayISO(), due_date: addDaysISO(todayISO(), INVOICE_CFG.dueDays), client_id: '', client: { ...EMPTY_CLIENT },
   items: [], discount_pct: '0', notes: '', bank_account_id: '', sigMode: 'draw', signature: '',
 });
 
@@ -265,7 +266,7 @@ export default function Invoices() {
       <div className="flex items-center gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-primary-800">🧾 E-Invoice</h1>
-          <p className="text-sm text-gray-500">TM-INV-YYYY-NNNN sequential numbering · IRD Sri Lanka guidelines</p>
+          <p className="text-sm text-gray-500">{INVOICE_CFG.prefix}-YYYY-NNNN sequential numbering · IRD Sri Lanka guidelines</p>
         </div>
         <button onClick={() => { resetForm(); setTab('new'); }} className="btn-primary ml-auto"><Plus size={16} /> New Invoice</button>
       </div>
@@ -362,7 +363,7 @@ export default function Invoices() {
               <Step n="3">Services &amp; Items</Step>
               <Label>⚡ Quick Add from Service Catalog</Label>
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {SERVICE_CATALOG.map(s => (
+                {INVOICE_CFG.catalog.map(s => (
                   <button key={s.name} type="button" onClick={() => addItem(s.name, s.price)}
                     className="px-3 py-1 rounded-full text-xs font-semibold border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-600 hover:text-white transition-colors">
                     {s.name} <span className="opacity-70">Rs.{s.price / 1000}k</span>
@@ -414,7 +415,7 @@ export default function Invoices() {
             <div className="card p-5">
               <Step n="4">Notes &amp; E-Signature</Step>
               <Label>Payment Instructions / Notes</Label>
-              <textarea className="input resize-none mb-4" rows={3} placeholder={DEFAULT_NOTE} value={form.notes} onChange={e => set({ notes: e.target.value })} />
+              <textarea className="input resize-none mb-4" rows={3} placeholder={INVOICE_CFG.defaultNote} value={form.notes} onChange={e => set({ notes: e.target.value })} />
               <div className="flex items-center gap-2 mb-2">
                 <Label className="mb-0">Authorized Signature</Label>
                 <div className="ml-auto flex rounded-lg overflow-hidden border border-gray-200 text-xs">
@@ -474,11 +475,12 @@ export default function Invoices() {
             </div>
             <div className="card p-4 text-xs text-gray-600 space-y-1">
               <div className="font-semibold text-primary-700 text-sm mb-1">🏢 Seller (Our Details)</div>
-              <div className="font-semibold">TaxMate Solutions</div>
-              <div>📧 info@taxmatesolutions.com</div>
-              <div>📱 0719 404 604</div>
-              <div>🌐 www.taxmatesolutions.com</div>
-              <div>📘 TaxMateSolutions.lk</div>
+              <div className="font-semibold">{FIRM.name}</div>
+              <div>📧 {FIRM.email}</div>
+              <div>📱 {FIRM.phone}</div>
+              <div>🌐 {FIRM.web}</div>
+              {FIRM.facebook && <div>📘 {FIRM.facebook}</div>}
+              <a href="/admin/settings" className="text-primary-600 underline">Edit in Settings</a>
             </div>
           </div>
         </div>
@@ -586,7 +588,7 @@ export default function Invoices() {
 }
 
 // ─── Bank accounts + signature image ─────────────────────
-function InvoiceSettings({ banks, firmSig, reload }) {
+export function InvoiceSettings({ banks, firmSig, reload }) {
   const [nb, setNb] = useState({ bank_name: '', account_name: 'TaxMate Solutions', account_no: '', branch: '' });
   const [busy, setBusy] = useState(false);
 

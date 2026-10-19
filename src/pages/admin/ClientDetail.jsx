@@ -9,6 +9,7 @@ import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
 import { loadInvoiceForPrint, openInvoice, STATUS_LABEL } from '../../lib/invoice';
 import SendMenu from '../../components/SendMenu';
+import PortalAccess from '../../components/PortalAccess';
 import { invoiceMessage } from '../../lib/share';
 
 export default function ClientDetail() {
@@ -156,6 +157,7 @@ export default function ClientDetail() {
           </div>
         </div>
       )}
+      {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
 
       {/* Calculations Tab */}
       {tab === 'calculations' && (

@@ -85,6 +85,7 @@ export default function Clients() {
                   <th className="table-th hidden sm:table-cell">NIC</th>
                   <th className="table-th hidden md:table-cell">Mobile</th>
                   <th className="table-th hidden lg:table-cell">Added</th>
+                  <th className="table-th">Portal</th>
                   <th className="table-th">Action</th>
                 </tr>
               </thead>
@@ -110,6 +111,11 @@ export default function Clients() {
                     <td className="table-td hidden sm:table-cell text-gray-600">{c.nic ?? '—'}</td>
                     <td className="table-td hidden md:table-cell text-gray-600">{c.mobile ?? '—'}</td>
                     <td className="table-td hidden lg:table-cell text-gray-400 text-xs">{fmtDate(c.created_at)}</td>
+                    <td className="table-td">
+                      {c.profile_id
+                        ? <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>
+                        : <Link to={`/admin/clients/${c.id}`} className="text-xs text-primary-600 hover:underline">Invite</Link>}
+                    </td>
                     <td className="table-td">
                       <Link
                         to={`/admin/clients/${c.id}`}
