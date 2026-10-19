@@ -2,6 +2,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import SharedDocument from './pages/SharedDocument';
+import { InvitePage, ResetPasswordPage } from './pages/AccountLinks';
+import Settings from './pages/admin/Settings';
+import { useSettings } from './contexts/SettingsContext';
 import AdminLayout from './components/AdminLayout';
 import ClientLayout from './components/ClientLayout';
 import Dashboard from './pages/admin/Dashboard';
@@ -58,12 +61,16 @@ function RootRedirect() {
 }
 
 export default function App() {
+  useSettings();   // re-render pages when firm / invoice settings load or change
   return (
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
       {/* Public: one document shared by secure link (WhatsApp / email) */}
       <Route path="/share/:token" element={<SharedDocument />} />
+      {/* Public: create password from an invite / reset link */}
+      <Route path="/invite/:token" element={<InvitePage />} />
+      <Route path="/reset/:token" element={<ResetPasswordPage />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={
@@ -77,6 +84,7 @@ export default function App() {
         <Route path="invoices" element={<Invoices />} />
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
 
       {/* Client routes */}
