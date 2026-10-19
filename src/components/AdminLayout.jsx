@@ -15,6 +15,7 @@ const nav = [
   { to: '/admin/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/admin/requests', icon: MessageSquarePlus, label: 'Update Requests' },
   { to: '/admin/updates', icon: Megaphone, label: 'Tax Updates' },
+  { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
 export default function AdminLayout() {
