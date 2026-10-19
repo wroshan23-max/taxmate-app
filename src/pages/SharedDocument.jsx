@@ -1,3 +1,4 @@
+import { waNumber } from '../lib/share';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -41,7 +42,7 @@ export default function SharedDocument() {
       <div className="card p-10 text-center max-w-lg mx-auto">
         <div className="text-4xl mb-3">🔒</div>
         <div className="font-semibold text-gray-800 mb-1">This link is not available</div>
-        <p className="text-sm text-gray-500">It may have been turned off or replaced with a newer version. Please contact {FIRM.name} on WhatsApp <a className="text-primary-700 underline" href="https://wa.me/94719404604">{FIRM.phone}</a>.</p>
+        <p className="text-sm text-gray-500">It may have been turned off or replaced with a newer version. Please contact {FIRM.name} on WhatsApp <a className="text-primary-700 underline" href={`https://wa.me/${waNumber(FIRM.whatsapp)}`}>{FIRM.whatsapp}</a>.</p>
       </div>
     </Shell>
   );

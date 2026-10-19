@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { FIRM } from '../lib/iitStatement';
+import { waNumber } from '../lib/share';
 
 export default function Login() {
   const { signIn, user, profile, loading: authLoading, isAdmin, isClient } = useAuth();
@@ -26,7 +28,7 @@ export default function Login() {
     const { error } = await signIn(email, password);
     setLoading(false);
     if (error) {
-      toast.error('Email හෛ Password වැරේ්ේ්: ' + error.message);
+      toast.error('Email හෝ Password වැරදියි — Email or password is incorrect');
     }
     // Navigation handled by useEffect above when auth state updates
   };
@@ -91,13 +93,22 @@ export default function Login() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
+          <div className="mt-3 text-center">
+            <a
+              href={`https://wa.me/${waNumber(FIRM.whatsapp)}?text=${encodeURIComponent(`Hi ${FIRM.name}, I forgot my portal password. My email is: ${email || ''}`)}`}
+              target="_blank" rel="noreferrer"
+              className="text-xs text-primary-600 hover:underline"
+            >
+              Forgot password? Ask {FIRM.name} on WhatsApp for a reset link
+            </a>
+          </div>
 
           <div className="mt-6 pt-5 border-t border-gray-100 text-center">
             <p className="text-xs text-gray-400">
-              TaxMate Solutions · IRD Sri Lanka Registered
+              {FIRM.name} · Accounting &amp; Tax Advisory
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              📞 +94 XX XXX XXXX
+              📞 {FIRM.phone} · {FIRM.email}
             </p>
           </div>
         </div>
