@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
+import SharedDocument from './pages/SharedDocument';
 import AdminLayout from './components/AdminLayout';
 import ClientLayout from './components/ClientLayout';
 import Dashboard from './pages/admin/Dashboard';
@@ -61,6 +62,8 @@ export default function App() {
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
+      {/* Public: one document shared by secure link (WhatsApp / email) */}
+      <Route path="/share/:token" element={<SharedDocument />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={
