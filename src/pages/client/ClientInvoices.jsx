@@ -1,3 +1,5 @@
+import { waNumber } from '../../lib/share';
+import { FIRM } from '../../lib/iitStatement';
 import { useEffect, useState } from 'react';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -100,7 +102,7 @@ export default function ClientInvoices() {
                 <div className="px-4 py-3 bg-amber-50 border-t border-amber-100">
                   <p className="text-xs text-amber-700">
                     Payment details are on the invoice. Questions? WhatsApp{' '}
-                    <a href="https://wa.me/94719404604" target="_blank" rel="noreferrer" className="font-semibold underline">0719 404 604</a>
+                    <a href={`https://wa.me/${waNumber(FIRM.whatsapp)}`} target="_blank" rel="noreferrer" className="font-semibold underline">{FIRM.whatsapp}</a>
                   </p>
                 </div>
               )}

@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Send, CheckCircle, Clock } from 'lucide-react';
+import ChangePassword from '../../components/ChangePassword';
 
 const FIELD_LABELS = {
   full_name: 'Full Name',
@@ -167,6 +168,8 @@ export default function ClientProfile() {
           </div>
         </div>
       )}
+
+      <div className="max-w-md"><ChangePassword /></div>
     </div>
   );
 }
