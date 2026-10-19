@@ -286,7 +286,13 @@ export function buildStatementHtml(calc, client = {}, { withToolbar = true } = {
   const title = `IIT_Computation_${String(calc.year || '').replace('/', '-')}_${(client.full_name || 'Client').trim().replace(/\s+/g, '_')}`;
   const bar = withToolbar
     ? '<div class="bar no-print"><button class="pbt" onclick="window.print()">&#128424; Print / Save as PDF</button></div>' : '';
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}</title>${CSS}</head><body>${bar}${body}</body></html>`;
+  // Anything not explicitly finalised (including unsaved previews) prints as a DRAFT
+  const isFinal = calc.status === 'final';
+  const statusStrip = isFinal
+    ? `<div class="vs fin">&#10004; FINAL computation${calc.label ? ` &mdash; ${esc(calc.label)}` : ''}</div>`
+    : `<div class="wm">DRAFT</div><div class="vs drf">&#9998; DRAFT${calc.label ? ` &mdash; ${esc(calc.label)}` : ''} &mdash; prepared for your verification. Figures may change before the final return is filed.</div>`;
+  const extraCss = '<style>.wm{position:fixed;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:120px;font-weight:900;color:rgba(192,57,43,.07);pointer-events:none;white-space:nowrap;z-index:0;letter-spacing:8px}.vs{border-radius:6px;padding:6px 12px;font-size:10px;font-weight:700;margin:0 0 10px}.vs.drf{background:#FDEDEC;border:1px solid #F5B7B1;color:#922B21}.vs.fin{background:#E9F7EF;border:1px solid #A9DFBF;color:#1E8449}</style>';
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}${isFinal ? '' : '_DRAFT'}</title>${CSS}${extraCss}</head><body>${bar}${statusStrip}${body}</body></html>`;
 }
 
 // Open the statement in a new window ready to print / save as PDF.
