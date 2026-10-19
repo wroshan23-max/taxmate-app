@@ -32,10 +32,11 @@ export default function TaxReturns() {
     const [{ data: rets }, { data: cls }, { data: cs }] = await Promise.all([
       supabase.from('tax_returns').select('*, clients(full_name, tin, nic, address, employer, resident_status)').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, full_name, tin').order('full_name'),
-      supabase.from('iit_calculations').select('id, client_id, year, calc_type, input_data, created_at').eq('calc_type', 'annual').order('created_at', { ascending: false }),
+      supabase.from('iit_calculations').select('id, client_id, year, calc_type, input_data, created_at, status, label').eq('calc_type', 'annual').order('created_at', { ascending: false }),
     ]);
     const latest = {};
-    for (const c of cs ?? []) { const k = `${c.client_id}|${c.year}`; if (!latest[k]) latest[k] = c; }
+    // FINAL version wins; otherwise the latest draft
+    for (const c of cs ?? []) { const k = `${c.client_id}|${c.year}`; if (!latest[k] || (c.status === 'final' && latest[k].status !== 'final')) latest[k] = c; }
     setReturns(rets ?? []); setClients(cls ?? []); setCalcs(latest); setLoading(false);
   };
 
@@ -127,6 +128,7 @@ export default function TaxReturns() {
                     <td className="table-td hidden md:table-cell text-sm font-semibold text-primary-700">
                       {tax != null ? fmtRs(tax) : '—'}
                       {sm && <div className={`text-xs font-normal ${sm.status === 'refund' ? 'text-green-700' : 'text-red-600'}`}>{sm.status === 'refund' ? 'Refund' : 'Balance'} {fmtRs(Math.abs(sm.amount))}</div>}
+                      {calc && <div className={`text-[10px] font-bold ${calc.status === 'final' ? 'text-green-700' : 'text-amber-600'}`}>{calc.status === 'final' ? '✅ FINAL' : '📝 DRAFT'}</div>}
                     </td>
                     <td className="table-td">{statusBadge(r.status)}</td>
                     <td className="table-td">

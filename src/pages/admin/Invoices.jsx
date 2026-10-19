@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Receipt, Plus, Trash2, Printer, Save, RotateCcw, Pencil, Download, Search, Building2, PenTool, Star } from 'lucide-react';
 import SignaturePad from '../../components/SignaturePad';
+import SendMenu from '../../components/SendMenu';
+import { invoiceMessage } from '../../lib/share';
 import {
   SERVICE_CATALOG, STATUS_LABEL, DEFAULT_NOTE, isSent, isOverdue, itemAmount, computeTotals,
   nextInvoiceNo, todayISO, addDaysISO, billTo, openInvoice, exportInvoicesCSV,
@@ -233,6 +235,21 @@ export default function Invoices() {
   const actionButtons = (inv, { ar = false } = {}) => (
     <div className="flex gap-1 flex-wrap justify-end">
       <button onClick={() => printSaved(inv)} title="Print / PDF" className="p-1.5 rounded-md border border-gray-200 hover:bg-gray-50 text-primary-700"><Printer size={14} /></button>
+      <SendMenu
+        table="invoices" row={inv}
+        phone={billTo(inv).phone} email={billTo(inv).email}
+        subject={`Invoice ${inv.invoice_no} — TaxMate Solutions`}
+        buildMessage={(url) => invoiceMessage(inv, url)}
+        beforeSend={async () => {
+          // sending a draft = it has been sent to the client
+          if (inv.status !== 'draft') return null;
+          const { error } = await supabase.from('invoices').update({ status: 'unpaid' }).eq('id', inv.id);
+          if (error) throw error;
+          toast.success(`${inv.invoice_no} marked as Sent`);
+          return { status: 'unpaid' };
+        }}
+        onChange={(patch) => setInvoices(list => list.map(x => (x.id === inv.id ? { ...x, ...patch } : x)))}
+      />
       {inv.status === 'draft' && <button onClick={() => setStatus(inv, 'unpaid')} className="px-2 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100">📤 Sent</button>}
       {isSent(inv.status) && <button onClick={() => setStatus(inv, 'paid')} className="px-2 py-1 rounded-md text-xs font-semibold bg-green-50 text-green-700 hover:bg-green-100">💰 Paid</button>}
       {!ar && inv.status === 'paid' && <button onClick={() => setStatus(inv, 'unpaid')} className="px-2 py-1 rounded-md text-xs font-semibold bg-gray-50 text-gray-500 hover:bg-gray-100">↩ Unmark</button>}

@@ -8,6 +8,8 @@ import SavedCalculations from '../../components/SavedCalculations';
 import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
 import { loadInvoiceForPrint, openInvoice, STATUS_LABEL } from '../../lib/invoice';
+import SendMenu from '../../components/SendMenu';
+import { invoiceMessage } from '../../lib/share';
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -180,7 +182,8 @@ export default function ClientDetail() {
           ) : (
             <div className="divide-y divide-gray-50">
               {returns.map(r => {
-                const calc = calculations.find(c => c.year === r.year && c.calc_type === 'annual');
+                const forYear = calculations.filter(c => c.year === r.year && c.calc_type === 'annual');
+                const calc = forYear.find(c => c.status === 'final') ?? forYear[0];   // final wins, else latest draft
                 const sm = calc ? summarizeCalc(calc) : null;
                 return (
                   <div key={r.id} className="flex items-center gap-3 px-5 py-3 flex-wrap">
@@ -189,7 +192,7 @@ export default function ClientDetail() {
                       <div className="text-xs text-gray-400">Due: {fmtDate(r.due_date)}{r.notes ? ` · ${r.notes}` : ''}</div>
                       {sm ? (
                         <div className="text-xs text-gray-600 mt-0.5">
-                          {KIND_LABEL[sm.kind]} · Assessable {fmtRs(sm.assessable)} · Gross tax {fmtRs(sm.grossTax)} ·{' '}
+                          <span className={`font-bold ${calc.status === 'final' ? 'text-green-700' : 'text-amber-600'}`}>{calc.status === 'final' ? '✅ FINAL' : '📝 DRAFT'}</span> · {KIND_LABEL[sm.kind]} · Assessable {fmtRs(sm.assessable)} · Gross tax {fmtRs(sm.grossTax)} ·{' '}
                           <span className={sm.status === 'refund' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
                             {sm.status === 'refund' ? 'Refund' : 'Payable'} {fmtRs(Math.abs(sm.amount))}
                           </span>
@@ -230,6 +233,19 @@ export default function ClientDetail() {
                   <div className="text-sm font-bold text-primary-700 mr-3">{fmtRs(inv.total_amount)}</div>
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700">{STATUS_LABEL[inv.status] ?? inv.status}</span>
                   <button onClick={() => printInvoice(inv.id)} className="btn-secondary text-xs py-1 px-2.5"><Printer size={13} /> Print</button>
+                  <SendMenu
+                    table="invoices" row={inv}
+                    phone={inv.client_snapshot?.phone || client.mobile} email={inv.client_snapshot?.email || client.email}
+                    subject={`Invoice ${inv.invoice_no} — TaxMate Solutions`}
+                    buildMessage={(url) => invoiceMessage({ ...inv, clients: client }, url)}
+                    beforeSend={async () => {
+                      if (inv.status !== 'draft') return null;
+                      const { error } = await supabase.from('invoices').update({ status: 'unpaid' }).eq('id', inv.id);
+                      if (error) throw error;
+                      return { status: 'unpaid' };
+                    }}
+                    onChange={(p) => setInvoices(list => list.map(x => (x.id === inv.id ? { ...x, ...p } : x)))}
+                  />
                 </div>
               ))}
             </div>

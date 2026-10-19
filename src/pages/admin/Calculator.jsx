@@ -100,20 +100,66 @@ export default function Calculator() {
   );
 }
 
-// Keep the client's Tax Return row (same Y/A) in step with the latest saved calculation
-async function syncTaxReturn(clientId, year, grossIncome, totalTax) {
-  await supabase.from('tax_returns')
-    .update({ gross_income: Math.round(grossIncome), total_tax: Math.round(totalTax), updated_at: new Date().toISOString() })
-    .eq('client_id', clientId).eq('year', year);
+// Save a calculation as a DRAFT version.
+//  - editing a draft + asNew=false → update that draft
+//  - otherwise (new, "save as new version", or editing a FINAL) → insert a new draft
+// Final versions are never overwritten; they are set in 🗂 Saved Calculations after the client confirms.
+async function persistDraft({ rec, editingId, editingStatus, asNew, userId }) {
+  const now = new Date().toISOString();
+  if (editingId && !asNew && editingStatus !== 'final') {
+    return supabase.from('iit_calculations').update({ ...rec, updated_at: now }).eq('id', editingId).select('id, status').single();
+  }
+  return supabase.from('iit_calculations')
+    .insert({ ...rec, status: 'draft', created_by: userId }).select('id, status').single();
 }
 
-// Banner shown when a saved calculation is open for editing
-function EditingBanner({ editingId, onNew }) {
+// Banner shown when a saved calculation is open
+function EditingBanner({ editingId, status, onNew }) {
   if (!editingId) return null;
+  const isFinal = status === 'final';
   return (
-    <div className="flex items-center gap-3 bg-primary-50 border border-primary-200 rounded-lg px-4 py-2 text-xs text-primary-800">
-      ✏️ Editing a saved calculation — <strong>Save</strong> updates the same record.
+    <div className={`flex items-center gap-3 rounded-lg px-4 py-2 text-xs border ${isFinal ? 'bg-green-50 border-green-200 text-green-800' : 'bg-primary-50 border-primary-200 text-primary-800'}`}>
+      {isFinal
+        ? <>🔒 This is the <strong>FINAL</strong> version. Any change you save becomes a <strong>new draft</strong> — the final stays as it is.</>
+        : <>✏️ Editing a <strong>DRAFT</strong>. “Update this draft” overwrites it; “Save as new draft” keeps both versions.</>}
       <button onClick={onNew} className="ml-auto px-3 py-1 rounded-md bg-white border border-primary-200 hover:bg-primary-100 font-medium">+ Start new calculation</button>
+    </div>
+  );
+}
+
+// Save panel shared by both calculator tabs
+function SavePanel({ clientId, label, setLabel, shareWithClient, setShare, editingId, editingStatus, saving, onSave, onPrint, children }) {
+  const isDraftEdit = editingId && editingStatus !== 'final';
+  return (
+    <div className="card p-4 space-y-3">
+      <div>
+        <label className="block text-xs font-semibold text-gray-500 mb-1">Version name (optional)</label>
+        <input className="input" placeholder="e.g. Draft 1 — before bank interest" value={label} onChange={e => setLabel(e.target.value)} maxLength={80} />
+      </div>
+      <label className="flex items-center gap-3 cursor-pointer">
+        <div className={`relative w-10 h-5 rounded-full transition-colors ${shareWithClient ? 'bg-green-500' : 'bg-gray-200'}`} onClick={() => setShare(!shareWithClient)}>
+          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${shareWithClient ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </div>
+        <span className="text-sm text-gray-700">Show on client portal (client can review &amp; confirm)</span>
+      </label>
+      {isDraftEdit ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => onSave(false)} disabled={saving || !clientId} className="btn-primary justify-center text-sm"><Save size={14} /> {saving ? 'Saving…' : 'Update this draft'}</button>
+          <button onClick={() => onSave(true)} disabled={saving || !clientId} className="btn-secondary justify-center text-sm"><Save size={14} /> Save as new draft</button>
+        </div>
+      ) : (
+        <button onClick={() => onSave(true)} disabled={saving || !clientId} className="btn-primary w-full justify-center">
+          <Save size={15} /> {saving ? 'Saving…' : editingId ? 'Save changes as new draft' : 'Save as Draft'}
+        </button>
+      )}
+      <button onClick={onPrint} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50 flex items-center justify-center gap-2">
+        <Printer size={15} /> Print / PDF Statement {editingStatus === 'final' ? '(Final)' : '(Draft)'}
+      </button>
+      {children}
+      <p className="text-xs text-gray-400 leading-relaxed">
+        Keep as many drafts as you need. When the client confirms, open <strong>🗂 Saved Calculations</strong> → <strong>Mark Final</strong>, and send it by WhatsApp or email from there.
+      </p>
+      {!clientId && <p className="text-xs text-amber-600">Select a client first.</p>}
     </div>
   );
 }
@@ -125,6 +171,8 @@ function IITTab({ clients, user, initial, onNew }) {
   const ini = initial?.input_data ?? {};
   const s0  = (k) => (ini[k] ? String(ini[k]) : '');
   const [editingId, setEditingId]     = useState(initial?.id ?? null);
+  const [editingStatus, setEditingStatus] = useState(initial?.status ?? 'draft');
+  const [label, setLabel]             = useState(initial?.label ?? '');
   const [clientId, setClientId]       = useState(initial?.client_id ?? '');
   const [year, setYear]               = useState(initial?.year ?? '2026/27');
   const [shareWithClient, setShare]   = useState(initial?.shared_with_client ?? false);
@@ -193,26 +241,26 @@ function IITTab({ clients, user, initial, onNew }) {
 
   const printPDF = () => {
     const client = clients.find(c => c.id === clientId) ?? {};
-    if (!openStatement(buildRecord(), client)) toast.error('Pop-up blocked — allow pop-ups for this site to print');
+    const rec = { ...buildRecord(), label: label.trim() || null, status: editingId ? editingStatus : 'draft' };
+    if (!openStatement(rec, client)) toast.error('Pop-up blocked — allow pop-ups for this site to print');
   };
 
-  const saveCalc = async () => {
+  const saveCalc = async (asNew) => {
     if (!clientId) return toast.error('Select a client first');
     setSaving(true);
-    const rec = { ...buildRecord(), client_id: clientId, shared_with_client: shareWithClient };
-    const res = editingId
-      ? await supabase.from('iit_calculations').update(rec).eq('id', editingId).select('id').single()
-      : await supabase.from('iit_calculations').insert({ ...rec, created_by: user.id }).select('id').single();
-    if (res.error) { setSaving(false); return toast.error(res.error.message); }
-    setEditingId(res.data.id);
-    if (mode === 'annual') await syncTaxReturn(clientId, year, totalAss, grossTax);
+    const rec = { ...buildRecord(), client_id: clientId, shared_with_client: shareWithClient, label: label.trim() || null };
+    const res = await persistDraft({ rec, editingId, editingStatus, asNew, userId: user.id });
     setSaving(false);
-    toast.success(editingId ? 'Calculation updated!' : shareWithClient ? 'Saved & shared with client!' : 'Calculation saved!');
+    if (res.error) return toast.error(res.error.message);
+    const updated = editingId === res.data.id;
+    setEditingId(res.data.id);
+    setEditingStatus('draft');
+    toast.success(updated ? 'Draft updated' : 'Saved as a new draft version');
   };
 
   return (
     <div className="space-y-4">
-      <EditingBanner editingId={editingId} onNew={onNew} />
+      <EditingBanner editingId={editingId} status={editingStatus} onNew={onNew} />
       {/* Client / Year / Mode */}
       <div className="card p-5 flex flex-wrap gap-4">
         <div className="flex-1 min-w-48">
@@ -438,25 +486,8 @@ function IITTab({ clients, user, initial, onNew }) {
           )}
 
           {/* Save panel */}
-          <div className="card p-4 space-y-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div
-                className={`relative w-10 h-5 rounded-full transition-colors ${shareWithClient ? 'bg-green-500' : 'bg-gray-200'}`}
-                onClick={() => setShare(!shareWithClient)}
-              >
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${shareWithClient ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </div>
-              <span className="text-sm text-gray-700">Share with client immediately</span>
-            </label>
-            <button onClick={saveCalc} disabled={saving || !clientId} className="btn-primary w-full justify-center">
-              <Save size={15} />
-              {saving ? 'Saving...' : editingId ? 'Update Saved Calculation' : shareWithClient ? 'Save & Share with Client' : 'Save Calculation'}
-            </button>
-            <button onClick={printPDF} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50 flex items-center justify-center gap-2">
-              <Printer size={15} /> Print / PDF Statement for Client
-            </button>
-            {!clientId && <p className="text-xs text-gray-400">Select a client so the statement shows their name, TIN and address.</p>}
-          </div>
+          <SavePanel clientId={clientId} label={label} setLabel={setLabel} shareWithClient={shareWithClient} setShare={setShare}
+            editingId={editingId} editingStatus={editingStatus} saving={saving} onSave={saveCalc} onPrint={printPDF} />
         </div>
       </div>
     </div>
@@ -470,6 +501,8 @@ function IITTab({ clients, user, initial, onNew }) {
 function Return2425Tab({ clients, user, initial, onNew }) {
   const iniF = initial?.input_data ? Object.fromEntries(Object.entries(initial.input_data).filter(([k, val]) => k !== 'form' && val).map(([k, val]) => [k, String(val)])) : {};
   const [editingId, setEditingId]   = useState(initial?.id ?? null);
+  const [editingStatus, setEditingStatus] = useState(initial?.status ?? 'draft');
+  const [label, setLabel]           = useState(initial?.label ?? '');
   const [clientId, setClientId]     = useState(initial?.client_id ?? '');
   const [shareWithClient, setShare] = useState(initial?.shared_with_client ?? false);
   const [saving, setSaving]         = useState(false);
@@ -511,11 +544,11 @@ function Return2425Tab({ clients, user, initial, onNew }) {
 
   const printPDF = () => {
     const client = clients.find(x => x.id === clientId) ?? {};
-    const calc = { year: '2024/25', calc_type: 'annual', input_data: { form: 'IIT_RETURN_2425', ...f } };
+    const calc = { year: '2024/25', calc_type: 'annual', input_data: { form: 'IIT_RETURN_2425', ...f }, label: label.trim() || null, status: editingId ? editingStatus : 'draft' };
     if (!openStatement(calc, client)) toast.error('Pop-up blocked — allow pop-ups for this site to print');
   };
 
-  const saveCalc = async () => {
+  const saveCalc = async (asNew) => {
     if (!clientId) return toast.error('Select a client first');
     setSaving(true);
     const inputData = { form: 'IIT_RETURN_2425', ...Object.fromEntries(Object.entries(f).map(([k, val]) => [k, v(val)])) };
@@ -531,22 +564,19 @@ function Return2425Tab({ clients, user, initial, onNew }) {
       cages: { 10: c.cage10, 20: c.cage20, 30: c.cage30, 40: c.cage40, 50: c.cage50, 60: c.rentRelief, 100: c.cage100, 120: c.cage120, 130: c.term.tax, 140: c.gainTax, 170: c.cage170, 180: c.cage180, 190: Math.max(0, c.balance), 200: Math.max(0, -c.balance), 210: c.cage210 },
       personalRelief: c.prUsed, solarRelief: c.solarUsed, sources: c.sources,
     };
-    const rec = { client_id: clientId, year: '2024/25', calc_type: 'annual', input_data: inputData, result_data: resultData, shared_with_client: shareWithClient };
-    const res = editingId
-      ? await supabase.from('iit_calculations').update(rec).eq('id', editingId).select('id').single()
-      : await supabase.from('iit_calculations').insert({ ...rec, created_by: user.id }).select('id').single();
-    if (res.error) { setSaving(false); return toast.error(res.error.message); }
-    const wasEditing = !!editingId;
-    setEditingId(res.data.id);
-    await syncTaxReturn(clientId, '2024/25', c.cage50, c.cage170);
+    const rec = { client_id: clientId, year: '2024/25', calc_type: 'annual', input_data: inputData, result_data: resultData, shared_with_client: shareWithClient, label: label.trim() || null };
+    const res = await persistDraft({ rec, editingId, editingStatus, asNew, userId: user.id });
     setSaving(false);
-    if (wasEditing) return toast.success('Return computation updated!');
-    toast.success(shareWithClient ? 'Return saved & shared with client!' : 'Return computation saved!');
+    if (res.error) return toast.error(res.error.message);
+    const updated = editingId === res.data.id;
+    setEditingId(res.data.id);
+    setEditingStatus('draft');
+    toast.success(updated ? 'Draft updated' : 'Saved as a new draft version');
   };
 
   return (
     <div className="space-y-4">
-      <EditingBanner editingId={editingId} onNew={onNew} />
+      <EditingBanner editingId={editingId} status={editingStatus} onNew={onNew} />
       {/* Deadline / rules banner */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1">
         <div><strong>📑 Y/A 2024/25</strong> (1 Apr 2024 – 31 Mar 2025) · Personal Relief <strong>Rs. 1,200,000</strong> · Slabs 6% · 12% · 18% · 24% · 30% · 36% (Rs. 500,000 bands)</div>
@@ -694,21 +724,11 @@ function Return2425Tab({ clients, user, initial, onNew }) {
             </div>
           </div>
 
-          <div className="card p-4 space-y-3">
-            <button onClick={printPDF} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50 flex items-center justify-center gap-2"><Printer size={15} /> Print / PDF Statement for Client</button>
+          <SavePanel clientId={clientId} label={label} setLabel={setLabel} shareWithClient={shareWithClient} setShare={setShare}
+            editingId={editingId} editingStatus={editingStatus} saving={saving} onSave={saveCalc} onPrint={printPDF}>
             <button onClick={copySummary} className="w-full px-4 py-2 text-sm rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50">📋 Copy cage summary (for RAMIS)</button>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div className={`relative w-10 h-5 rounded-full transition-colors ${shareWithClient ? 'bg-green-500' : 'bg-gray-200'}`} onClick={() => setShare(!shareWithClient)}>
-                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${shareWithClient ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </div>
-              <span className="text-sm text-gray-700">Share with client immediately</span>
-            </label>
-            <button onClick={saveCalc} disabled={saving || !clientId} className="btn-primary w-full justify-center">
-              <Save size={15} />
-              {saving ? 'Saving...' : editingId ? 'Update Saved Return' : shareWithClient ? 'Save & Share with Client' : 'Save Return Computation'}
-            </button>
             <p className="text-xs text-gray-400">Based on IRD guide Asmt_IIT_004_2024_2025. Verify figures against source documents before filing.</p>
-          </div>
+          </SavePanel>
         </div>
       </div>
     </div>
