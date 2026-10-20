@@ -3,6 +3,7 @@ import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import SharedDocument from './pages/SharedDocument';
 import { InvitePage, ResetPasswordPage } from './pages/AccountLinks';
+import Register from './pages/Register';
 import Settings from './pages/admin/Settings';
 import { useSettings } from './contexts/SettingsContext';
 import AdminLayout from './components/AdminLayout';
@@ -75,6 +76,8 @@ export default function App() {
       {/* Public: create password from an invite / reset link */}
       <Route path="/invite/:token" element={<InvitePage />} />
       <Route path="/reset/:token" element={<ResetPasswordPage />} />
+      {/* Public: new client fills in their own details from a one-time link */}
+      <Route path="/register/:token" element={<Register />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={
