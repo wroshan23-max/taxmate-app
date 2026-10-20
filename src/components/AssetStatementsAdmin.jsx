@@ -9,6 +9,7 @@ import {
 } from '../lib/assets';
 import AssetStatementForm, { AssetSummary } from './AssetStatementForm';
 import MessageMenu from './MessageMenu';
+import { recipientsOf } from '../lib/contacts';
 
 export function StatusPill({ s, enabled = true }) {
   if (!enabled) return <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Hidden from client</span>;
@@ -146,7 +147,7 @@ export default function AssetStatementsAdmin({ client }) {
                     <button onClick={() => openEditor(s)} className="btn-secondary text-xs py-1 px-2.5"><Edit2 size={13} /> Open</button>
                     <button onClick={() => pdf(s)} className="btn-secondary text-xs py-1 px-2.5"><Printer size={13} /> PDF</button>
                     {s.status === 'open' && (
-                      <MessageMenu label="Send to client" phone={client.mobile} email={client.email}
+                      <MessageMenu label="Send to client" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
                         subject={`Assets & Liabilities Y/A ${s.year} — TaxMate`} getText={requestText(s)} />
                     )}
                     {s.status === 'submitted' && <button onClick={() => markReviewed(s)} className="btn-primary text-xs py-1 px-2.5"><CheckCircle2 size={13} /> Mark reviewed</button>}

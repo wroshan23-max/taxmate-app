@@ -7,12 +7,14 @@ import { whatsappLink, emailLink, waNumber } from '../lib/share';
  * Send a ready-made message by WhatsApp / Email / copy.
  *  getText: async () => message text (may create the link first). Throw to abort.
  */
-export default function MessageMenu({ phone, email, subject, getText, label = 'Send', className = '' }) {
+export default function MessageMenu({ recipients, phone: phoneProp, email: emailProp, subject, getText, label = 'Send', className = '' }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const canNative = typeof navigator !== 'undefined' && !!navigator.share;
 
-  const go = async (channel) => {
+  const go = async (channel, to = null) => {
+    const phone = to ? to.phone : phoneProp;
+    const email = to ? to.email : emailProp;
     setOpen(false);
     const w = channel === 'wa' ? window.open('', '_blank') : null;   // open inside the click
     setBusy(true);
@@ -47,9 +49,14 @@ export default function MessageMenu({ phone, email, subject, getText, label = 'S
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 z-50 mt-1 w-60 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
-            <button className={item} onClick={() => go('wa')}><MessageCircle size={15} className="text-green-600" /> WhatsApp{phone ? <span className="ml-auto text-xs text-gray-400">{phone}</span> : null}</button>
-            <button className={item} onClick={() => go('mail')}><Mail size={15} className="text-blue-600" /> Email{email ? <span className="ml-auto text-xs text-gray-400 truncate max-w-[110px]">{email}</span> : null}</button>
+          <div className="absolute left-0 z-50 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+            {(recipients?.length ? recipients : [{ phone: phoneProp, email: emailProp }]).map((r, k) => (
+              <div key={k} className={k ? 'border-t border-gray-100' : ''}>
+                {r.label && <div className="px-3 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400 truncate">{r.label}</div>}
+                <button className={item} onClick={() => go('wa', r)}><MessageCircle size={15} className="text-green-600" /> WhatsApp{r.phone ? <span className="ml-auto text-xs text-gray-400">{r.phone}</span> : null}</button>
+                {(r.email || !recipients?.length) && <button className={item} onClick={() => go('mail', r)}><Mail size={15} className="text-blue-600" /> Email{r.email ? <span className="ml-auto text-xs text-gray-400 truncate max-w-[110px]">{r.email}</span> : null}</button>}
+              </div>
+            ))}
             {canNative && <button className={item} onClick={() => go('native')}><Share2 size={15} className="text-primary-600" /> Share… (phone apps)</button>}
             <button className={item} onClick={() => go('copy')}><Copy size={15} className="text-gray-500" /> Copy message + link</button>
           </div>

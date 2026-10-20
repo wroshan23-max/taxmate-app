@@ -6,6 +6,7 @@ import { summarizeCalc, KIND_LABEL, calcKind } from '../lib/iitCalc';
 import { buildStatementHtml, openStatement } from '../lib/iitStatement';
 import { calcMessage } from '../lib/share';
 import SendMenu from './SendMenu';
+import { recipientsOf } from '../lib/contacts';
 
 const AMT_STYLE = { payable: 'text-red-700', refund: 'text-green-700', nil: 'text-gray-500', instalment: 'text-primary-700' };
 const AMT_LABEL = { payable: 'Payable', refund: 'Refund', nil: 'Nil', instalment: 'Instalment' };
@@ -37,7 +38,7 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
   const load = async () => {
     setLoading(true);
     let q = supabase.from('iit_calculations')
-      .select('*, clients(id, full_name, tin, nic, address, employer, resident_status, mobile, email)')
+      .select('*, clients(id, full_name, tin, nic, address, employer, resident_status, mobile, email, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred)')
       .order('created_at', { ascending: true })
       .limit(500);
     if (clientId) q = q.eq('client_id', clientId);
@@ -220,7 +221,7 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
                             <button onClick={() => print(r)} className="btn-secondary text-xs py-1 px-2.5" title="Print / save as PDF"><Printer size={13} /> PDF</button>
                             {onOpen && <button onClick={() => onOpen(r)} className="btn-secondary text-xs py-1 px-2.5" title={isFinal ? 'Open (changes save as a new draft)' : 'Edit this draft'}><Pencil size={13} /> {isFinal ? 'Open' : 'Edit'}</button>}
                             <SendMenu
-                              table="iit_calculations" row={r} phone={c.mobile} email={c.email}
+                              table="iit_calculations" row={r} phone={c.mobile} email={c.email} recipients={recipientsOf(c)}
                               subject={`${isFinal ? 'Final' : 'Draft'} Income Tax Computation — Y/A ${r.year} — TaxMate Solutions`}
                               buildMessage={(url) => calcMessage(r, c, url)}
                               onChange={(patch) => patchRow(r.id, patch)}

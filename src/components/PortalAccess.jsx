@@ -5,6 +5,7 @@ import { supabase, fmtDate } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { callPortal, inviteUrl, resetUrl, inviteMessage, resetMessage } from '../lib/portal';
 import MessageMenu from './MessageMenu';
+import { recipientsOf } from '../lib/contacts';
 
 /**
  * Client portal access for one client: invite → active login → reset / remove.
@@ -89,7 +90,7 @@ export default function PortalAccess({ client, onChange }) {
             {login?.role === 'admin' && <span className="block text-amber-700 text-xs mt-1">⚠️ This login has the admin role.</span>}
           </p>
           <div className="flex gap-2 flex-wrap">
-            <MessageMenu label="Send password reset link" phone={client.mobile} email={client.email}
+            <MessageMenu label="Send password reset link" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
               subject={`Reset your portal password — ${client.full_name}`} getText={resetText} />
             <button onClick={removeAccess} className="btn-secondary text-sm text-red-600 border-red-200"><UserX size={14} /> Remove access</button>
           </div>
@@ -101,7 +102,7 @@ export default function PortalAccess({ client, onChange }) {
             The client opens the link and creates their own password.
           </p>
           <div className="flex gap-2 flex-wrap">
-            <MessageMenu label="Send invite again" phone={client.mobile} email={pending.email}
+            <MessageMenu label="Send invite again" phone={client.mobile} email={pending.email} recipients={recipientsOf(client, { email: pending.email })}
               subject="Your TaxMate client portal" getText={resendText} />
             <button onClick={cancelInvite} className="btn-secondary text-sm"><XCircle size={14} /> Cancel invite</button>
           </div>
@@ -112,7 +113,7 @@ export default function PortalAccess({ client, onChange }) {
             Invite {client.full_name?.split(' ').slice(-1)[0] || 'the client'} to the portal. They get a link by WhatsApp or email, set their own password and can then see and confirm their tax calculations.
           </p>
           {!client.email && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">Add the client's email first (Edit at the top). It becomes their sign-in name.</p>}
-          <MessageMenu label="Invite to portal" phone={client.mobile} email={client.email}
+          <MessageMenu label="Invite to portal" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
             subject="Your TaxMate client portal" getText={newInviteText} />
         </div>
       )}
