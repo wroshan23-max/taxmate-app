@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
@@ -9,6 +9,9 @@ import { waNumber } from '../lib/share';
 export default function Login() {
   const { signIn, user, profile, loading: authLoading, isAdmin, isClient } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Go back to the page that sent the user here (e.g. a WhatsApp link to /client/assets)
+  const from = location.state?.from;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -17,10 +20,10 @@ export default function Login() {
   // Redirect when auth state is ready
   useEffect(() => {
     if (!authLoading && user && profile) {
-      if (isAdmin) navigate('/admin', { replace: true });
-      else if (isClient) navigate('/client', { replace: true });
+      if (isAdmin) navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true });
+      else if (isClient) navigate(from?.startsWith('/client') ? from : '/client', { replace: true });
     }
-  }, [authLoading, user, profile, isAdmin, isClient, navigate]);
+  }, [authLoading, user, profile, isAdmin, isClient, navigate, from]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
