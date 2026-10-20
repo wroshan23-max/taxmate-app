@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, fmtDate } from '../../lib/supabase';
-import { Bell } from 'lucide-react';
+import { Bell, ExternalLink } from 'lucide-react';
+import LinkifiedText, { safeUrl, hostOf } from '../../components/LinkifiedText';
 
 const tagColors = {
   general: 'bg-blue-100 text-blue-700',
@@ -71,7 +72,14 @@ export default function ClientTaxUpdates() {
                     <span className="text-xs text-gray-400">{fmtDate(u.created_at)}</span>
                   </div>
                   <h3 className="font-bold text-gray-800 mb-2">{u.title}</h3>
-                  <p className="text-sm text-gray-600 whitespace-pre-line leading-relaxed">{u.body}</p>
+                  <LinkifiedText text={u.body} className="text-sm text-gray-600 whitespace-pre-line leading-relaxed" />
+                  {safeUrl(u.link_url) && (
+                    <a href={u.link_url} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 mt-3 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 px-4 py-2 rounded-lg shadow-sm">
+                      <ExternalLink size={15} /> {u.link_label || 'Read more'}
+                      <span className="text-xs font-normal text-primary-100">· {hostOf(u.link_url)}</span>
+                    </a>
+                  )}
                 </div>
               </div>
             </div>

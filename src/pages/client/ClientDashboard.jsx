@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight } from 'lucide-react';
+import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight, ExternalLink } from 'lucide-react';
+import { safeUrl } from '../../components/LinkifiedText';
 import { yearInfo } from '../../lib/assets';
 
 export default function ClientDashboard() {
@@ -86,9 +87,17 @@ export default function ClientDashboard() {
           ) : (
             <div className="divide-y divide-gray-50">
               {data.updates.map(u => (
-                <div key={u.id} className="px-5 py-3">
-                  <div className="text-sm font-semibold text-gray-800">{u.title}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{fmtDate(u.created_at)}</div>
+                <div key={u.id} className="px-5 py-3 flex items-start gap-2">
+                  <Link to="/client/updates" className="flex-1 min-w-0 group">
+                    <div className="text-sm font-semibold text-gray-800 group-hover:text-primary-700">{u.title}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{fmtDate(u.created_at)}</div>
+                  </Link>
+                  {safeUrl(u.link_url) && (
+                    <a href={u.link_url} target="_blank" rel="noopener noreferrer" title={u.link_label || 'Open link'}
+                      className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 px-2 py-1 rounded-md">
+                      <ExternalLink size={12} /> {u.link_label ? (u.link_label.length > 18 ? 'Open' : u.link_label) : 'Open'}
+                    </a>
+                  )}
                 </div>
               ))}
             </div>
