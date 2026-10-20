@@ -10,6 +10,7 @@ import { openStatement } from '../../lib/iitStatement';
 import { loadInvoiceForPrint, openInvoice, STATUS_LABEL } from '../../lib/invoice';
 import SendMenu from '../../components/SendMenu';
 import PortalAccess from '../../components/PortalAccess';
+import AssetStatementsAdmin from '../../components/AssetStatementsAdmin';
 import { invoiceMessage } from '../../lib/share';
 
 export default function ClientDetail() {
@@ -24,7 +25,7 @@ export default function ClientDetail() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview');
 
   useEffect(() => { loadAll(); }, [id]);
 
@@ -99,16 +100,16 @@ export default function ClientDetail() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit overflow-x-auto">
-        {['overview', 'calculations', 'returns', 'invoices'].map(t => (
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
+        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['assets', 'Assets & Liabilities'], ['invoices', 'Invoices']].map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize transition-all whitespace-nowrap ${
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
               tab === t ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {t}
+            {label}
           </button>
         ))}
       </div>
@@ -216,6 +217,9 @@ export default function ClientDetail() {
           )}
         </div>
       )}
+
+      {/* Assets & Liabilities Tab */}
+      {tab === 'assets' && <AssetStatementsAdmin client={client} />}
 
       {/* Invoices Tab */}
       {tab === 'invoices' && (

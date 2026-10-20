@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import {
   Users, FileText, Receipt, Calculator, Clock, AlertCircle, ArrowRight, MessageSquareWarning,
-  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine,
+  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark,
 } from 'lucide-react';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -29,17 +29,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [cl, rt, inv, calc, req, invites] = await Promise.all([
+      const [cl, rt, inv, calc, req, invites, al] = await Promise.all([
         supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id').order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
         supabase.from('iit_calculations').select('id, client_id, year, status, client_status, client_note, client_responded_at, created_at, clients(full_name)'),
         supabase.from('update_requests').select('id, created_at, clients(full_name)').eq('status', 'pending'),
         supabase.from('portal_invites').select('id, expires_at').is('accepted_at', null).is('revoked_at', null),
+        supabase.from('asset_statements').select('id, client_id, year, status, client_note, submitted_at, clients(full_name)').eq('status', 'submitted').eq('enabled', true),
       ]);
       setD({
         clients: cl.data ?? [], returns: rt.data ?? [], invoices: inv.data ?? [], calcs: calc.data ?? [],
-        requests: req.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
+        requests: req.data ?? [], assets: al.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
       });
     })();
   }, []);
@@ -60,6 +61,7 @@ export default function Dashboard() {
     const nameOf = (i) => i.client_snapshot?.name || i.clients?.full_name || '—';
 
     const attention = [
+      ...d.assets.map(a => ({ key: `al${a.id}`, icon: Landmark, tone: 'blue', text: `${a.clients?.full_name ?? 'Client'} submitted Assets & Liabilities — Y/A ${a.year}`, note: a.client_note, to: `/admin/clients/${a.client_id}?tab=assets`, when: a.submitted_at })),
       ...changes.map(c => ({ key: `ch${c.id}`, icon: MessageSquareWarning, tone: 'amber', text: `${c.clients?.full_name ?? 'Client'} asked for changes — Y/A ${c.year}`, note: c.client_note, to: `/admin/clients/${c.client_id}`, when: c.client_responded_at })),
       ...confirmed.map(c => ({ key: `ok${c.id}`, icon: CheckCircle2, tone: 'green', text: `${c.clients?.full_name ?? 'Client'} confirmed the draft — mark it Final (Y/A ${c.year})`, to: `/admin/clients/${c.client_id}`, when: c.client_responded_at })),
       ...overdue.map(i => ({ key: `od${i.id}`, icon: AlertTriangle, tone: 'red', text: `${i.invoice_no} overdue — ${nameOf(i)} · ${fmtRs(i.total_amount)}`, to: '/admin/invoices', when: i.due_date })),
