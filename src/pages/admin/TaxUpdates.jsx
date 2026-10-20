@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Bell, X, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Bell, X, Trash2, Eye, EyeOff, Edit2, ExternalLink, Link2 } from 'lucide-react';
+import LinkifiedText, { safeUrl, hostOf } from '../../components/LinkifiedText';
+
+const EMPTY = { title: '', body: '', tag: 'general', published: true, link_url: '', link_label: '' };
 
 const tagColors = {
   general: 'badge-blue',
@@ -17,7 +20,8 @@ export default function TaxUpdates() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ title: '', body: '', tag: 'general', published: true });
+  const [form, setForm] = useState(EMPTY);
+  const [editId, setEditId] = useState(null);   // null = new post
 
   useEffect(() => { loadUpdates(); }, []);
 
@@ -30,16 +34,32 @@ export default function TaxUpdates() {
     setLoading(false);
   };
 
+  const openNew = () => { setEditId(null); setForm(EMPTY); setModal(true); };
+  const openEdit = (u) => {
+    setEditId(u.id);
+    setForm({ title: u.title ?? '', body: u.body ?? '', tag: u.tag ?? 'general', published: !!u.published, link_url: u.link_url ?? '', link_label: u.link_label ?? '' });
+    setModal(true);
+  };
+  const closeModal = () => { setModal(false); setEditId(null); setForm(EMPTY); };
+
   const save = async (e) => {
     e.preventDefault();
     if (!form.title.trim() || !form.body.trim()) return toast.error('Title and body required');
+    let link = form.link_url.trim();
+    if (link && !/^https?:\/\//i.test(link)) link = `https://${link}`;   // "ird.gov.lk/..." → https://ird.gov.lk/...
+    if (link && !safeUrl(link)) return toast.error('The link must be a web address, e.g. https://www.ird.gov.lk/...');
+    const row = {
+      title: form.title.trim(), body: form.body.trim(), tag: form.tag, published: form.published,
+      link_url: link || null, link_label: link ? (form.link_label.trim() || null) : null,
+    };
     setSaving(true);
-    const { error } = await supabase.from('tax_updates').insert({ ...form, created_by: user.id });
+    const { error } = editId
+      ? await supabase.from('tax_updates').update({ ...row, updated_at: new Date().toISOString() }).eq('id', editId)
+      : await supabase.from('tax_updates').insert({ ...row, created_by: user.id });
     setSaving(false);
     if (error) { toast.error(error.message); return; }
-    toast.success('Update published!');
-    setModal(false);
-    setForm({ title: '', body: '', tag: 'general', published: true });
+    toast.success(editId ? 'Update saved' : row.published ? 'Update published!' : 'Saved as draft');
+    closeModal();
     loadUpdates();
   };
 
@@ -63,7 +83,7 @@ export default function TaxUpdates() {
           <h1 className="text-2xl font-bold text-primary-800">Tax Updates</h1>
           <p className="text-sm text-gray-500">Notices visible to clients</p>
         </div>
-        <button onClick={() => setModal(true)} className="btn-primary ml-auto">
+        <button onClick={openNew} className="btn-primary ml-auto">
           <Plus size={16} /> Post Update
         </button>
       </div>
@@ -88,9 +108,19 @@ export default function TaxUpdates() {
                   <span className="text-xs text-gray-400 ml-auto">{fmtDate(u.created_at)}</span>
                 </div>
                 <h3 className="font-bold text-gray-800 mb-1">{u.title}</h3>
-                <p className="text-sm text-gray-600 whitespace-pre-line">{u.body}</p>
+                <LinkifiedText text={u.body} className="text-sm text-gray-600 whitespace-pre-line" />
+                {safeUrl(u.link_url) && (
+                  <a href={u.link_url} target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-2 text-sm font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-1.5 rounded-lg">
+                    <ExternalLink size={14} /> {u.link_label || 'Open link'} <span className="text-xs font-normal text-primary-500">· {hostOf(u.link_url)}</span>
+                  </a>
+                )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={() => openEdit(u)} title="Edit"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary-600 transition-colors">
+                  <Edit2 size={16} />
+                </button>
                 <button
                   onClick={() => togglePublished(u.id, u.published)}
                   title={u.published ? 'Unpublish' : 'Publish'}
@@ -114,10 +144,10 @@ export default function TaxUpdates() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
             <div className="flex items-center justify-between p-5 border-b">
-              <h3 className="font-bold text-primary-800">Post Tax Update</h3>
-              <button onClick={() => setModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+              <h3 className="font-bold text-primary-800">{editId ? 'Edit Tax Update' : 'Post Tax Update'}</h3>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
-            <form onSubmit={save} className="p-5 space-y-4">
+            <form onSubmit={save} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Title *</label>
                 <input className="input" placeholder="e.g. IIT Filing Deadline Extended" value={form.title}
@@ -127,6 +157,20 @@ export default function TaxUpdates() {
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Body *</label>
                 <textarea className="input resize-none" rows={5} placeholder="Full update details..." value={form.body}
                   onChange={e => setForm({...form, body: e.target.value})} required />
+              </div>
+              <div className="rounded-xl border border-gray-200 p-3 space-y-3 bg-gray-50/60">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-600"><Link2 size={14} /> Link (optional)</div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Web address</label>
+                  <input className="input" inputMode="url" placeholder="https://www.ird.gov.lk/... or your blog / YouTube / Facebook post"
+                    value={form.link_url} onChange={e => setForm({ ...form, link_url: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Button text</label>
+                  <input className="input" maxLength={60} placeholder="e.g. Read the IRD notice · Watch the video" disabled={!form.link_url.trim()}
+                    value={form.link_label} onChange={e => setForm({ ...form, link_label: e.target.value })} />
+                </div>
+                <p className="text-[11px] text-gray-400">Clients see a button under the update and the link opens in a new tab. Links typed inside the body text are clickable too.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -147,8 +191,8 @@ export default function TaxUpdates() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button type="button" onClick={() => setModal(false)} className="btn-secondary flex-1 justify-center">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Posting...' : 'Post Update'}</button>
+                <button type="button" onClick={closeModal} className="btn-secondary flex-1 justify-center">Cancel</button>
+                <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Saving...' : editId ? 'Save Changes' : 'Post Update'}</button>
               </div>
             </form>
           </div>
