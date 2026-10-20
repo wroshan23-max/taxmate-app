@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import SharedDocument from './pages/SharedDocument';
@@ -15,6 +15,8 @@ import TaxReturns from './pages/admin/TaxReturns';
 import Invoices from './pages/admin/Invoices';
 import UpdateRequests from './pages/admin/UpdateRequests';
 import TaxUpdates from './pages/admin/TaxUpdates';
+import AssetStatements from './pages/admin/AssetStatements';
+import ClientAssets from './pages/client/ClientAssets';
 import ClientDashboard from './pages/client/ClientDashboard';
 import ClientCalculations from './pages/client/ClientCalculations';
 import ClientTaxReturns from './pages/client/ClientTaxReturns';
@@ -37,16 +39,18 @@ function LoadingScreen() {
 
 function ProtectedAdmin({ children }) {
   const { user, isAdmin, loading } = useAuth();
+  const loc = useLocation();
   if (loading) return <LoadingScreen />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
   if (!isAdmin) return <Navigate to="/client" replace />;
   return children;
 }
 
 function ProtectedClient({ children }) {
   const { user, isClient, loading } = useAuth();
+  const loc = useLocation();
   if (loading) return <LoadingScreen />;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
   if (!isClient) return <Navigate to="/admin" replace />;
   return children;
 }
@@ -81,6 +85,7 @@ export default function App() {
         <Route path="clients/:id" element={<ClientDetail />} />
         <Route path="calculator" element={<Calculator />} />
         <Route path="tax-returns" element={<TaxReturns />} />
+        <Route path="assets" element={<AssetStatements />} />
         <Route path="invoices" element={<Invoices />} />
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
@@ -94,6 +99,7 @@ export default function App() {
         <Route index element={<ClientDashboard />} />
         <Route path="calculations" element={<ClientCalculations />} />
         <Route path="tax-returns" element={<ClientTaxReturns />} />
+        <Route path="assets" element={<ClientAssets />} />
         <Route path="invoices" element={<ClientInvoices />} />
         <Route path="profile" element={<ClientProfile />} />
         <Route path="updates" element={<ClientTaxUpdates />} />
