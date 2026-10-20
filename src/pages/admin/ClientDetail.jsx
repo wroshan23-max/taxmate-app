@@ -12,6 +12,9 @@ import SendMenu from '../../components/SendMenu';
 import PortalAccess from '../../components/PortalAccess';
 import AssetStatementsAdmin from '../../components/AssetStatementsAdmin';
 import { invoiceMessage } from '../../lib/share';
+import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
+import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
+import { UserRound, Sparkles, CheckCircle2 } from 'lucide-react';
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -46,11 +49,30 @@ export default function ClientDetail() {
       full_name: form.full_name, tin: form.tin, nic: form.nic,
       email: form.email, mobile: form.mobile, address: form.address,
       employer: form.employer, resident_status: form.resident_status,
+      ...contactPatch(form),
     }).eq('id', id);
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success('Client updated!');
-    setClient(form); setEditing(false);
+    setClient({ ...form, ...contactPatch(form) }); setEditing(false);
+  };
+
+  // Self-registered clients: show what they sent + possible duplicates until reviewed
+  const [dupes, setDupes] = useState([]);
+  useEffect(() => {
+    if (!client || client.source !== 'self_registration' || client.reviewed_at) return;
+    const q = (v) => `"${String(v).replace(/["\\]/g, '')}"`;   // quote for PostgREST or()
+    const ors = [client.nic && `nic.eq.${q(client.nic)}`, client.mobile && `mobile.eq.${q(client.mobile)}`, client.tin && `tin.eq.${q(client.tin)}`].filter(Boolean);
+    if (!ors.length) return;
+    supabase.from('clients').select('id, full_name, nic, mobile, tin').or(ors.join(',')).neq('id', client.id).limit(5)
+      .then(({ data }) => setDupes(data ?? []));
+  }, [client?.id, client?.reviewed_at]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const markReviewed = async () => {
+    const { error } = await supabase.from('clients').update({ reviewed_at: new Date().toISOString() }).eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Marked as reviewed');
+    setClient(c => ({ ...c, reviewed_at: new Date().toISOString() }));
   };
 
   const printInvoice = async (invoiceId) => {
@@ -82,6 +104,9 @@ export default function ClientDetail() {
         <div>
           <h1 className="text-2xl font-bold text-primary-800">{client.full_name}</h1>
           <div className="text-sm text-gray-500">TIN: {client.tin ?? '—'} · {client.email ?? '—'}</div>
+          {hasContact(client) && (
+            <div className="text-xs text-primary-700 mt-0.5 flex items-center gap-1"><UserRound size={12} /> Contact: {contactLabel(client)}{client.contact_mobile && ` · ${client.contact_mobile}`}{client.contact_preferred && ' ★ coordinates'}</div>
+          )}
         </div>
         <div className="ml-auto">
           {!editing ? (
@@ -113,6 +138,26 @@ export default function ClientDetail() {
           </button>
         ))}
       </div>
+
+      {/* New self-registration */}
+      {tab === 'overview' && client.source === 'self_registration' && !client.reviewed_at && (
+        <div className="card p-4 border-amber-300 bg-amber-50/60 space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Sparkles size={16} className="text-amber-600" />
+            <div className="font-semibold text-amber-900 flex-1">New client — registered online on {fmtDate(client.registered_at)}
+              {client.registration?.filled_by === 'contact' && <span className="font-normal text-amber-800"> · filled in by {contactLabel(client) || 'a contact person'}</span>}</div>
+            <button onClick={markReviewed} className="btn-primary text-xs py-1"><CheckCircle2 size={13} /> Mark reviewed</button>
+          </div>
+          {client.registration?.services?.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">{client.registration.services.map(sv => <span key={sv} className="text-xs px-2 py-0.5 rounded-full bg-white border border-amber-200 text-amber-900">{sv}</span>)}</div>
+          )}
+          {client.registration?.note && <div className="text-sm text-amber-900 whitespace-pre-line">“{client.registration.note}”</div>}
+          {dupes.length > 0 && (
+            <div className="text-xs text-red-700">⚠️ Possible duplicate of: {dupes.map((d, i) => <span key={d.id}>{i > 0 && ', '}<Link to={`/admin/clients/${d.id}`} className="underline font-semibold">{d.full_name}</Link></span>)} (same NIC / TIN / mobile)</div>
+          )}
+          <div className="text-xs text-amber-800">Check the details below, fix anything with Edit, then mark it reviewed.</div>
+        </div>
+      )}
 
       {/* Overview Tab */}
       {tab === 'overview' && (
@@ -153,6 +198,21 @@ export default function ClientDetail() {
                 </select>
               ) : (
                 <div className="text-sm text-gray-800 capitalize">{client.resident_status ?? '—'}</div>
+              )}
+            </div>
+            <div className="sm:col-span-2">
+              {editing ? <ContactPersonFields form={form} setForm={setForm} /> : (
+                <div>
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Contact person</div>
+                  {hasContact(client) ? (
+                    <div className="text-sm text-gray-800 flex flex-wrap gap-x-4 gap-y-1">
+                      <span className="font-medium flex items-center gap-1"><UserRound size={14} className="text-primary-600" /> {contactLabel(client) || '—'}</span>
+                      {client.contact_mobile && <a href={`tel:${client.contact_mobile}`} className="text-primary-700 hover:underline">{client.contact_mobile}</a>}
+                      {client.contact_email && <span className="text-gray-600">{client.contact_email}</span>}
+                      {client.contact_preferred && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary-50 text-primary-700">★ Coordinate with this person</span>}
+                    </div>
+                  ) : <div className="text-sm text-gray-300">— <span className="text-xs">(Edit to add a son / daughter or other person who coordinates)</span></div>}
+                </div>
               )}
             </div>
           </div>
@@ -242,6 +302,7 @@ export default function ClientDetail() {
                   <SendMenu
                     table="invoices" row={inv}
                     phone={inv.client_snapshot?.phone || client.mobile} email={inv.client_snapshot?.email || client.email}
+                    recipients={recipientsOf(client, { phone: inv.client_snapshot?.phone || client.mobile, email: inv.client_snapshot?.email || client.email })}
                     subject={`Invoice ${inv.invoice_no} — TaxMate Solutions`}
                     buildMessage={(url) => invoiceMessage({ ...inv, clients: client }, url)}
                     beforeSend={async () => {

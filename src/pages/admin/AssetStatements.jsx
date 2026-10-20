@@ -9,6 +9,7 @@ import {
 } from '../../lib/assets';
 import { StatusPill } from '../../components/AssetStatementsAdmin';
 import MessageMenu from '../../components/MessageMenu';
+import { recipientsOf } from '../../lib/contacts';
 
 // All clients' Assets & Liabilities sheets for one Y/A
 export default function AssetStatements() {
@@ -24,7 +25,7 @@ export default function AssetStatements() {
   const load = async () => {
     setLoading(true);
     const [{ data: c }, { data: s, error }] = await Promise.all([
-      supabase.from('clients').select('id, full_name, tin, nic, address, mobile, email, profile_id').order('full_name'),
+      supabase.from('clients').select('id, full_name, tin, nic, address, mobile, email, profile_id, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred').order('full_name'),
       supabase.from('asset_statements').select('*').eq('year', year),
     ]);
     if (error) toast.error(error.message);
@@ -145,7 +146,7 @@ export default function AssetStatements() {
                         <button onClick={() => pdf(s, c)} className="btn-secondary text-xs py-1 px-2.5"><Printer size={13} /> PDF</button>
                         {s.status === 'submitted' && <button onClick={() => markReviewed(s)} className="btn-primary text-xs py-1 px-2.5"><CheckCircle2 size={13} /> Reviewed</button>}
                         {s.status === 'open' && c.profile_id && (
-                          <MessageMenu label="Send" phone={c.mobile} email={c.email} subject={`Assets & Liabilities Y/A ${year} — TaxMate`}
+                          <MessageMenu label="Send" phone={c.mobile} email={c.email} recipients={recipientsOf(c)} subject={`Assets & Liabilities Y/A ${year} — TaxMate`}
                             getText={async () => alRequestMessage({ name: c.full_name, year, url: portalAssetsUrl(year), prefilled: !!s.prefilled_from })} />
                         )}
                       </div>

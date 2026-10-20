@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Search, X, User, Mail, Phone, CreditCard } from 'lucide-react';
+import { Plus, Search, X, User, Mail, Phone, CreditCard, Link2, UserRound } from 'lucide-react';
+import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
+import RegistrationLinks from '../../components/RegistrationLinks';
+import { hasContact, contactLabel } from '../../lib/contacts';
 
-const EMPTY = { full_name: '', tin: '', nic: '', email: '', mobile: '', address: '', employer: '', resident_status: 'resident' };
+const EMPTY = { full_name: '', tin: '', nic: '', email: '', mobile: '', address: '', employer: '', resident_status: 'resident', contact_name: '', contact_relation: '', contact_mobile: '', contact_email: '', contact_preferred: false };
 
 export default function Clients() {
   const { user } = useAuth();
@@ -15,6 +18,8 @@ export default function Clients() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [regOpen, setRegOpen] = useState(false);
+  const [onlyNew, setOnlyNew] = useState(false);
 
   useEffect(() => { loadClients(); }, []);
 
@@ -24,8 +29,11 @@ export default function Clients() {
     setLoading(false);
   };
 
+  const isNew = (c) => c.source === 'self_registration' && !c.reviewed_at;
+  const newCount = clients.filter(isNew).length;
   const filtered = clients.filter(c =>
-    [c.full_name, c.tin, c.email, c.mobile, c.nic].some(f => f?.toLowerCase().includes(search.toLowerCase()))
+    (!onlyNew || isNew(c)) &&
+    [c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
   );
 
   const openAdd = () => { setForm(EMPTY); setModal(true); };
@@ -35,7 +43,7 @@ export default function Clients() {
     e.preventDefault();
     if (!form.full_name.trim()) return toast.error('Name required');
     setSaving(true);
-    const { error } = await supabase.from('clients').insert({ ...form, created_by: user.id });
+    const { error } = await supabase.from('clients').insert({ ...form, ...contactPatch(form), created_by: user.id });
     setSaving(false);
     if (error) { toast.error('Error: ' + error.message); return; }
     toast.success('Client added!');
@@ -48,9 +56,11 @@ export default function Clients() {
       <div className="flex items-center gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-primary-800">Clients</h1>
-          <p className="text-sm text-gray-500">{clients.length} total clients</p>
+          <p className="text-sm text-gray-500">{clients.length} total clients
+            {newCount > 0 && <button onClick={() => setOnlyNew(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${onlyNew ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-800'}`}>{newCount} new registration{newCount > 1 ? 's' : ''}{onlyNew ? ' ✕' : ''}</button>}
+          </p>
         </div>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-3 flex-wrap">
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -60,6 +70,9 @@ export default function Clients() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+          <button onClick={() => setRegOpen(true)} className="btn-secondary" title="Send a link so the client fills in their own details">
+            <Link2 size={16} /> Registration link
+          </button>
           <button onClick={openAdd} className="btn-primary">
             <Plus size={16} /> Add Client
           </button>
@@ -98,8 +111,14 @@ export default function Clients() {
                           {c.full_name?.[0] ?? '?'}
                         </div>
                         <div>
-                          <div className="font-semibold text-gray-800">{c.full_name}</div>
+                          <div className="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap">{c.full_name}
+                            {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · self-registered</span>}</div>
                           <div className="text-xs text-gray-400">{c.email ?? '—'}</div>
+                          {hasContact(c) && (
+                            <div className={`text-xs mt-0.5 flex items-center gap-1 ${c.contact_preferred ? 'text-primary-700 font-medium' : 'text-gray-500'}`}>
+                              <UserRound size={11} /> {contactLabel(c) || 'Contact'}{c.contact_mobile && <> · {c.contact_mobile}</>}{c.contact_preferred && <span title="Coordinate with this person"> ★</span>}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -131,6 +150,8 @@ export default function Clients() {
           </div>
         )}
       </div>
+
+      {regOpen && <RegistrationLinks onClose={() => { setRegOpen(false); loadClients(); }} />}
 
       {/* Add Client Modal */}
       {modal && (
@@ -187,6 +208,7 @@ export default function Clients() {
                   </select>
                 </div>
               </div>
+              <ContactPersonFields form={form} setForm={setForm} />
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="btn-secondary flex-1 justify-center">Cancel</button>
                 <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">

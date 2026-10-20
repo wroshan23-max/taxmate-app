@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Receipt, Plus, Trash2, Printer, Save, RotateCcw, Pencil, Download, Search, Building2, PenTool, Star } from 'lucide-react';
 import SignaturePad from '../../components/SignaturePad';
 import SendMenu from '../../components/SendMenu';
+import { recipientsOf } from '../../lib/contacts';
 import { invoiceMessage } from '../../lib/share';
 import { FIRM } from '../../lib/iitStatement';
 import {
@@ -50,7 +51,7 @@ export default function Invoices() {
 
   const loadAll = async () => {
     const [inv, cls, bk, st] = await Promise.all([
-      supabase.from('invoices').select('*, clients(full_name, tin, nic, mobile, email, address), invoice_items(*)').order('created_at', { ascending: false }),
+      supabase.from('invoices').select('*, clients(full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, full_name, tin, nic, mobile, email, address').order('full_name'),
       supabase.from('bank_accounts').select('*').order('created_at'),
       supabase.from('app_settings').select('value').eq('key', 'firm_signature').maybeSingle(),
@@ -189,7 +190,7 @@ export default function Invoices() {
             onClick={async () => {
               toast.dismiss(t.id);
               const w = window.open('', '_blank', 'width=900,height=900');
-              const { data } = await supabase.from('invoices').select('*, clients(full_name, tin, nic, mobile, email, address), invoice_items(*)').eq('id', saved.id).single();
+              const { data } = await supabase.from('invoices').select('*, clients(full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').eq('id', saved.id).single();
               if (data) openInvoice(data, data.invoice_items ?? [], bankById(data.bank_account_id), {}, w); else w?.close();
             }}>
             🖨 Print
@@ -238,7 +239,7 @@ export default function Invoices() {
       <button onClick={() => printSaved(inv)} title="Print / PDF" className="p-1.5 rounded-md border border-gray-200 hover:bg-gray-50 text-primary-700"><Printer size={14} /></button>
       <SendMenu
         table="invoices" row={inv}
-        phone={billTo(inv).phone} email={billTo(inv).email}
+        phone={billTo(inv).phone} email={billTo(inv).email} recipients={recipientsOf(inv.clients, billTo(inv))}
         subject={`Invoice ${inv.invoice_no} — TaxMate Solutions`}
         buildMessage={(url) => invoiceMessage(inv, url)}
         beforeSend={async () => {
