@@ -21,6 +21,7 @@ export const greetName = (c) => (c?.contact_preferred && c?.contact_name) ? c.co
 
 // ─── Registration links ──────────────────────────────────
 export const registerUrl = (token) => `${window.location.origin}/register/${token}`;
+export const joinUrl = (code) => `${window.location.origin}/join/${code}`;
 
 export function registrationMessage({ name, url }) {
   const first = (name || '').trim().split(/\s+/).slice(-1)[0];
