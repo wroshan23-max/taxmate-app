@@ -15,12 +15,14 @@ const STATUS_MSG = {
   expired: 'This link has expired. Please ask TaxMate for a new one.',
   revoked: 'This link was cancelled. Please ask TaxMate for a new one.',
   missing: 'This link is not valid. Please check you opened the full link, or ask TaxMate for a new one.',
+  closed: 'Online registration is closed right now. Please WhatsApp TaxMate and we will help you.',
 };
+const CODE_RE = /^[a-z0-9][a-z0-9-]{1,29}$/i;
 
 const EMPTY = {
   filled_by: 'self', full_name: '', nic: '', tin: '', mobile: '', email: '', address: '', employer: '', resident_status: 'resident',
   contact_name: '', contact_relation: '', contact_mobile: '', contact_email: '', contact_preferred: true,
-  services: ['Individual Income Tax Return'], note: '', consent: false,
+  services: ['Individual Income Tax Return'], note: '', consent: false, website: '',
 };
 
 function F({ label, si, required, children, wide, hint }) {
@@ -34,8 +36,10 @@ function F({ label, si, required, children, wide, hint }) {
   );
 }
 
+// /register/:token = one-time personal link · /join/:code = reusable public link (Facebook, flyers…)
 export default function Register() {
-  const { token } = useParams();
+  const { token, code } = useParams();
+  const isPublic = !!code;
   const [state, setState] = useState('loading');
   const [f, setF] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -43,12 +47,16 @@ export default function Register() {
   const [done, setDone] = useState(null);
 
   useEffect(() => {
-    if (!UUID_RE.test(token || '')) { setState('missing'); return; }
-    supabase.rpc('get_registration', { p_token: token }).then(({ data, error }) => {
+    const valid = isPublic ? CODE_RE.test(code || '') : UUID_RE.test(token || '');
+    if (!valid) { setState('missing'); return; }
+    const call = isPublic
+      ? supabase.rpc('get_public_registration', { p_code: code.toLowerCase() })
+      : supabase.rpc('get_registration', { p_token: token });
+    call.then(({ data, error }) => {
       if (error || !data) return setState('missing');
       setState(data.status);
     });
-  }, [token]);
+  }, [token, code, isPublic]);
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const forOther = f.filled_by === 'contact';
@@ -70,7 +78,9 @@ export default function Register() {
       contact_name: forOther ? f.contact_name : '', contact_relation: forOther ? f.contact_relation : '',
       contact_email: forOther ? f.contact_email : '', contact_preferred: forOther && f.contact_preferred,
     };
-    const { data, error } = await supabase.rpc('submit_registration', { p_token: token, p: payload });
+    const { data, error } = isPublic
+      ? await supabase.rpc('submit_public_registration', { p_code: code.toLowerCase(), p: payload })
+      : await supabase.rpc('submit_registration', { p_token: token, p: payload });
     setBusy(false);
     if (error) return setErr(error.message);
     setDone(data?.name ?? f.full_name);
@@ -108,6 +118,10 @@ export default function Register() {
 
           {state === 'ok' && !done && (
             <form onSubmit={submit} className="space-y-5">
+              {/* Honeypot: hidden from people, bots fill it */}
+              <div aria-hidden="true" style={{ position: 'absolute', left: '-10000px', width: 1, height: 1, overflow: 'hidden' }}>
+                <label>Website<input tabIndex={-1} autoComplete="off" value={f.website} onChange={set('website')} /></label>
+              </div>
               <div>
                 <h2 className="text-lg font-bold text-primary-800">Your details for {FIRM.name}</h2>
                 <p className="text-sm text-gray-500">Takes about 2 minutes · මිනිත්තු 2ක් පමණ ගතවේ</p>
