@@ -78,6 +78,8 @@ export default function App() {
       <Route path="/reset/:token" element={<ResetPasswordPage />} />
       {/* Public: new client fills in their own details from a one-time link */}
       <Route path="/register/:token" element={<Register />} />
+      {/* Public: reusable link for Facebook / flyers (e.g. /join/fb) */}
+      <Route path="/join/:code" element={<Register />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={
