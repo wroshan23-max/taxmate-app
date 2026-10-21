@@ -144,7 +144,7 @@ export default function ClientDetail() {
         <div className="card p-4 border-amber-300 bg-amber-50/60 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <Sparkles size={16} className="text-amber-600" />
-            <div className="font-semibold text-amber-900 flex-1">New client — registered online on {fmtDate(client.registered_at)}
+            <div className="font-semibold text-amber-900 flex-1">New client — registered online on {fmtDate(client.registered_at)}{client.registration?.via && ` via ${client.registration.via}`}
               {client.registration?.filled_by === 'contact' && <span className="font-normal text-amber-800"> · filled in by {contactLabel(client) || 'a contact person'}</span>}</div>
             <button onClick={markReviewed} className="btn-primary text-xs py-1"><CheckCircle2 size={13} /> Mark reviewed</button>
           </div>

@@ -112,7 +112,7 @@ export default function Clients() {
                         </div>
                         <div>
                           <div className="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap">{c.full_name}
-                            {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · self-registered</span>}</div>
+                            {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · {c.registration?.via && c.registration.via !== 'personal link' ? `via ${c.registration.via}` : 'self-registered'}</span>}</div>
                           <div className="text-xs text-gray-400">{c.email ?? '—'}</div>
                           {hasContact(c) && (
                             <div className={`text-xs mt-0.5 flex items-center gap-1 ${c.contact_preferred ? 'text-primary-700 font-medium' : 'text-gray-500'}`}>
