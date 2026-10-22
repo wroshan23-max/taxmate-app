@@ -138,6 +138,9 @@ export default function ClientDashboard() {
       <div className="card p-4">
         <div className="text-sm font-semibold text-gray-600 mb-3">Quick Actions</div>
         <div className="flex flex-wrap gap-3">
+          <Link to="/client/tax-calculator" className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-primary-900 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
+            <Calculator size={15} /> Tax Calculator
+          </Link>
           <Link to="/client/profile" className="flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg text-sm font-semibold hover:bg-primary-100 transition-colors">
             <User size={15} /> Update My Profile
           </Link>
