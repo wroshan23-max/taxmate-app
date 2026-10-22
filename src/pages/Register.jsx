@@ -45,6 +45,7 @@ export default function Register() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [done, setDone] = useState(null);
+  const [invitedBy, setInvitedBy] = useState(null);
 
   useEffect(() => {
     const valid = isPublic ? CODE_RE.test(code || '') : UUID_RE.test(token || '');
@@ -54,6 +55,7 @@ export default function Register() {
       : supabase.rpc('get_registration', { p_token: token });
     call.then(({ data, error }) => {
       if (error || !data) return setState('missing');
+      if (data.invited_by) setInvitedBy(data.invited_by);
       setState(data.status);
     });
   }, [token, code, isPublic]);
@@ -116,6 +118,11 @@ export default function Register() {
             </div>
           )}
 
+          {state === 'ok' && !done && invitedBy && (
+            <div className="mb-4 rounded-xl bg-gradient-to-r from-gold-500/20 to-pink-100 border border-gold-500/40 px-4 py-3 text-sm text-primary-900 flex items-center gap-2">
+              <span className="text-xl">🎉</span> <span><b>{invitedBy}</b> invited you to {FIRM.name}. <span className="text-gray-600">ඔබට ආරාධනා කළේ {invitedBy}.</span></span>
+            </div>
+          )}
           {state === 'ok' && !done && (
             <form onSubmit={submit} className="space-y-5">
               {/* Honeypot: hidden from people, bots fill it */}
