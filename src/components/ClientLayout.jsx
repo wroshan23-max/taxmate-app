@@ -4,7 +4,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
-  LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift
+  LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock
 } from 'lucide-react';
 
 const nav = [
@@ -14,6 +14,7 @@ const nav = [
   { to: '/client/income', icon: Wallet, label: 'Monthly Income', feature: 'income_sheets' },
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
   { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals' },
+  { to: '/client/documents', icon: FolderLock, label: 'My Documents', feature: 'documents' },
   { to: '/client/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/client/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/client/invoices', icon: Receipt, label: 'Invoices' },
@@ -25,7 +26,7 @@ export default function ClientLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   // Features switched on by TaxMate (Tax Calculator on/off, Monthly Income sheet enabled)
-  const [features, setFeatures] = useState({ tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, income_sheets: 0, loaded: false });
+  const [features, setFeatures] = useState({ tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, documents: true, return_tracker: true, income_sheets: 0, loaded: false });
   useEffect(() => {
     supabase.rpc('my_portal_features').then(({ data }) => { if (data) setFeatures({ ...data, loaded: true }); else setFeatures(f => ({ ...f, loaded: true })); });
   }, [profile?.id]);

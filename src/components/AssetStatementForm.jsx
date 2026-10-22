@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import TopUpCalc from './TopUpCalc';
 import { ChevronDown, ChevronRight, Plus, Trash2, History, ArrowRightLeft, Info, AlertCircle } from 'lucide-react';
 import {
   SECTIONS, SECTION, newRow, rowsOf, totals, yearInfo, fmtMoney, num, moneyCols, isRowEmpty,
@@ -16,7 +17,7 @@ function MoneyInput({ value, onChange, negative, disabled, invalid }) {
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Rs.</span>
       <input
-        className={`input pl-10 text-right tabular-nums ${invalid ? 'border-red-400 bg-red-50' : ''}`}
+        className={`input pl-10 pr-8 text-right tabular-nums ${invalid ? 'border-red-400 bg-red-50' : ''}`}
         inputMode="decimal" disabled={disabled} value={show} placeholder="0"
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onChange={e => {
@@ -25,6 +26,7 @@ function MoneyInput({ value, onChange, negative, disabled, invalid }) {
           onChange(v);
         }}
       />
+      <TopUpCalc value={value} onUse={onChange} disabled={disabled} allowNegative={negative} />
     </div>
   );
 }

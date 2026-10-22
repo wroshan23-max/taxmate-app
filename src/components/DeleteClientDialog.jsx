@@ -3,10 +3,11 @@ import toast from 'react-hot-toast';
 import { X, Archive, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { callPortal } from '../lib/portal';
+import { purgeClientFiles } from '../lib/documents';
 
 const TABLES = [
   ['iit_calculations', 'tax calculations'], ['tax_returns', 'tax returns'], ['invoices', 'invoices'],
-  ['asset_statements', 'Assets & Liabilities sheets'], ['income_sheets', 'monthly income sheets'], ['reminders', 'reminders'],
+  ['asset_statements', 'Assets & Liabilities sheets'], ['income_sheets', 'monthly income sheets'], ['reminders', 'reminders'], ['client_documents', 'uploaded documents'],
 ];
 
 /** Archive (hide, keep everything) or permanently delete a client. */
@@ -35,6 +36,7 @@ export default function DeleteClientDialog({ client, onClose, onDone }) {
     setBusy(true);
     try {
       if (client.profile_id && removeLogin) await callPortal('delete_user', { user_id: client.profile_id });
+      await purgeClientFiles(client.id);   // stored files are not removed by the database cascade
       const { error } = await supabase.from('clients').delete().eq('id', client.id);
       if (error) throw error;
       toast.success(`${client.full_name} deleted`);

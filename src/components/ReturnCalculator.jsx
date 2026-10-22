@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import TopUpCalc from './TopUpCalc';
 import toast from 'react-hot-toast';
 import {
   Briefcase, Store, Landmark, Globe2, Sparkles, HeartHandshake, Receipt, ShieldOff, ChevronDown, ChevronRight,
@@ -58,8 +59,9 @@ function Money({ value, onChange }) {
   return (
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-gray-400">Rs.</span>
-      <input className="input pl-10 py-2 text-right tabular-nums" inputMode="decimal" placeholder="0" value={shown}
+      <input className="input pl-10 pr-8 py-2 text-right tabular-nums" inputMode="decimal" placeholder="0" value={shown}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChange={e => onChange(e.target.value.replace(/[^\d.]/g, ''))} />
+      <TopUpCalc value={value} onUse={onChange} />
     </div>
   );
 }
