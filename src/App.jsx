@@ -18,6 +18,7 @@ import UpdateRequests from './pages/admin/UpdateRequests';
 import TaxUpdates from './pages/admin/TaxUpdates';
 import AssetStatements from './pages/admin/AssetStatements';
 import ClientAssets from './pages/client/ClientAssets';
+import ClientTaxCalculator from './pages/client/ClientTaxCalculator';
 import ClientDashboard from './pages/client/ClientDashboard';
 import ClientCalculations from './pages/client/ClientCalculations';
 import ClientTaxReturns from './pages/client/ClientTaxReturns';
@@ -105,6 +106,7 @@ export default function App() {
         <Route path="calculations" element={<ClientCalculations />} />
         <Route path="tax-returns" element={<ClientTaxReturns />} />
         <Route path="assets" element={<ClientAssets />} />
+        <Route path="tax-calculator" element={<ClientTaxCalculator />} />
         <Route path="invoices" element={<ClientInvoices />} />
         <Route path="profile" element={<ClientProfile />} />
         <Route path="updates" element={<ClientTaxUpdates />} />
