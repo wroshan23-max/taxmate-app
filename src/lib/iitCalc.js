@@ -49,7 +49,23 @@ export function graduatedTax(taxable, slabs = SLABS) {
   return { tax, detail };
 }
 
-// Foreign bank income (2025/26+): 6% on first Rs.1,000,000 taxable; 15% on balance
+// Foreign-currency income remitted through a bank (Y/A 2025/26+), IRA First Schedule para 1(6):
+// taxed at the progressive rates but at a MAXIMUM of 15%. The foreign income sits on top of the
+// local taxable income in the bands (IRD guide Asmt_IIT_004_2025_2026 examples 2, 3, 6; APIT Table 08):
+// whatever is left of the first Rs.1,000,000 band (6%) after local taxable income, then 15%.
+export function foreignStackTax(taxableLocal, taxableForeign) {
+  const tf = Math.max(0, taxableForeign);
+  if (tf <= 0) return { tax: 0, bands: [] };
+  const room6 = Math.max(0, 1_000_000 - Math.max(0, taxableLocal));
+  const at6 = Math.min(tf, room6);
+  const at15 = tf - at6;
+  const bands = [];
+  if (at6 > 0) bands.push({ label: `Rs.${Math.round(at6).toLocaleString()} @ 6% (rest of first Rs.1,000,000 band)`, taxed: at6, rate: 0.06, tax: Math.round(at6 * 0.06) });
+  if (at15 > 0) bands.push({ label: `Rs.${Math.round(at15).toLocaleString()} @ 15% (maximum rate)`, taxed: at15, rate: 0.15, tax: Math.round(at15 * 0.15) });
+  return { tax: bands.reduce((t, x) => t + x.tax, 0), bands };
+}
+
+// Foreign bank income alone (no local taxable income): 6% on first Rs.1,000,000 taxable; 15% on balance
 export function calcForeignTax(taxable) {
   if (taxable <= 0) return { tax: 0, bands: [] };
   if (taxable <= 1_000_000) {
@@ -103,7 +119,7 @@ export function computeAnnual(year, raw = {}) {
   const unusedDed  = Math.max(0, totalDed - stdIncome);
   const taxableFB  = Math.max(0, forBankTx - unusedDed);
   const stdResult  = graduatedTax(taxableStd, cfg.slabs);
-  const fbResult   = calcForeignTax(taxableFB);
+  const fbResult   = foreignStackTax(taxableStd, taxableFB);
   const grossTax   = stdResult.tax + fbResult.tax;
   const totalWHT   = i.whtApit + i.whtRent + i.whtProf + i.whtOth;
   const netTax     = grossTax - totalWHT;
@@ -209,4 +225,85 @@ export function summarizeCalc(calc) {
   }
   const a = computeAnnual(calc.year, calc.input_data);
   return { kind, amount: a.netTax, status: a.taxStatus, assessable: a.totalAss, grossTax: a.grossTax };
+}
+
+// ═══════════════════════════════════════════════════════════
+//  Client self-service calculator (Y/A 2025/26 onwards)
+//  Sources: Inland Revenue (Amendment) Act No. 02 of 2025 (First Schedule
+//  para 1(1D) rates, para 1(6) 15% max for foreign-currency income remitted
+//  through a bank; Fifth Schedule personal relief Rs.1,800,000), IRD Tax Chart
+//  2025/26, IRD guide Asmt_IIT_004_2025_2026, APIT Tables 01 & 08.
+// ═══════════════════════════════════════════════════════════
+export const SOLAR_MAX = 600_000;
+export const DONATION_MAX = 75_000;
+export const INTEREST_WHT = 0.10;
+
+/**
+ * All amounts are ANNUAL rupees.
+ * x: { residency: 'resident'|'nrcitizen'|'nonresident',
+ *      salary, business, rent, interest, otherLocal,          // Sri Lankan income
+ *      foreignFx,                                              // foreign-currency income remitted through a bank (15% max)
+ *      foreignOther,                                           // foreign income NOT remitted through a bank (normal rates)
+ *      solar, donCharity, donGovt,                             // reliefs / qualifying payments
+ *      apitPaid, whtInterestAuto (bool), otherTaxPaid }        // tax already paid
+ */
+export function computePersonal(year, x = {}) {
+  const n = (k) => Math.max(0, num(x[k]));
+  const cfg = yearCfg(year);
+  const residency = x.residency || 'resident';
+  const resident = residency === 'resident';
+  const getsPR = residency !== 'nonresident';                       // residents + non-resident citizens
+  const foreignTaxable = residency !== 'nonresident';               // non-residents: only Sri Lankan-source income
+
+  const salary = n('salary'), business = n('business'), rent = n('rent'), interest = n('interest'), otherLocal = n('otherLocal');
+  const foreignFx = foreignTaxable ? n('foreignFx') : 0;
+  const foreignOther = foreignTaxable ? n('foreignOther') : 0;
+
+  const localAss = salary + business + rent + interest + otherLocal + foreignOther;   // normal progressive rates
+  const totalAss = localAss + foreignFx;
+
+  // Reliefs (Cage 60) — personal relief limited to assessable income
+  const rentRelief = resident ? Math.round(rent * 0.25) : 0;
+  const prUsed = getsPR ? Math.min(cfg.pr, Math.max(0, totalAss - rentRelief)) : 0;
+  const solarUsed = resident ? Math.min(n('solar'), SOLAR_MAX, Math.max(0, totalAss - rentRelief - prUsed)) : 0;
+  const reliefs = rentRelief + prUsed + solarUsed;
+  const afterRel = Math.max(0, totalAss - reliefs);
+
+  // Qualifying payments (Cage 100): approved charity ≤ min(Rs.75,000, 1/3 of taxable income); Govt donations in full
+  const donUsed = Math.min(n('donCharity'), DONATION_MAX, afterRel / 3);
+  const qp = Math.min(Math.round(donUsed) + n('donGovt'), afterRel);
+  const deductions = reliefs + qp;
+
+  // Deduct against Sri Lankan / normal-rate income first (higher rates), balance against foreign-currency income
+  const taxableLocal = Math.max(0, localAss - deductions);
+  const unused = Math.max(0, deductions - localAss);
+  const taxableForeign = Math.max(0, foreignFx - unused);
+  const taxable = taxableLocal + taxableForeign;
+
+  const local = graduatedTax(taxableLocal, cfg.slabs);
+  const foreign = foreignStackTax(taxableLocal, taxableForeign);
+  const tax = local.tax + foreign.tax;
+
+  const whtInterest = x.whtInterestAuto ? Math.round(interest * INTEREST_WHT) : 0;
+  const credits = n('apitPaid') + whtInterest + n('otherTaxPaid');
+  const balance = tax - credits;
+
+  return {
+    year, cfg, residency, salary, business, rent, interest, otherLocal, foreignFx, foreignOther,
+    localAss, totalAss, rentRelief, prUsed, solarUsed, reliefs, donUsed: Math.round(donUsed), qp, deductions,
+    taxableLocal, taxableForeign, taxable, local, foreign, tax, whtInterest, credits, balance,
+    afterTax: totalAss - tax,
+    effRate: totalAss > 0 ? (tax / totalAss) * 100 : 0,
+    marginal: Math.max(0, ...local.detail.map(b => b.rate), ...foreign.bands.map(b => b.rate)),
+    mustFile: totalAss > cfg.pr,
+    status: balance > 0.5 ? 'payable' : balance < -0.5 ? 'refund' : 'nil',
+  };
+}
+
+// APIT Tax Table 01 (2025/26): monthly tax on regular profits from primary employment
+export function apitTable1(monthly) {
+  const m = Math.max(0, num(monthly));
+  const rows = [[150_000, 0, 0], [233_333, 0.06, 9_000], [275_000, 0.18, 37_000], [316_667, 0.24, 53_500], [358_333, 0.30, 72_500], [Infinity, 0.36, 94_000]];
+  const [, rate, less] = rows.find(([lim]) => m <= lim);
+  return Math.max(0, Math.round(m * rate - less));
 }
