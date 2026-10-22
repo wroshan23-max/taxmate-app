@@ -141,34 +141,75 @@ export function computeQuarterly(raw = {}) {
   return { quarter, A, C, B, instalment: Math.max(0, Math.round((A - C) / B)) };
 }
 
-// ─── IIT Return Y/A 2024/25 (cage-wise, mixed income) ────
-export function computeReturn2425(f = {}) {
-  const n = (k) => num(f[k]);
+// ─── IIT Return (cage-wise, mixed income) — Y/A 2024/25, 2025/26, 2026/27 ────
+// Sources: IRD guides Asmt_IIT_004_2024_2025 & Asmt_IIT_004_2025_2026; Inland Revenue
+// (Amendment) Act No. 02 of 2025 (rates, Rs.1.8M relief, 15% max on foreign-currency income).
+// Foreign-currency income remitted through a bank ("Fx"):
+//   2024/25  → exempt (Cage 210)
+//   2025/26+ → declared under its own schedule (employment / business / other) but taxed at a
+//              maximum of 15%, stacked on top of local taxable income (Cage 809B).
+export const RETURN_YEARS = ['2024/25', '2025/26', '2026/27'];
+// Income fields that are monthly amounts when the return is entered "per month" (×12)
+export const RETURN_MONTHLY_KEYS = ['empPrimary', 'empSecondary', 'empBenefits', 'empFx', 'bizProfit', 'bizPartner', 'bizFx',
+  'interest', 'rentGross', 'othInv', 'othInc', 'forTaxable', 'forFx'];
+export const fxExemptYear = (year) => yearCfg(year).foreignBankExempt;
 
-  const cage10 = n('empPrimary') + n('empSecondary') + n('empBenefits') + n('empBonus');
-  const bizGross    = n('bizProfit') + n('bizPartner');
-  const bizLossUsed = Math.min(n('bizLossBF'), bizGross);
-  const cage20      = bizGross - bizLossUsed;
-  const cage30 = n('interest') + n('rentGross') + n('othInv');
-  const cage40 = n('othInc') + n('forTaxable');
+export function computeReturn(year, f = {}) {
+  const cfg = yearCfg(year);
+  const monthly = f.period === 'monthly';
+  const n = (k) => Math.max(0, num(f[k])) * (monthly && RETURN_MONTHLY_KEYS.includes(k) ? 12 : 1);
+  const fxExempt = cfg.foreignBankExempt;
+
+  // Schedule 1 — employment
+  const empLocal = n('empPrimary') + n('empSecondary') + n('empBenefits') + n('empBonus');
+  const empFx = n('empFx');
+  // Schedule 2 — business (loss b/f set off against local business first)
+  const bizLocal = n('bizProfit') + n('bizPartner');
+  const bizFxGross = n('bizFx');
+  const bizLossBF = n('bizLossBF');
+  const lossLocal = Math.min(bizLossBF, bizLocal);
+  const lossFx = fxExempt ? 0 : Math.min(bizLossBF - lossLocal, bizFxGross);
+  const bizLossUsed = lossLocal + lossFx;
+  const bizFx = bizFxGross - lossFx;
+  // Schedule 3 / 4 — investment & other
+  const investLocal = n('interest') + n('rentGross') + n('othInv');
+  const otherLocal = n('othInc') + n('forTaxable');
+  const forFx = n('forFx');
+
+  const fxTotal = fxExempt ? 0 : empFx + bizFx + forFx;          // taxable foreign-currency income
+  const fxExemptAmt = fxExempt ? empFx + bizFxGross + forFx : 0;  // 2024/25: goes to Cage 210
+
+  const cage10 = empLocal + (fxExempt ? 0 : empFx);
+  const cage20 = bizLocal - lossLocal + (fxExempt ? 0 : bizFx);
+  const bizGross = bizLocal + (fxExempt ? 0 : bizFxGross);
+  const cage30 = investLocal;
+  const cage40 = otherLocal + (fxExempt ? 0 : forFx);
   const cage50 = cage10 + cage20 + cage30 + cage40;
+  const localAss = cage50 - fxTotal;
 
+  // Cage 60 — reliefs
   const rentRelief = Math.min(Math.round(n('rentGross') * 0.25), cage50);
-  const prUsed     = Math.min(PR_2425, Math.max(0, cage50 - rentRelief));
+  const prUsed     = Math.min(cfg.pr, Math.max(0, cage50 - rentRelief));
   const solarUsed  = Math.min(n('solar'), 600_000, Math.max(0, cage50 - rentRelief - prUsed));
   const reliefs    = rentRelief + prUsed + solarUsed;
   const afterRel   = Math.max(0, cage50 - reliefs);
 
+  // Cage 100 — qualifying payments (approved charity ≤ Rs.75,000 and ≤ 1/3 of taxable income)
   const donCap  = Math.min(75_000, afterRel / 3);
   const donUsed = Math.min(n('donCharity'), donCap);
   const qpRaw   = donUsed + n('donGovt') + n('qpOther');
   const cage100 = Math.min(qpRaw, afterRel);
 
+  // Cage 120 — taxable income; reliefs & QP set off against local income first
   const cage120 = Math.max(0, afterRel - cage100);
-  const prog    = graduatedTax(cage120, SLABS_2425);
+  const taxableLocal = Math.max(0, localAss - reliefs - cage100);
+  const taxableFx = Math.max(0, cage120 - taxableLocal);
+
+  const prog    = graduatedTax(taxableLocal, cfg.slabs);
+  const fx      = foreignStackTax(taxableLocal, taxableFx);
   const term    = terminalBenefitTax(n('termBen'));
   const gainTax = Math.round(n('invGain') * 0.10);
-  const cage170 = prog.tax + term.tax + gainTax;
+  const cage170 = prog.tax + fx.tax + term.tax + gainTax;
 
   const credits = [
     { cage: '901', label: 'Foreign tax credit', amt: n('ftc') },
@@ -179,36 +220,62 @@ export function computeReturn2425(f = {}) {
     { cage: '909/910', label: 'Investment gain tax paid', amt: n('gainTaxPaid') },
     { cage: '911', label: 'Self-assessment instalments paid', amt: n('instalments') },
   ];
+  // Foreign tax credit cannot exceed the Sri Lankan tax on that foreign income (s.80/81; IRD guide 2025/26).
+  // Applied from Y/A 2025/26 (earlier saved returns keep their original figures).
+  if (!fxExempt) {
+    const forShare = localAss > 0 ? prog.tax * (n('forTaxable') / localAss) : 0;
+    credits[0].amt = Math.min(credits[0].amt, Math.round(fx.tax + forShare));
+  }
   const cage180 = credits.reduce((s, x) => s + x.amt, 0);
   const balance = cage170 - cage180;
 
   const sources = [
-    cage10 > 0 && 'Employment', cage20 > 0 && 'Business', n('interest') > 0 && 'Interest',
-    n('rentGross') > 0 && 'Rent', n('othInv') > 0 && 'Other investment', cage40 > 0 && 'Other',
+    empLocal > 0 && 'Employment', bizLocal > 0 && 'Business', n('interest') > 0 && 'Interest',
+    n('rentGross') > 0 && 'Rent', n('othInv') > 0 && 'Other investment', otherLocal > 0 && 'Other',
+    (empFx + bizFxGross + forFx) > 0 && (fxExempt ? 'Foreign (exempt)' : 'Foreign currency (15% max)'),
     n('termBen') > 0 && 'Terminal benefits', n('invGain') > 0 && 'Capital gains',
     n('forExempt') > 0 && 'Foreign (exempt)',
   ].filter(Boolean);
 
   return {
-    f: Object.fromEntries(Object.keys(f).map(k => [k, n(k)])),
+    year, cfg, monthly, fxExempt,
+    f: Object.fromEntries(Object.keys(f).filter(k => k !== 'form' && k !== 'period').map(k => [k, n(k)])),
+    empLocal, empFx, bizLocal, bizFx, forFx, fxTotal, fxExemptAmt, localAss,
     cage10, cage20, bizGross, bizLossUsed, cage30, cage40, cage50, rentRelief, prUsed, solarUsed, reliefs,
-    donUsed, donCap, cage100, cage120, prog, term, gainTax, cage170, credits, cage180, balance,
-    cage210: n('forExempt') + n('othExempt'), sources,
+    donUsed, donCap, cage100, cage120, taxableLocal, taxableFx, prog, fx, term, gainTax, cage170, credits, cage180, balance,
+    cage210: n('forExempt') + n('othExempt') + fxExemptAmt, sources,
     effRate: cage50 > 0 ? (cage170 / cage50 * 100).toFixed(2) : '0.00',
     taxStatus: balance > 0.5 ? 'payable' : balance < -0.5 ? 'refund' : 'nil',
   };
 }
 
+// Legacy name (saved Y/A 2024/25 returns)
+export const computeReturn2425 = (f = {}) => computeReturn('2024/25', f);
+
+// Map an old "Annual IIT" saved calculation onto the return fields
+export function annualToReturnInput(a = {}) {
+  const g = (k) => num(a[k]);
+  const out = {
+    empPrimary: g('emp'), empBonus: g('bonus'), bizProfit: g('biz') + g('cons'), rentGross: g('rentGross'),
+    forFx: g('forBank'), forTaxable: g('forOth'), othInc: g('othInc'),
+    donCharity: g('donations'), solar: g('solar'), donGovt: g('govtDon'),
+    apitPrimary: g('whtApit'), whtRent: g('whtRent'), whtService: g('whtProf'), whtOther: g('whtOth'),
+  };
+  return Object.fromEntries(Object.entries(out).filter(([, val]) => val));
+}
+
 // What kind of saved calculation is this?
 export function calcKind(calc) {
-  if (calc?.input_data?.form === 'IIT_RETURN_2425') return 'return2425';
+  const form = calc?.input_data?.form;
+  if (form === 'IIT_RETURN' || form === 'IIT_RETURN_2425') return 'return';
   if (calc?.calc_type === 'quarterly') return 'quarterly';
   return 'annual';
 }
 
 export const KIND_LABEL = {
   annual: 'Annual IIT Computation',
-  return2425: 'IIT Return Y/A 2024/25',
+  return: 'IIT Return Computation',
+  return2425: 'IIT Return Computation',
   quarterly: 'Quarterly Instalment',
 };
 
@@ -219,8 +286,8 @@ export function summarizeCalc(calc) {
     const q = computeQuarterly(calc.input_data);
     return { kind, amount: q.instalment, status: 'instalment', assessable: null, grossTax: null };
   }
-  if (kind === 'return2425') {
-    const r = computeReturn2425(calc.input_data);
+  if (kind === 'return') {
+    const r = computeReturn(calc.year || '2024/25', calc.input_data);
     return { kind, amount: r.balance, status: r.taxStatus, assessable: r.cage50, grossTax: r.cage170 };
   }
   const a = computeAnnual(calc.year, calc.input_data);

@@ -4,7 +4,7 @@
 //  client uses "Print / Save as PDF".
 // ═══════════════════════════════════════════════════════════
 import {
-  calcKind, computeAnnual, computeQuarterly, computeReturn2425, yearCfg, SLABS_2425,
+  calcKind, computeAnnual, computeQuarterly, computeReturn, yearCfg,
 } from './iitCalc';
 
 // Firm profile used on every statement, invoice and message.
@@ -210,56 +210,69 @@ function annualBody(calc, client) {
     + footer(`ird.gov.lk — Y/A ${calc.year}: Personal Relief Rs. ${cfg.pr.toLocaleString('en-LK')}, rates ${cfg.slabText}`);
 }
 
-// ─── IIT Return Y/A 2024/25 (cage-wise) ──────────────────
-function return2425Body(calc, client) {
-  const r = computeReturn2425(calc.input_data);
+// ─── IIT Return computation (cage-wise) — Y/A 2024/25, 2025/26, 2026/27 ──
+function returnBody(calc, client) {
+  const year = calc.year || '2024/25';
+  const r = computeReturn(year, calc.input_data);
+  const cfg = r.cfg;
   const f = r.f;
   const row = (cage, label, val, cls = '') => `<tr class="${cls}"><td class="c">${cage}</td><td>${label}</td><td class="r">${val}</td></tr>`;
   const opt = (k, cage, label, cls) => (f[k] > 0 ? row(cage, label, m(f[k]), cls) : '');
+  const fxLbl = r.fxExempt ? 'EXEMPT (declared in Cage 210)' : 'foreign currency via bank — 15% max';
+  const fxRow = (k, label) => (f[k] > 0 ? row('', `${label} <i style="color:#2980B9">(${fxLbl})</i>`, r.fxExempt ? `<span style="color:#999">${m(f[k])}</span>` : m(k === 'bizFx' ? r.bizFx : f[k]), 'det') : '');
 
   const sched = `
     <tr class="hd"><td class="c">Cage</td><td>Schedule 1 — Employment Income</td><td class="r">Rs.</td></tr>
     ${opt('empPrimary', '', 'Primary employment — salary &amp; allowances', 'det')}${opt('empSecondary', '', 'Secondary employment', 'det')}
     ${opt('empBenefits', '', 'Non-cash benefits', 'det')}${opt('empBonus', '', 'Bonus / other lump sums', 'det')}
+    ${fxRow('empFx', 'Employment with a foreign employer')}
     ${row('10', '<b>Employment income</b>', `<b>${m(r.cage10)}</b>`)}
     <tr class="hd"><td class="c"></td><td>Schedule 2 — Business Income</td><td></td></tr>
-    ${opt('bizProfit', '', 'Sole proprietorship net profit', 'det')}${opt('bizPartner', '', 'Share of partnership income', 'det')}
+    ${opt('bizProfit', '', 'Sole proprietorship / professional net profit', 'det')}${opt('bizPartner', '', 'Share of partnership income', 'det')}
+    ${fxRow('bizFx', 'Services to foreign clients')}
     ${r.bizLossUsed > 0 ? row('', 'Less: business loss brought forward', neg(r.bizLossUsed), 'sub') : ''}
     ${row('20', '<b>Business income</b>', `<b>${m(r.cage20)}</b>`)}
     <tr class="hd"><td class="c"></td><td>Schedule 3 — Investment Income</td><td></td></tr>
     ${opt('interest', '', 'Interest income (gross)', 'det')}${opt('rentGross', '', 'Rental income (gross)', 'det')}${opt('othInv', '', 'Other investment income', 'det')}
     ${row('30', '<b>Investment income</b>', `<b>${m(r.cage30)}</b>`)}
     <tr class="hd"><td class="c"></td><td>Schedule 4 — Other Income</td><td></td></tr>
-    ${opt('othInc', '', 'Other income', 'det')}${opt('forTaxable', '', 'Foreign income not remitted via bank', 'det')}
+    ${opt('othInc', '', 'Other income', 'det')}${opt('forTaxable', '', 'Foreign income not remitted through a bank', 'det')}
+    ${fxRow('forFx', 'Other foreign-source income')}
     ${row('40', '<b>Other income</b>', `<b>${m(r.cage40)}</b>`)}
     <tr class="tot"><td class="c">50</td><td>Total Assessable Income</td><td class="r">${m(r.cage50)}</td></tr>`;
 
   const ded = `
     ${row('60', 'Rent relief (25% of gross rent)', neg(r.rentRelief), 'sub')}
-    ${row('', 'Personal relief (Y/A 2024/25)', neg(r.prUsed), 'sub')}
-    ${r.solarUsed > 0 ? row('', 'Solar panel relief', neg(r.solarUsed), 'sub') : ''}
-    ${r.donUsed > 0 ? row('', 'Approved charitable donations', neg(r.donUsed), 'sub') : ''}
+    ${row('', `Personal relief (Rs. ${cfg.pr.toLocaleString('en-LK')})`, neg(r.prUsed), 'sub')}
+    ${r.solarUsed > 0 ? row('', 'Solar panel relief (max Rs. 600,000)', neg(r.solarUsed), 'sub') : ''}
+    ${r.donUsed > 0 ? row('', 'Approved charitable donations (max Rs. 75,000)', neg(r.donUsed), 'sub') : ''}
     ${f.donGovt > 0 ? row('', 'Donations to Government / specified funds', neg(f.donGovt), 'sub') : ''}
     ${f.qpOther > 0 ? row('', 'Other qualifying payments', neg(f.qpOther), 'sub') : ''}
     ${row('100', 'Total qualifying payments', neg(r.cage100))}
-    <tr class="tot"><td class="c">120</td><td>Taxable Income</td><td class="r">${r.cage120 > 0 ? m(r.cage120) : 'NIL'}</td></tr>`;
+    <tr class="tot"><td class="c">120</td><td>Taxable Income</td><td class="r">${r.cage120 > 0 ? m(r.cage120) : 'NIL'}</td></tr>
+    ${r.taxableFx > 0 ? row('', 'of which: local income at progressive rates', m(r.taxableLocal), 'det') + row('', 'of which: foreign-currency income (15% max)', m(r.taxableFx), 'det') : ''}`;
+
+  const fxTable = r.fx.bands.length ? `<table class="sl" style="margin-top:6px"><tr><th>Foreign-currency income (Cage 809B)</th><th class="r">Rate</th><th class="r">Amount Taxed (Rs.)</th><th class="r">Tax (Rs.)</th></tr>
+    ${r.fx.bands.map(b => `<tr class="on"><td>${b.label}</td><td class="r">${pct(b.rate)}</td><td class="r">${m(b.taxed)}</td><td class="r">${m(b.tax)}</td></tr>`).join('')}
+    <tr class="tot"><td colspan="3">Tax on foreign-currency income</td><td class="r">${m(r.fx.tax)}</td></tr></table>` : '';
 
   const other = (r.term.tax > 0 || r.gainTax > 0 || f.termBen > 0 || f.invGain > 0) ? `<table class="st">
     ${f.termBen > 0 ? row('130', `Terminal benefits Rs. ${m(f.termBen)} (0% / 6% / 12%)`, m(r.term.tax)) : ''}
     ${f.invGain > 0 ? row('140', `Gains on investment assets Rs. ${m(f.invGain)} @ 10%`, m(r.gainTax)) : ''}</table>` : '';
 
   const credits = r.credits.filter(x => x.amt > 0).map(x => row(x.cage, x.label, neg(x.amt))).join('') || row('', 'No tax credits', m(0));
-  const exempt = r.cage210 > 0 ? `<table class="st">${row('210', 'Exempt income — foreign income remitted via bank / other exempt (declared, not taxed)', m(r.cage210), 'ex')}</table>` : '';
+  const exempt = r.cage210 > 0 ? `<table class="st">${row('210', 'Exempt income — declared, not taxed' + (r.fxExemptAmt > 0 ? ' (incl. foreign income remitted through a bank)' : ''), m(r.cage210), 'ex')}</table>` : '';
+  const ystart = parseInt(year, 10);
 
-  return header('Individual Income Tax Return — Computation Statement', 'Return of Income Y/A 2024/2025 | Inland Revenue Act No. 24 of 2017 (as amended)', '2024/25')
-    + clientTable(client, '2024/25')
+  return header('Individual Income Tax Return — Computation Statement', `Return of Income Y/A ${ystart}/${ystart + 1} | Inland Revenue Act No. 24 of 2017 (as amended)${r.monthly ? ' | entered as monthly amounts × 12' : ''}`, year)
+    + clientTable(client, year)
     + `<div class="ph">PART A &mdash; ASSESSABLE INCOME (SCHEDULES 1&ndash;4)</div><table class="st">${sched}</table>`
     + `<div class="ph">PART B &mdash; RELIEFS &amp; QUALIFYING PAYMENTS</div><table class="st">${ded}</table>`
-    + `<div class="ph">PART C &mdash; TAX ON TAXABLE INCOME (Y/A 2024/25 RATES)</div>${slabTable(SLABS_2425, r.prog.detail, 'Tax at progressive rates')}${other}`
+    + `<div class="ph">PART C &mdash; TAX ON TAXABLE INCOME (Y/A ${year} RATES)</div>${slabTable(cfg.slabs, r.prog.detail, 'Tax at progressive rates')}${fxTable}${other}`
     + `<div class="ph">PART D &mdash; TAX PAYABLE &amp; CREDITS (SCHEDULE 9)</div><table class="st">
        <tr class="tot"><td class="c">170</td><td>Total Tax Payable</td><td class="r">${m(r.cage170)}</td></tr>${credits}
        <tr class="tot"><td class="c">180</td><td>Total Tax Credits</td><td class="r">${neg(r.cage180)}</td></tr></table>${exempt}`
-    + `<div class="sw">${resultBox(r.balance, r.taxStatus, (r.balance >= 0 ? 'Cage 190 &mdash; ' : 'Cage 200 &mdash; ') + payNote(r.taxStatus, '2024/25'))}
+    + `<div class="sw">${resultBox(r.balance, r.taxStatus, (r.balance >= 0 ? 'Cage 190 &mdash; ' : 'Cage 200 &mdash; ') + payNote(r.taxStatus, year))}
        <table class="sm">
         <tr><td class="k">Total Assessable Income (50)</td><td class="v">Rs. ${m(r.cage50)}</td></tr>
         <tr><td class="k">Reliefs</td><td class="v neg">(Rs. ${m(r.reliefs)})</td></tr>
@@ -269,7 +282,7 @@ function return2425Body(calc, client) {
         <tr><td class="k">Tax Credits (180)</td><td class="v neg">(Rs. ${m(r.cage180)})</td></tr>
         <tr><td class="k">Income Sources</td><td class="v">${esc(r.sources.join(', ') || '—')}</td></tr>
        </table></div>`
-    + footer('IRD Guide to the Return of Income Y/A 2024/2025 — Personal Relief Rs. 1,200,000, rates 6% to 36%');
+    + footer(`IRD Guide to the Return of Income Y/A ${ystart}/${ystart + 1} — Personal Relief Rs. ${cfg.pr.toLocaleString('en-LK')}, rates ${cfg.slabText}${r.fxExempt ? '' : '; foreign-currency income remitted through a bank taxed at a maximum of 15%'}`);
 }
 
 // ─── Quarterly instalment notice ─────────────────────────
@@ -293,7 +306,7 @@ function quarterlyBody(calc, client) {
 // calc: { year, calc_type, input_data }  client: { full_name, tin, nic, address, employer, resident_status }
 export function buildStatementHtml(calc, client = {}, { withToolbar = true } = {}) {
   const kind = calcKind(calc);
-  const body = kind === 'return2425' ? return2425Body(calc, client) : kind === 'quarterly' ? quarterlyBody(calc, client) : annualBody(calc, client);
+  const body = kind === 'return' ? returnBody(calc, client) : kind === 'quarterly' ? quarterlyBody(calc, client) : annualBody(calc, client);
   const title = `IIT_Computation_${String(calc.year || '').replace('/', '-')}_${(client.full_name || 'Client').trim().replace(/\s+/g, '_')}`;
   const bar = withToolbar
     ? '<div class="bar no-print"><button class="pbt" onclick="window.print()">&#128424; Print / Save as PDF</button></div>' : '';
