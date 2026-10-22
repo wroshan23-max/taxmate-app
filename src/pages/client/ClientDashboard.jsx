@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight, ExternalLink, Wallet } from 'lucide-react';
 import { safeUrl } from '../../components/LinkifiedText';
 import { yearInfo } from '../../lib/assets';
+import DueDatesWidget from '../../components/DueDatesWidget';
 
 export default function ClientDashboard() {
   const { user, profile } = useAuth();
@@ -91,6 +92,24 @@ export default function ClientDashboard() {
           </Link>
         ))}
       </div>
+
+      {(features.tax_calendar !== false || features.referrals !== false) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {features.tax_calendar !== false && <DueDatesWidget role="client" withReminders={features.reminders !== false} max={5} />}
+          {features.referrals !== false && (
+            <Link to="/client/invite" className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-700 via-primary-800 to-indigo-900 text-white p-5 shadow-lg flex flex-col justify-between min-h-[180px] hover:shadow-xl transition-shadow">
+              <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-gold-500/25 blur-2xl" />
+              <div className="relative">
+                <div className="text-3xl">🎁</div>
+                <div className="font-black text-lg mt-1 leading-tight">Invite friends &amp; family</div>
+                <div className="text-sm text-primary-200">Help them file their tax the easy way · යාළුවන්ට TaxMate හඳුන්වා දෙන්න</div>
+                {features.referral_reward && <div className="mt-2 text-sm font-semibold text-gold-500">{features.referral_reward}</div>}
+              </div>
+              <div className="relative mt-3 inline-flex items-center gap-1 text-sm font-bold bg-gold-500 text-primary-900 rounded-xl px-3 py-1.5 w-fit">Get my invite link <ChevronRight size={15} /></div>
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Recent Updates */}
