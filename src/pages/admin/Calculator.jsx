@@ -7,7 +7,7 @@ import { Calculator as CalcIcon, Save, Users, Printer } from 'lucide-react';
 
 // Tax rules & computations live in src/lib/iitCalc.js (shared with saved-calc viewer & PDF)
 import {
-  PR, TAX_YEARS, graduatedTax, calcForeignTax,
+  PR, TAX_YEARS, graduatedTax, foreignStackTax,
   computeAnnual, computeQuarterly, computeReturn2425, calcKind,
 } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
@@ -1137,7 +1137,7 @@ function MixedIncome() {
   const taxableFB  = Math.max(0, v(fBank) - unusedPR);
   const taxableFO  = Math.max(0, v(fOther) - Math.max(0, unusedPR - v(fBank)));
   const { tax: localTax, detail: localDetail } = graduatedTax(taxableL + taxableFO);
-  const { tax: fbTax, bands: fbBands } = calcForeignTax(taxableFB);
+  const { tax: fbTax, bands: fbBands } = foreignStackTax(taxableL + taxableFO, taxableFB);
   const grossTax   = localTax + fbTax;
   const netTax     = grossTax - v(credits);
   const taxStatus  = netTax > 0.5 ? 'payable' : netTax < -0.5 ? 'refund' : 'nil';
@@ -1154,7 +1154,7 @@ function MixedIncome() {
       </div>
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
         Local income: Progressive 6%→18%→24%→30%→36% (after Rs.1,800,000 relief) |
-        Foreign income: 6% on first Rs.1,000,000 taxable → 15% MAX cap |
+        Foreign income: 15% MAX — only the part of the first Rs.1,000,000 band not used by local income is at 6% |
         Personal relief applied to local income first, balance to foreign income
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1171,7 +1171,7 @@ function MixedIncome() {
         <div className="card p-5">
           <SectionHead className="text-blue-700">🌏 Foreign Income</SectionHead>
           <div className="space-y-3 mb-4">
-            <RsField label="Foreign Bank Remitted" hint="6% on first Rs.1M taxable; 15% on balance (IRD Table 08)" value={fBank} onChange={setFBank} tag="6%+15% Tiered" tagColor="blue" />
+            <RsField label="Foreign Bank Remitted" hint="6% only on what is left of the first Rs.1M band after local income; 15% on balance (IRD guide 2025/26, Table 08)" value={fBank} onChange={setFBank} tag="6%+15% Tiered" tagColor="blue" />
             <RsField label="Other Foreign Income" hint="Not via bank — normal graduated rates apply" value={fOther} onChange={setFOther} tag="Graduated Rates" tagColor="red" />
           </div>
           <SectionHead>🏦 Tax Credits</SectionHead>
