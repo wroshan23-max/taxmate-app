@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
-  LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent
+  LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet
 } from 'lucide-react';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/client/calculations', icon: Calculator, label: 'My Calculations' },
-  { to: '/client/tax-calculator', icon: Percent, label: 'Tax Calculator' },
+  { to: '/client/tax-calculator', icon: Percent, label: 'Tax Calculator', feature: 'tax_calculator' },
+  { to: '/client/income', icon: Wallet, label: 'Monthly Income', feature: 'income_sheets' },
   { to: '/client/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/client/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/client/invoices', icon: Receipt, label: 'Invoices' },
@@ -20,6 +22,11 @@ const nav = [
 export default function ClientLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
+  // Features switched on by TaxMate (Tax Calculator on/off, Monthly Income sheet enabled)
+  const [features, setFeatures] = useState({ tax_calculator: true, income_sheets: 0, loaded: false });
+  useEffect(() => {
+    supabase.rpc('my_portal_features').then(({ data }) => { if (data) setFeatures({ ...data, loaded: true }); else setFeatures(f => ({ ...f, loaded: true })); });
+  }, [profile?.id]);
   const [open, setOpen] = useState(false);
 
   const handleSignOut = async () => {
@@ -37,7 +44,7 @@ export default function ClientLayout() {
       </div>
 
       <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto px-2">
-        {nav.map(({ to, icon: Icon, label, end }) => (
+        {nav.filter(n => !n.feature || features[n.feature]).map(({ to, icon: Icon, label, end }) => (
           <NavLink
             key={to}
             to={to}
@@ -113,7 +120,7 @@ export default function ClientLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Outlet />
+          <Outlet context={features} />
         </main>
       </div>
     </div>
