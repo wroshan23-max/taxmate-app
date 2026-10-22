@@ -3,12 +3,13 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
-  LogOut, Menu, X, User, Bell, Megaphone, Landmark
+  LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent
 } from 'lucide-react';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/client/calculations', icon: Calculator, label: 'My Calculations' },
+  { to: '/client/tax-calculator', icon: Percent, label: 'Tax Calculator' },
   { to: '/client/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/client/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/client/invoices', icon: Receipt, label: 'Invoices' },
