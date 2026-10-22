@@ -20,6 +20,8 @@ import AssetStatements from './pages/admin/AssetStatements';
 import ClientAssets from './pages/client/ClientAssets';
 import ClientTaxCalculator from './pages/client/ClientTaxCalculator';
 import ClientIncome from './pages/client/ClientIncome';
+import ClientInvite from './pages/client/ClientInvite';
+import TaxCalendar from './pages/TaxCalendar';
 import ClientDashboard from './pages/client/ClientDashboard';
 import ClientCalculations from './pages/client/ClientCalculations';
 import ClientTaxReturns from './pages/client/ClientTaxReturns';
@@ -93,6 +95,7 @@ export default function App() {
         <Route path="calculator" element={<Calculator />} />
         <Route path="tax-returns" element={<TaxReturns />} />
         <Route path="assets" element={<AssetStatements />} />
+        <Route path="calendar" element={<TaxCalendar role="admin" />} />
         <Route path="invoices" element={<Invoices />} />
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
@@ -109,6 +112,8 @@ export default function App() {
         <Route path="assets" element={<ClientAssets />} />
         <Route path="tax-calculator" element={<ClientTaxCalculator />} />
         <Route path="income" element={<ClientIncome />} />
+        <Route path="calendar" element={<TaxCalendar role="client" />} />
+        <Route path="invite" element={<ClientInvite />} />
         <Route path="invoices" element={<ClientInvoices />} />
         <Route path="profile" element={<ClientProfile />} />
         <Route path="updates" element={<ClientTaxUpdates />} />
