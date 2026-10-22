@@ -16,7 +16,9 @@ import { PORTAL_FEATURES } from './Settings';
 import { invoiceMessage } from '../../lib/share';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
-import { UserRound, Sparkles, CheckCircle2 } from 'lucide-react';
+import { UserRound, Sparkles, CheckCircle2, FolderLock } from 'lucide-react';
+import DocumentVault from '../../components/DocumentVault';
+import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -33,6 +35,10 @@ export default function ClientDetail() {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview');
 
   useEffect(() => { loadAll(); }, [id]);
+  const [newDocs, setNewDocs] = useState(0);
+  const countNewDocs = () => supabase.from('client_documents').select('id', { count: 'exact', head: true })
+    .eq('client_id', id).eq('uploaded_role', 'client').is('seen_at', null).then(({ count }) => setNewDocs(count ?? 0));
+  useEffect(() => { countNewDocs(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadAll = async () => {
     const [{ data: c }, { data: calcs }, { data: rets }, { data: invs }] = await Promise.all([
@@ -128,7 +134,7 @@ export default function ClientDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
-        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['invoices', 'Invoices']].map(([t, label]) => (
+        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['documents', 'Documents'], ['invoices', 'Invoices']].map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -136,7 +142,7 @@ export default function ClientDetail() {
               tab === t ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            {label}
+            {label}{t === 'documents' && newDocs > 0 && <span className="ml-1.5 text-[10px] font-black bg-gold-500 text-primary-900 rounded-full px-1.5">{newDocs}</span>}
           </button>
         ))}
       </div>
@@ -277,37 +283,44 @@ export default function ClientDetail() {
       {/* Returns Tab */}
       {tab === 'returns' && (
         <div className="card">
-          <div className="card-header"><FileText size={16} /> Tax Returns</div>
+          <div className="card-header flex-wrap gap-2"><FileText size={16} /> Tax Returns — progress
+            <div className="ml-auto"><StartTracking clientId={id} userId={user?.id} existing={returns.map(r => r.year)} onCreated={(r) => setReturns(rs => [r, ...rs])} /></div>
+          </div>
           {returns.length === 0 ? (
-            <div className="p-8 text-center text-gray-400 text-sm">No returns</div>
+            <div className="p-8 text-center text-gray-400 text-sm">No returns yet — pick a Y/A above and click <b>Start tracking</b>.</div>
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-100">
               {returns.map(r => {
                 const forYear = calculations.filter(c => c.year === r.year && c.calc_type === 'annual');
                 const calc = forYear.find(c => c.status === 'final') ?? forYear[0];   // final wins, else latest draft
                 const sm = calc ? summarizeCalc(calc) : null;
                 return (
-                  <div key={r.id} className="flex items-center gap-3 px-5 py-3 flex-wrap">
-                    <div className="flex-1 min-w-48">
-                      <div className="text-sm font-semibold">Y/A {r.year}</div>
-                      <div className="text-xs text-gray-400">Due: {fmtDate(r.due_date)}{r.notes ? ` · ${r.notes}` : ''}</div>
-                      {sm ? (
-                        <div className="text-xs text-gray-600 mt-0.5">
-                          <span className={`font-bold ${calc.status === 'final' ? 'text-green-700' : 'text-amber-600'}`}>{calc.status === 'final' ? '✅ FINAL' : '📝 DRAFT'}</span> · {KIND_LABEL[sm.kind]} · Assessable {fmtRs(sm.assessable)} · Gross tax {fmtRs(sm.grossTax)} ·{' '}
-                          <span className={sm.status === 'refund' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
-                            {sm.status === 'refund' ? 'Refund' : 'Payable'} {fmtRs(Math.abs(sm.amount))}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-amber-600 mt-0.5">No saved calculation for Y/A {r.year} yet</div>
+                  <div key={r.id} className="px-5 py-4 space-y-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex-1 min-w-48">
+                        <div className="text-sm font-bold text-gray-800">Y/A {r.year}</div>
+                        <div className="text-xs text-gray-400">Due: {fmtDate(r.due_date)}{r.notes ? ` · ${r.notes}` : ''}</div>
+                        {sm ? (
+                          <div className="text-xs text-gray-600 mt-0.5">
+                            <span className={`font-bold ${calc.status === 'final' ? 'text-green-700' : 'text-amber-600'}`}>{calc.status === 'final' ? '✅ FINAL' : '📝 DRAFT'}</span> · {KIND_LABEL[sm.kind]} · Assessable {fmtRs(sm.assessable)} · Gross tax {fmtRs(sm.grossTax)} ·{' '}
+                            <span className={sm.status === 'refund' ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}>
+                              {sm.status === 'refund' ? 'Refund' : 'Payable'} {fmtRs(Math.abs(sm.amount))}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-amber-600 mt-0.5">No saved calculation for Y/A {r.year} yet</div>
+                        )}
+                      </div>
+                      {calc && (
+                        <button onClick={() => openStatement(calc, client)} className="btn-secondary text-xs py-1 px-2.5">
+                          <Printer size={13} /> PDF
+                        </button>
                       )}
                     </div>
-                    {calc && (
-                      <button onClick={() => openStatement(calc, client)} className="btn-secondary text-xs py-1 px-2.5">
-                        <Printer size={13} /> PDF
-                      </button>
-                    )}
-                    {statusBadge(r.status)}
+                    <div className="rounded-xl bg-gray-50/70 border border-gray-100 p-3">
+                      <ReturnStepper ret={r} onSet={async (stage) => { const d = await setReturnStage(r.id, stage); setReturns(rs => rs.map(x => (x.id === r.id ? d : x))); }} />
+                      <div className="text-[10px] text-gray-400 text-center mt-1.5">Click a step to update — the client sees it on their dashboard.</div>
+                    </div>
                   </div>
                 );
               })}
@@ -320,6 +333,15 @@ export default function ClientDetail() {
 
       {/* Assets & Liabilities Tab */}
       {tab === 'assets' && <AssetStatementsAdmin client={client} />}
+
+      {/* Documents Tab */}
+      {tab === 'documents' && (
+        <div className="space-y-3">
+          {client.feature_overrides?.documents === false && (
+            <div className="card p-3 text-sm bg-amber-50 border-amber-200 text-amber-800 flex items-center gap-2"><FolderLock size={15} /> Document vault is switched off for this client — they can't see or upload files. Turn it on in Overview → Portal features.</div>)}
+          <DocumentVault clientId={id} role="admin" userId={user?.id} onChange={countNewDocs} />
+        </div>
+      )}
 
       {/* Invoices Tab */}
       {tab === 'invoices' && (

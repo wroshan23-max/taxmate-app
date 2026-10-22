@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -13,6 +13,14 @@ const EMPTY = { full_name: '', tin: '', nic: '', email: '', mobile: '', address:
 
 export default function Clients() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+  // Click anywhere on a row to open the client (buttons/links keep their own action; Ctrl/⌘ or middle-click = new tab)
+  const openRow = (e, id) => {
+    if (e.target.closest('a,button,input,select,textarea,label')) return;
+    if (window.getSelection()?.toString()) return;   // user is selecting text
+    if (e.ctrlKey || e.metaKey || e.button === 1) window.open(`/admin/clients/${id}`, '_blank', 'noopener');
+    else navigate(`/admin/clients/${id}`);
+  };
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -118,7 +126,8 @@ export default function Clients() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={c.id} className="group cursor-pointer hover:bg-primary-50/50 transition-colors"
+                    onClick={(e) => openRow(e, c.id)} onAuxClick={(e) => e.button === 1 && openRow(e, c.id)}>
                     <td className="table-td">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm flex-shrink-0">
@@ -155,7 +164,7 @@ export default function Clients() {
                         to={`/admin/clients/${c.id}`}
                         className="text-primary-600 hover:text-primary-800 text-xs font-semibold hover:underline"
                       >
-                        View →
+                        View <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
                       </Link>
                       {c.archived_at
                         ? <button onClick={() => restore(c)} title="Restore" className="ml-3 text-xs text-green-700 hover:underline inline-flex items-center gap-1"><RotateCcw size={12} /> Restore</button>

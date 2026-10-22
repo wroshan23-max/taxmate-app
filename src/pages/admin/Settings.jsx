@@ -349,6 +349,8 @@ export const PORTAL_FEATURES = [
   ['tax_calculator', '🧮', 'Tax Calculator', 'Clients estimate their monthly / annual tax (local, foreign, mixed).'],
   ['tax_calendar', '📅', 'Tax Calendar & due dates', 'IRD due dates on their dashboard and a full calendar.'],
   ['reminders', '🔔', 'Reminders', 'Clients see your reminders and can add their own.'],
+  ['documents', '🗂️', 'Document vault', 'Clients upload salary slips, bank certificates etc. and download files you share.'],
+  ['return_tracker', '🚦', 'Return progress tracker', 'Clients see where their return is: Documents received → Computing → Ready to review → Filed in RAMIS.'],
   ['referrals', '🎁', 'Invite friends', 'Each client gets a personal invite link; friends who register are linked to them.'],
 ];
 

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import TopUpCalc from '../../components/TopUpCalc';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase, fmtRs } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -350,7 +351,8 @@ function RsField({ label, hint, value, onChange, tag, tagColor, required }) {
       </label>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">Rs.</span>
-        <input type="number" className="input pl-9" placeholder="0" value={value} onChange={e => onChange(e.target.value)} min="0" />
+        <input type="number" className="input pl-9 pr-9" placeholder="0" value={value} onChange={e => onChange(e.target.value)} min="0" />
+        <TopUpCalc value={value} onUse={onChange} />
       </div>
       {hint && <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{hint}</p>}
     </div>

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DueDatesWidget from '../../components/DueDatesWidget';
+import StorageMeter from '../../components/StorageMeter';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import {
   Users, FileText, Receipt, Calculator, Clock, AlertCircle, ArrowRight, MessageSquareWarning,
-  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark, Sparkles,
+  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark, Sparkles, FolderLock,
 } from 'lucide-react';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -30,7 +31,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [cl, rt, inv, calc, req, invites, al, sh] = await Promise.all([
+      const [cl, rt, inv, calc, req, invites, al, sh, docs] = await Promise.all([
         supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').is('archived_at', null).order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
@@ -39,10 +40,11 @@ export default function Dashboard() {
         supabase.from('portal_invites').select('id, expires_at').is('accepted_at', null).is('revoked_at', null),
         supabase.from('asset_statements').select('id, client_id, year, status, client_note, submitted_at, clients(full_name)').eq('status', 'submitted').eq('enabled', true),
         supabase.from('income_sheets').select('id, client_id, year, client_note, submitted_at, clients(full_name)').eq('status', 'submitted').eq('enabled', true),
+        supabase.from('client_documents').select('id, client_id, year, title, created_at, clients(full_name)').eq('uploaded_role', 'client').is('seen_at', null).order('created_at', { ascending: false }).limit(200),
       ]);
       setD({
         clients: cl.data ?? [], returns: rt.data ?? [], invoices: inv.data ?? [], calcs: calc.data ?? [],
-        requests: req.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
+        requests: req.data ?? [], docs: docs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
       });
     })();
   }, []);
@@ -62,7 +64,10 @@ export default function Dashboard() {
     const dueSoon = openReturns.filter(r => r.due_date && r.due_date <= in30);
     const nameOf = (i) => i.client_snapshot?.name || i.clients?.full_name || '—';
 
+    // new client uploads, one line per client
+    const docGroups = Object.values(d.docs.reduce((m, x) => { (m[x.client_id] ??= { client_id: x.client_id, name: x.clients?.full_name ?? 'Client', items: [] }).items.push(x); return m; }, {}));
     const attention = [
+      ...docGroups.map(g => ({ key: `doc${g.client_id}`, icon: FolderLock, tone: 'green', text: `${g.name} uploaded ${g.items.length} new document${g.items.length > 1 ? 's' : ''}`, note: g.items.slice(0, 3).map(x => x.title).join(', '), to: `/admin/clients/${g.client_id}?tab=documents`, when: g.items[0].created_at })),
       ...d.clients.filter(c => c.source === 'self_registration' && !c.reviewed_at).map(c => ({ key: `reg${c.id}`, icon: Sparkles, tone: 'green', text: `New client registered online${c.registration?.via && c.registration.via !== 'personal link' ? ` (${c.registration.via})` : ''} — ${c.full_name}${c.registration?.filled_by === 'contact' && c.contact_name ? ` (by ${c.contact_name}${c.contact_relation ? `, ${c.contact_relation.toLowerCase()}` : ''})` : ''}`, note: c.registration?.services?.join(', '), to: `/admin/clients/${c.id}`, when: c.registered_at })),
       ...d.sheets.map(x => ({ key: `sh${x.id}`, icon: Wallet, tone: 'blue', text: `${x.clients?.full_name ?? 'Client'} submitted monthly income — Y/A ${x.year}`, note: x.client_note, to: `/admin/clients/${x.client_id}?tab=income`, when: x.submitted_at })),
       ...d.assets.map(a => ({ key: `al${a.id}`, icon: Landmark, tone: 'blue', text: `${a.clients?.full_name ?? 'Client'} submitted Assets & Liabilities — Y/A ${a.year}`, note: a.client_note, to: `/admin/clients/${a.client_id}?tab=assets`, when: a.submitted_at })),
@@ -141,7 +146,10 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        <DueDatesWidget role="admin" />
+        <div className="space-y-4">
+          <DueDatesWidget role="admin" />
+          <StorageMeter />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

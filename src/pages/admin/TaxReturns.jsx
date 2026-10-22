@@ -5,14 +5,9 @@ import toast from 'react-hot-toast';
 import { Plus, FileText, X, Search, Printer } from 'lucide-react';
 import { summarizeCalc } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
+import { ReturnStepper, setReturnStage } from '../../components/ReturnTracker';
+import { STAGES, docYears, defaultDocYear } from '../../lib/documents';
 
-const STATUSES = ['pending', 'in_progress', 'submitted', 'completed'];
-
-const statusBadge = (s) => {
-  const map = { pending: 'badge-yellow', in_progress: 'badge-blue', submitted: 'badge-gray', completed: 'badge-green' };
-  const labels = { pending: 'Pending', in_progress: 'In Progress', submitted: 'Submitted', completed: 'Completed' };
-  return <span className={map[s] ?? 'badge-gray'}>{labels[s] ?? s}</span>;
-};
 
 export default function TaxReturns() {
   const { user } = useAuth();
@@ -22,7 +17,7 @@ export default function TaxReturns() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ client_id: '', year: '2026/27', status: 'pending', due_date: '', gross_income: '', total_tax: '', notes: '' });
+  const [form, setForm] = useState({ client_id: '', year: defaultDocYear(), stage: 'docs', due_date: '', gross_income: '', total_tax: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +36,7 @@ export default function TaxReturns() {
   };
 
   const filtered = returns.filter(r => {
-    const matchStatus = filter === 'all' || r.status === filter;
+    const matchStatus = filter === 'all' || r.stage === filter;
     const matchSearch = !search || r.clients?.full_name?.toLowerCase().includes(search.toLowerCase()) || r.clients?.tin?.includes(search);
     return matchStatus && matchSearch;
   });
@@ -50,7 +45,7 @@ export default function TaxReturns() {
     e.preventDefault();
     if (!form.client_id) return toast.error('Select a client');
     setSaving(true);
-    const { error } = await supabase.from('tax_returns').insert({ ...form, created_by: user.id, gross_income: parseFloat(form.gross_income) || null, total_tax: parseFloat(form.total_tax) || null });
+    const { error } = await supabase.from('tax_returns').insert({ ...form, due_date: form.due_date || null, created_by: user.id, gross_income: parseFloat(form.gross_income) || null, total_tax: parseFloat(form.total_tax) || null });
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success('Tax return added!');
@@ -58,10 +53,9 @@ export default function TaxReturns() {
     loadAll();
   };
 
-  const updateStatus = async (id, status) => {
-    await supabase.from('tax_returns').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-    toast.success('Status updated!');
-    loadAll();
+  const updateStage = async (id, stage) => {
+    const d = await setReturnStage(id, stage);
+    setReturns(rs => rs.map(x => (x.id === id ? { ...x, ...d } : x)));
   };
 
   return (
@@ -82,10 +76,10 @@ export default function TaxReturns() {
 
       {/* Status filter */}
       <div className="flex gap-2 flex-wrap">
-        {['all', ...STATUSES].map(s => (
-          <button key={s} onClick={() => setFilter(s)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all ${filter === s ? 'bg-primary-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            {s === 'all' ? 'All' : s.replace('_', ' ')}
+        {[{ key: 'all', label: 'All', emoji: '' }, ...STAGES].map(s => (
+          <button key={s.key} onClick={() => setFilter(s.key)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${filter === s.key ? 'bg-primary-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            {s.emoji} {s.label} <span className="opacity-60">{s.key === 'all' ? returns.length : returns.filter(r => r.stage === s.key).length}</span>
           </button>
         ))}
       </div>
@@ -106,8 +100,8 @@ export default function TaxReturns() {
                   <th className="table-th hidden sm:table-cell">Due Date</th>
                   <th className="table-th hidden md:table-cell">Gross Income</th>
                   <th className="table-th hidden md:table-cell">Tax</th>
-                  <th className="table-th">Status</th>
-                  <th className="table-th">Statement / Status</th>
+                  <th className="table-th min-w-[300px]">Progress <span className="font-normal normal-case text-gray-400">(click a step)</span></th>
+                  <th className="table-th">Statement</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -130,7 +124,7 @@ export default function TaxReturns() {
                       {sm && <div className={`text-xs font-normal ${sm.status === 'refund' ? 'text-green-700' : 'text-red-600'}`}>{sm.status === 'refund' ? 'Refund' : 'Balance'} {fmtRs(Math.abs(sm.amount))}</div>}
                       {calc && <div className={`text-[10px] font-bold ${calc.status === 'final' ? 'text-green-700' : 'text-amber-600'}`}>{calc.status === 'final' ? '✅ FINAL' : '📝 DRAFT'}</div>}
                     </td>
-                    <td className="table-td">{statusBadge(r.status)}</td>
+                    <td className="table-td"><ReturnStepper ret={r} size="sm" onSet={(st) => updateStage(r.id, st)} /></td>
                     <td className="table-td">
                       <div className="flex items-center gap-2">
                       {calc ? (
@@ -139,13 +133,6 @@ export default function TaxReturns() {
                           <Printer size={12} /> PDF
                         </button>
                       ) : <span className="text-xs text-gray-300" title="No saved calculation for this year">no calc</span>}
-                      <select
-                        value={r.status}
-                        onChange={e => updateStatus(r.id, e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      >
-                        {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                      </select>
                       </div>
                     </td>
                   </tr>
@@ -176,13 +163,13 @@ export default function TaxReturns() {
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Year of Assessment</label>
                   <select className="input" value={form.year} onChange={e => setForm({...form, year: e.target.value})}>
-                    <option>2025/26</option><option>2026/27</option>
+                    {docYears().map(y => <option key={y}>{y}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
-                  <select className="input" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
-                    {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Progress</label>
+                  <select className="input" value={form.stage} onChange={e => setForm({...form, stage: e.target.value})}>
+                    {STAGES.map(s => <option key={s.key} value={s.key}>{s.emoji} {s.label}</option>)}
                   </select>
                 </div>
                 <div>
