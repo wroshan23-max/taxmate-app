@@ -11,6 +11,7 @@ import { loadInvoiceForPrint, openInvoice, STATUS_LABEL } from '../../lib/invoic
 import SendMenu from '../../components/SendMenu';
 import PortalAccess from '../../components/PortalAccess';
 import AssetStatementsAdmin from '../../components/AssetStatementsAdmin';
+import IncomeSheetsAdmin from '../../components/IncomeSheetsAdmin';
 import { invoiceMessage } from '../../lib/share';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
@@ -126,7 +127,7 @@ export default function ClientDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
-        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['assets', 'Assets & Liabilities'], ['invoices', 'Invoices']].map(([t, label]) => (
+        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['invoices', 'Invoices']].map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -219,6 +220,25 @@ export default function ClientDetail() {
         </div>
       )}
       {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
+      {tab === 'overview' && (
+        <div className="card p-5 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[220px]">
+            <div className="font-semibold text-primary-800 text-sm">Tax Calculator in this client's portal</div>
+            <div className="text-xs text-gray-500">"Default" follows Settings → Client Portal.</div>
+          </div>
+          <select className="input w-auto" value={client.tax_calc ?? 'default'} onChange={async (e) => {
+            const val = e.target.value;
+            const { error } = await supabase.from('clients').update({ tax_calc: val }).eq('id', id);
+            if (error) return toast.error(error.message);
+            setClient(c => ({ ...c, tax_calc: val }));
+            toast.success(val === 'default' ? 'Follows the main setting' : `Tax Calculator ${val.toUpperCase()} for this client`);
+          }}>
+            <option value="default">Default (Settings)</option>
+            <option value="on">Always ON</option>
+            <option value="off">OFF for this client</option>
+          </select>
+        </div>
+      )}
 
       {/* Calculations Tab */}
       {tab === 'calculations' && (
@@ -277,6 +297,8 @@ export default function ClientDetail() {
           )}
         </div>
       )}
+
+      {tab === 'income' && <IncomeSheetsAdmin client={client} />}
 
       {/* Assets & Liabilities Tab */}
       {tab === 'assets' && <AssetStatementsAdmin client={client} />}

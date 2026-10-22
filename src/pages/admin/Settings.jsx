@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -16,6 +17,7 @@ const TABS = [
   ['invoice', Receipt, 'Invoices'],
   ['bank', Landmark, 'Bank & Signature'],
   ['users', Users, 'Users & Access'],
+  ['portal', MonitorSmartphone, 'Client Portal'],
   ['me', UserCog, 'My Account'],
 ];
 
@@ -39,6 +41,7 @@ export default function Settings() {
       {tab === 'invoice' && <InvoiceTab />}
       {tab === 'bank' && <BankTab />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'portal' && <PortalTab />}
       {tab === 'me' && <MyAccountTab />}
     </div>
   );
@@ -336,6 +339,71 @@ function MyAccountTab() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <ChangePassword />
+    </div>
+  );
+}
+
+
+// ─── Client Portal: features clients can use ─────────────
+function PortalTab() {
+  const [on, setOn] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [overrides, setOverrides] = useState([]);
+
+  const load = async () => {
+    const [{ data: st }, { data: cl }] = await Promise.all([
+      supabase.from('app_settings').select('value').eq('key', 'client_tools').maybeSingle(),
+      supabase.from('clients').select('id, full_name, tax_calc').neq('tax_calc', 'default').order('full_name'),
+    ]);
+    setOn(st?.value?.tax_calculator !== false);
+    setOverrides(cl ?? []);
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggle = async () => {
+    const next = !on;
+    const { error } = await supabase.from('app_settings').upsert({ key: 'client_tools', value: { tax_calculator: next }, updated_at: new Date().toISOString() });
+    if (error) return toast.error(error.message);
+    setOn(next);
+    toast.success(next ? 'Tax Calculator is ON for clients' : 'Tax Calculator is OFF for clients');
+  };
+  const clearOverride = async (c) => {
+    const { error } = await supabase.from('clients').update({ tax_calc: 'default' }).eq('id', c.id);
+    if (error) return toast.error(error.message);
+    load();
+  };
+
+  if (loading) return <div className="card p-6 text-gray-400 text-sm">Loading…</div>;
+  return (
+    <div className="space-y-4">
+      <div className="card p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gold-500/20 text-amber-700 flex items-center justify-center"><CalcIcon size={20} /></div>
+          <div className="flex-1">
+            <div className="font-semibold text-gray-800">Tax Calculator in the client portal</div>
+            <p className="text-sm text-gray-500">Clients can estimate their monthly / annual tax (local, foreign, mixed). Switch it off for everyone here, or for one client on their page (Overview → Client portal).</p>
+          </div>
+          <button onClick={toggle} className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-green-500' : 'bg-gray-300'}`} aria-label="Toggle tax calculator">
+            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? 'translate-x-6' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        <div className={`mt-3 text-sm font-semibold ${on ? 'text-green-700' : 'text-gray-500'}`}>{on ? 'ON — all clients see it (except those switched off below)' : 'OFF — hidden for all clients (except those switched on below)'}</div>
+      </div>
+      <div className="card">
+        <div className="card-header">Client-specific settings</div>
+        {overrides.length === 0 ? <div className="p-5 text-sm text-gray-400">No exceptions — every client follows the switch above.</div> : (
+          <div className="divide-y divide-gray-50">
+            {overrides.map(c => (
+              <div key={c.id} className="px-5 py-2.5 flex items-center gap-3 text-sm">
+                <Link to={`/admin/clients/${c.id}`} className="flex-1 font-medium text-primary-700 hover:underline">{c.full_name}</Link>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c.tax_calc === 'on' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>Calculator always {c.tax_calc.toUpperCase()}</span>
+                <button onClick={() => clearOverride(c)} className="text-xs text-gray-500 hover:underline">Follow main switch</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

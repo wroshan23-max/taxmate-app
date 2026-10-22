@@ -29,7 +29,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [cl, rt, inv, calc, req, invites, al] = await Promise.all([
+      const [cl, rt, inv, calc, req, invites, al, sh] = await Promise.all([
         supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
@@ -37,10 +37,11 @@ export default function Dashboard() {
         supabase.from('update_requests').select('id, created_at, clients(full_name)').eq('status', 'pending'),
         supabase.from('portal_invites').select('id, expires_at').is('accepted_at', null).is('revoked_at', null),
         supabase.from('asset_statements').select('id, client_id, year, status, client_note, submitted_at, clients(full_name)').eq('status', 'submitted').eq('enabled', true),
+        supabase.from('income_sheets').select('id, client_id, year, client_note, submitted_at, clients(full_name)').eq('status', 'submitted').eq('enabled', true),
       ]);
       setD({
         clients: cl.data ?? [], returns: rt.data ?? [], invoices: inv.data ?? [], calcs: calc.data ?? [],
-        requests: req.data ?? [], assets: al.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
+        requests: req.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
       });
     })();
   }, []);
@@ -62,6 +63,7 @@ export default function Dashboard() {
 
     const attention = [
       ...d.clients.filter(c => c.source === 'self_registration' && !c.reviewed_at).map(c => ({ key: `reg${c.id}`, icon: Sparkles, tone: 'green', text: `New client registered online${c.registration?.via && c.registration.via !== 'personal link' ? ` (${c.registration.via})` : ''} — ${c.full_name}${c.registration?.filled_by === 'contact' && c.contact_name ? ` (by ${c.contact_name}${c.contact_relation ? `, ${c.contact_relation.toLowerCase()}` : ''})` : ''}`, note: c.registration?.services?.join(', '), to: `/admin/clients/${c.id}`, when: c.registered_at })),
+      ...d.sheets.map(x => ({ key: `sh${x.id}`, icon: Wallet, tone: 'blue', text: `${x.clients?.full_name ?? 'Client'} submitted monthly income — Y/A ${x.year}`, note: x.client_note, to: `/admin/clients/${x.client_id}?tab=income`, when: x.submitted_at })),
       ...d.assets.map(a => ({ key: `al${a.id}`, icon: Landmark, tone: 'blue', text: `${a.clients?.full_name ?? 'Client'} submitted Assets & Liabilities — Y/A ${a.year}`, note: a.client_note, to: `/admin/clients/${a.client_id}?tab=assets`, when: a.submitted_at })),
       ...changes.map(c => ({ key: `ch${c.id}`, icon: MessageSquareWarning, tone: 'amber', text: `${c.clients?.full_name ?? 'Client'} asked for changes — Y/A ${c.year}`, note: c.client_note, to: `/admin/clients/${c.client_id}`, when: c.client_responded_at })),
       ...confirmed.map(c => ({ key: `ok${c.id}`, icon: CheckCircle2, tone: 'green', text: `${c.clients?.full_name ?? 'Client'} confirmed the draft — mark it Final (Y/A ${c.year})`, to: `/admin/clients/${c.client_id}`, when: c.client_responded_at })),
