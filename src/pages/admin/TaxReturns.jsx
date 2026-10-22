@@ -31,7 +31,7 @@ export default function TaxReturns() {
   const loadAll = async () => {
     const [{ data: rets }, { data: cls }, { data: cs }] = await Promise.all([
       supabase.from('tax_returns').select('*, clients(full_name, tin, nic, address, employer, resident_status)').order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, full_name, tin').order('full_name'),
+      supabase.from('clients').select('id, full_name, tin').is('archived_at', null).order('full_name'),
       supabase.from('iit_calculations').select('id, client_id, year, calc_type, input_data, created_at, status, label').eq('calc_type', 'annual').order('created_at', { ascending: false }),
     ]);
     const latest = {};

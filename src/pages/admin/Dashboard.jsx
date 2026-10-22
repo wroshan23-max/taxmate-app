@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import DueDatesWidget from '../../components/DueDatesWidget';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import {
   Users, FileText, Receipt, Calculator, Clock, AlertCircle, ArrowRight, MessageSquareWarning,
@@ -30,7 +31,7 @@ export default function Dashboard() {
   useEffect(() => {
     (async () => {
       const [cl, rt, inv, calc, req, invites, al, sh] = await Promise.all([
-        supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').order('created_at', { ascending: false }),
+        supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').is('archived_at', null).order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
         supabase.from('iit_calculations').select('id, client_id, year, status, client_status, client_note, client_responded_at, created_at, clients(full_name)'),
@@ -118,26 +119,29 @@ export default function Dashboard() {
         <Kpi icon={AlertTriangle} label="Overdue" value={fmtRs(k.overdueAmt)} sub={`${k.overdue.length} invoice${k.overdue.length !== 1 ? 's' : ''}`} color="bg-red-600" to="/admin/invoices" />
       </div>
 
-      {/* Needs attention */}
-      <div className="card overflow-hidden">
-        <div className="card-header"><AlertCircle size={16} /> Needs your attention <span className="text-xs text-gray-400 font-normal">{k.attention.length}</span></div>
-        {k.attention.length === 0 ? (
-          <div className="p-8 text-center text-green-700 text-sm font-semibold">✅ All clear — nothing waiting for you.</div>
-        ) : (
-          <div className="p-3 space-y-2">
-            {k.attention.slice(0, 12).map(a => (
-              <Link key={a.key} to={a.to} className={`flex items-start gap-3 border rounded-lg px-3 py-2 text-sm hover:shadow-sm ${tone[a.tone]}`}>
-                <a.icon size={16} className="mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium">{a.text}</div>
-                  {a.note && <div className="text-xs opacity-80 truncate">“{a.note}”</div>}
-                </div>
-                <ArrowRight size={14} className="mt-0.5 flex-shrink-0 opacity-60" />
-              </Link>
-            ))}
-            {k.attention.length > 12 && <div className="text-xs text-gray-400 px-2">+ {k.attention.length - 12} more</div>}
-          </div>
-        )}
+      <div className="grid lg:grid-cols-[1fr_380px] gap-4 items-start">
+        {/* Needs attention */}
+        <div className="card overflow-hidden">
+          <div className="card-header"><AlertCircle size={16} /> Needs your attention <span className="text-xs text-gray-400 font-normal">{k.attention.length}</span></div>
+          {k.attention.length === 0 ? (
+            <div className="p-8 text-center text-green-700 text-sm font-semibold">✅ All clear — nothing waiting for you.</div>
+          ) : (
+            <div className="p-3 space-y-2">
+              {k.attention.slice(0, 12).map(a => (
+                <Link key={a.key} to={a.to} className={`flex items-start gap-3 border rounded-lg px-3 py-2 text-sm hover:shadow-sm ${tone[a.tone]}`}>
+                  <a.icon size={16} className="mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium">{a.text}</div>
+                    {a.note && <div className="text-xs opacity-80 truncate">“{a.note}”</div>}
+                  </div>
+                  <ArrowRight size={14} className="mt-0.5 flex-shrink-0 opacity-60" />
+                </Link>
+              ))}
+              {k.attention.length > 12 && <div className="text-xs text-gray-400 px-2">+ {k.attention.length - 12} more</div>}
+            </div>
+          )}
+        </div>
+        <DueDatesWidget role="admin" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

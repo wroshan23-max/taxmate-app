@@ -12,6 +12,7 @@ import SendMenu from '../../components/SendMenu';
 import PortalAccess from '../../components/PortalAccess';
 import AssetStatementsAdmin from '../../components/AssetStatementsAdmin';
 import IncomeSheetsAdmin from '../../components/IncomeSheetsAdmin';
+import { PORTAL_FEATURES } from './Settings';
 import { invoiceMessage } from '../../lib/share';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
@@ -140,6 +141,14 @@ export default function ClientDetail() {
         ))}
       </div>
 
+      {client.archived_at && (
+        <div className="card p-3 flex items-center gap-3 bg-gray-50 border-gray-300 text-sm">
+          <span className="flex-1 text-gray-700">📦 This client is <b>archived</b> (hidden from lists) since {fmtDate(client.archived_at)}.</span>
+          <button onClick={async () => { const { error } = await supabase.from('clients').update({ archived_at: null }).eq('id', id); if (error) return toast.error(error.message); setClient(c => ({ ...c, archived_at: null })); toast.success('Restored'); }}
+            className="btn-secondary text-xs py-1">Restore</button>
+        </div>
+      )}
+
       {/* New self-registration */}
       {tab === 'overview' && client.source === 'self_registration' && !client.reviewed_at && (
         <div className="card p-4 border-amber-300 bg-amber-50/60 space-y-2">
@@ -221,22 +230,31 @@ export default function ClientDetail() {
       )}
       {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
       {tab === 'overview' && (
-        <div className="card p-5 flex flex-wrap items-center gap-3">
-          <div className="flex-1 min-w-[220px]">
-            <div className="font-semibold text-primary-800 text-sm">Tax Calculator in this client's portal</div>
-            <div className="text-xs text-gray-500">"Default" follows Settings → Client Portal.</div>
+        <div className="card p-5">
+          <div className="font-semibold text-primary-800 text-sm">Portal features for this client</div>
+          <div className="text-xs text-gray-500 mb-3">"Default" follows Settings → Client Portal.</div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {PORTAL_FEATURES.map(([k, emo, title]) => {
+              const ov = client.feature_overrides?.[k];
+              const val = ov === true ? 'on' : ov === false ? 'off' : 'default';
+              return (
+                <label key={k} className="flex items-center gap-2 text-sm">
+                  <span className="text-lg">{emo}</span><span className="flex-1 text-gray-700">{title}</span>
+                  <select className="input w-auto py-1.5 text-sm" value={val} onChange={async (e) => {
+                    const next = { ...(client.feature_overrides ?? {}) };
+                    if (e.target.value === 'default') delete next[k]; else next[k] = e.target.value === 'on';
+                    const { error } = await supabase.from('clients').update({ feature_overrides: next }).eq('id', id);
+                    if (error) return toast.error(error.message);
+                    setClient(c => ({ ...c, feature_overrides: next }));
+                    toast.success(`${title}: ${e.target.value === 'default' ? 'default' : e.target.value.toUpperCase()}`);
+                  }}>
+                    <option value="default">Default</option><option value="on">ON</option><option value="off">OFF</option>
+                  </select>
+                </label>
+              );
+            })}
           </div>
-          <select className="input w-auto" value={client.tax_calc ?? 'default'} onChange={async (e) => {
-            const val = e.target.value;
-            const { error } = await supabase.from('clients').update({ tax_calc: val }).eq('id', id);
-            if (error) return toast.error(error.message);
-            setClient(c => ({ ...c, tax_calc: val }));
-            toast.success(val === 'default' ? 'Follows the main setting' : `Tax Calculator ${val.toUpperCase()} for this client`);
-          }}>
-            <option value="default">Default (Settings)</option>
-            <option value="on">Always ON</option>
-            <option value="off">OFF for this client</option>
-          </select>
+          {client.referred_by && <div className="text-xs text-purple-700 mt-3">🎁 Joined through a friend's invite link.</div>}
         </div>
       )}
 

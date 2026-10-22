@@ -52,7 +52,7 @@ export default function Invoices() {
   const loadAll = async () => {
     const [inv, cls, bk, st] = await Promise.all([
       supabase.from('invoices').select('*, clients(full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, full_name, tin, nic, mobile, email, address').order('full_name'),
+      supabase.from('clients').select('id, full_name, tin, nic, mobile, email, address').is('archived_at', null).order('full_name'),
       supabase.from('bank_accounts').select('*').order('created_at'),
       supabase.from('app_settings').select('value').eq('key', 'firm_signature').maybeSingle(),
     ]);

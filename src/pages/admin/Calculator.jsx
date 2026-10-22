@@ -28,7 +28,7 @@ export default function Calculator() {
   const [loaded, setLoaded] = useState(null);   // { calc, nonce } — a saved calc opened for editing
 
   useEffect(() => {
-    supabase.from('clients').select('id, full_name, tin, nic, address, employer, resident_status').order('full_name').then(({ data }) => setClients(data ?? []));
+    supabase.from('clients').select('id, full_name, tin, nic, address, employer, resident_status').is('archived_at', null).order('full_name').then(({ data }) => setClients(data ?? []));
   }, []);
 
   // Open a saved calculation (returns and older annual calculations open in the IIT Return)

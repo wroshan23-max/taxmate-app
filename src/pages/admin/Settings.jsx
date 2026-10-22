@@ -345,60 +345,80 @@ function MyAccountTab() {
 
 
 // ─── Client Portal: features clients can use ─────────────
+export const PORTAL_FEATURES = [
+  ['tax_calculator', '🧮', 'Tax Calculator', 'Clients estimate their monthly / annual tax (local, foreign, mixed).'],
+  ['tax_calendar', '📅', 'Tax Calendar & due dates', 'IRD due dates on their dashboard and a full calendar.'],
+  ['reminders', '🔔', 'Reminders', 'Clients see your reminders and can add their own.'],
+  ['referrals', '🎁', 'Invite friends', 'Each client gets a personal invite link; friends who register are linked to them.'],
+];
+
 function PortalTab() {
-  const [on, setOn] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [cfg, setCfg] = useState(null);
+  const [reward, setReward] = useState('');
   const [overrides, setOverrides] = useState([]);
 
   const load = async () => {
     const [{ data: st }, { data: cl }] = await Promise.all([
       supabase.from('app_settings').select('value').eq('key', 'client_tools').maybeSingle(),
-      supabase.from('clients').select('id, full_name, tax_calc').neq('tax_calc', 'default').order('full_name'),
+      supabase.from('clients').select('id, full_name, feature_overrides').neq('feature_overrides', '{}').order('full_name'),
     ]);
-    setOn(st?.value?.tax_calculator !== false);
-    setOverrides(cl ?? []);
-    setLoading(false);
+    const v = st?.value ?? {};
+    setCfg(v); setReward(v.referral_reward ?? '');
+    setOverrides((cl ?? []).filter(c => c.feature_overrides && Object.keys(c.feature_overrides).length));
   };
   useEffect(() => { load(); }, []);
 
-  const toggle = async () => {
-    const next = !on;
-    const { error } = await supabase.from('app_settings').upsert({ key: 'client_tools', value: { tax_calculator: next }, updated_at: new Date().toISOString() });
+  const saveCfg = async (patch, msg) => {
+    const value = { ...cfg, ...patch };
+    const { error } = await supabase.from('app_settings').upsert({ key: 'client_tools', value, updated_at: new Date().toISOString() });
     if (error) return toast.error(error.message);
-    setOn(next);
-    toast.success(next ? 'Tax Calculator is ON for clients' : 'Tax Calculator is OFF for clients');
+    setCfg(value);
+    if (msg) toast.success(msg);
   };
-  const clearOverride = async (c) => {
-    const { error } = await supabase.from('clients').update({ tax_calc: 'default' }).eq('id', c.id);
+  const clearOverrides = async (c) => {
+    const { error } = await supabase.from('clients').update({ feature_overrides: {} }).eq('id', c.id);
     if (error) return toast.error(error.message);
     load();
   };
 
-  if (loading) return <div className="card p-6 text-gray-400 text-sm">Loading…</div>;
+  if (!cfg) return <div className="card p-6 text-gray-400 text-sm">Loading…</div>;
+  const isOn = (k) => cfg[k] !== false;
   return (
     <div className="space-y-4">
-      <div className="card p-5">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gold-500/20 text-amber-700 flex items-center justify-center"><CalcIcon size={20} /></div>
-          <div className="flex-1">
-            <div className="font-semibold text-gray-800">Tax Calculator in the client portal</div>
-            <p className="text-sm text-gray-500">Clients can estimate their monthly / annual tax (local, foreign, mixed). Switch it off for everyone here, or for one client on their page (Overview → Client portal).</p>
+      <div className="card divide-y divide-gray-100">
+        <div className="px-5 py-3 text-sm text-gray-500">Switch features on or off for <b>all clients</b>. To change one client, open their page → Overview → <b>Portal features</b>.</div>
+        {PORTAL_FEATURES.map(([k, emo, title, desc]) => (
+          <div key={k} className="px-5 py-4 flex items-start gap-3">
+            <div className="text-2xl w-9 text-center">{emo}</div>
+            <div className="flex-1">
+              <div className="font-semibold text-gray-800">{title}</div>
+              <p className="text-sm text-gray-500">{desc}</p>
+              {k === 'referrals' && isOn('referrals') && (
+                <div className="mt-2 flex gap-2 flex-wrap">
+                  <input className="input flex-1 min-w-[220px]" maxLength={160} placeholder="Reward shown to clients (optional) — e.g. Rs. 1,000 off your next return for every friend who files with us"
+                    value={reward} onChange={e => setReward(e.target.value)} />
+                  <button onClick={() => saveCfg({ referral_reward: reward.trim() }, 'Reward text saved')} className="btn-secondary text-sm">Save</button>
+                </div>
+              )}
+            </div>
+            <button onClick={() => saveCfg({ [k]: !isOn(k) }, `${title} ${isOn(k) ? 'OFF' : 'ON'} for clients`)} className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${isOn(k) ? 'bg-green-500' : 'bg-gray-300'}`} aria-label={`Toggle ${title}`}>
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isOn(k) ? 'translate-x-6' : 'translate-x-0.5'}`} />
+            </button>
           </div>
-          <button onClick={toggle} className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-green-500' : 'bg-gray-300'}`} aria-label="Toggle tax calculator">
-            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? 'translate-x-6' : 'translate-x-0.5'}`} />
-          </button>
-        </div>
-        <div className={`mt-3 text-sm font-semibold ${on ? 'text-green-700' : 'text-gray-500'}`}>{on ? 'ON — all clients see it (except those switched off below)' : 'OFF — hidden for all clients (except those switched on below)'}</div>
+        ))}
+        <div className="px-5 py-3 text-xs text-gray-400">Monthly Income sheets and Assets &amp; Liabilities appear only when you enable them for a client.</div>
       </div>
       <div className="card">
-        <div className="card-header">Client-specific settings</div>
-        {overrides.length === 0 ? <div className="p-5 text-sm text-gray-400">No exceptions — every client follows the switch above.</div> : (
+        <div className="card-header">Clients with their own settings</div>
+        {overrides.length === 0 ? <div className="p-5 text-sm text-gray-400">None — every client follows the switches above.</div> : (
           <div className="divide-y divide-gray-50">
             {overrides.map(c => (
-              <div key={c.id} className="px-5 py-2.5 flex items-center gap-3 text-sm">
+              <div key={c.id} className="px-5 py-2.5 flex items-center gap-3 text-sm flex-wrap">
                 <Link to={`/admin/clients/${c.id}`} className="flex-1 font-medium text-primary-700 hover:underline">{c.full_name}</Link>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${c.tax_calc === 'on' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>Calculator always {c.tax_calc.toUpperCase()}</span>
-                <button onClick={() => clearOverride(c)} className="text-xs text-gray-500 hover:underline">Follow main switch</button>
+                {Object.entries(c.feature_overrides).map(([k, v]) => (
+                  <span key={k} className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${v ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{PORTAL_FEATURES.find(f => f[0] === k)?.[2] ?? k}: {v ? 'ON' : 'OFF'}</span>
+                ))}
+                <button onClick={() => clearOverrides(c)} className="text-xs text-gray-500 hover:underline">Reset</button>
               </div>
             ))}
           </div>

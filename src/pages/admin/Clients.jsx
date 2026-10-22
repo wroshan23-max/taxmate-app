@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, Search, X, User, Mail, Phone, CreditCard, Link2, UserRound } from 'lucide-react';
+import { Plus, Search, X, User, Mail, Phone, CreditCard, Link2, UserRound, Trash2, Archive, RotateCcw, Gift } from 'lucide-react';
+import DeleteClientDialog from '../../components/DeleteClientDialog';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import RegistrationLinks from '../../components/RegistrationLinks';
 import { hasContact, contactLabel } from '../../lib/contacts';
@@ -20,6 +21,8 @@ export default function Clients() {
   const [saving, setSaving] = useState(false);
   const [regOpen, setRegOpen] = useState(false);
   const [onlyNew, setOnlyNew] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [removing, setRemoving] = useState(null);
 
   useEffect(() => { loadClients(); }, []);
 
@@ -29,9 +32,19 @@ export default function Clients() {
     setLoading(false);
   };
 
-  const isNew = (c) => c.source === 'self_registration' && !c.reviewed_at;
+  const isNew = (c) => c.source === 'self_registration' && !c.reviewed_at && !c.archived_at;
   const newCount = clients.filter(isNew).length;
+  const archivedCount = clients.filter(c => c.archived_at).length;
+  const active = clients.filter(c => !c.archived_at);
+  const nameOf = Object.fromEntries(clients.map(c => [c.id, c.full_name]));
+  const restore = async (c) => {
+    const { error } = await supabase.from('clients').update({ archived_at: null }).eq('id', c.id);
+    if (error) return toast.error(error.message);
+    toast.success(`${c.full_name} restored`);
+    loadClients();
+  };
   const filtered = clients.filter(c =>
+    (showArchived ? !!c.archived_at : !c.archived_at) &&
     (!onlyNew || isNew(c)) &&
     [c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
   );
@@ -56,7 +69,8 @@ export default function Clients() {
       <div className="flex items-center gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-primary-800">Clients</h1>
-          <p className="text-sm text-gray-500">{clients.length} total clients
+          <p className="text-sm text-gray-500">{active.length} clients
+            {archivedCount > 0 && <button onClick={() => setShowArchived(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${showArchived ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600'}`}><Archive size={11} className="inline -mt-0.5" /> {archivedCount} archived{showArchived ? ' ✕' : ''}</button>}
             {newCount > 0 && <button onClick={() => setOnlyNew(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${onlyNew ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-800'}`}>{newCount} new registration{newCount > 1 ? 's' : ''}{onlyNew ? ' ✕' : ''}</button>}
           </p>
         </div>
@@ -114,6 +128,7 @@ export default function Clients() {
                           <div className="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap">{c.full_name}
                             {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · {c.registration?.via && c.registration.via !== 'personal link' ? `via ${c.registration.via}` : 'self-registered'}</span>}</div>
                           <div className="text-xs text-gray-400">{c.email ?? '—'}</div>
+                          {c.referred_by && <div className="text-[11px] text-purple-700 flex items-center gap-1 mt-0.5"><Gift size={11} /> Referred by {nameOf[c.referred_by] ?? 'a client'}</div>}
                           {hasContact(c) && (
                             <div className={`text-xs mt-0.5 flex items-center gap-1 ${c.contact_preferred ? 'text-primary-700 font-medium' : 'text-gray-500'}`}>
                               <UserRound size={11} /> {contactLabel(c) || 'Contact'}{c.contact_mobile && <> · {c.contact_mobile}</>}{c.contact_preferred && <span title="Coordinate with this person"> ★</span>}
@@ -142,6 +157,10 @@ export default function Clients() {
                       >
                         View →
                       </Link>
+                      {c.archived_at
+                        ? <button onClick={() => restore(c)} title="Restore" className="ml-3 text-xs text-green-700 hover:underline inline-flex items-center gap-1"><RotateCcw size={12} /> Restore</button>
+                        : null}
+                      <button onClick={() => setRemoving(c)} title="Archive or delete" className="ml-2 p-1 rounded-md text-gray-300 hover:text-red-600 hover:bg-red-50 align-middle"><Trash2 size={14} /></button>
                     </td>
                   </tr>
                 ))}
@@ -151,6 +170,7 @@ export default function Clients() {
         )}
       </div>
 
+      {removing && <DeleteClientDialog client={removing} onClose={() => setRemoving(null)} onDone={() => { setRemoving(null); loadClients(); }} />}
       {regOpen && <RegistrationLinks onClose={() => { setRegOpen(false); loadClients(); }} />}
 
       {/* Add Client Modal */}

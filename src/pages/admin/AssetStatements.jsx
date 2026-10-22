@@ -25,7 +25,7 @@ export default function AssetStatements() {
   const load = async () => {
     setLoading(true);
     const [{ data: c }, { data: s, error }] = await Promise.all([
-      supabase.from('clients').select('id, full_name, tin, nic, address, mobile, email, profile_id, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred').order('full_name'),
+      supabase.from('clients').select('id, full_name, tin, nic, address, mobile, email, profile_id, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred').is('archived_at', null).order('full_name'),
       supabase.from('asset_statements').select('*').eq('year', year),
     ]);
     if (error) toast.error(error.message);
