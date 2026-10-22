@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays
 } from 'lucide-react';
 
 const nav = [
@@ -13,6 +13,7 @@ const nav = [
   { to: '/admin/calculator', icon: Calculator, label: 'IIT Calculator' },
   { to: '/admin/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/admin/assets', icon: Landmark, label: 'Assets & Liabilities' },
+  { to: '/admin/calendar', icon: CalendarDays, label: 'Tax Calendar' },
   { to: '/admin/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/admin/requests', icon: MessageSquarePlus, label: 'Update Requests' },
   { to: '/admin/updates', icon: Megaphone, label: 'Tax Updates' },
