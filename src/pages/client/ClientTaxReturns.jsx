@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { FileText } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { ReturnStepper } from '../../components/ReturnTracker';
+import { STAGES, stageIndex } from '../../lib/documents';
 
 const statusBadge = (s) => {
   const map = { pending: 'badge-yellow', in_progress: 'badge-blue', submitted: 'badge-gray', completed: 'badge-green' };
@@ -9,10 +12,10 @@ const statusBadge = (s) => {
   return <span className={map[s] ?? 'badge-gray'}>{labels[s] ?? s}</span>;
 };
 
-const STEPS = ['pending', 'in_progress', 'submitted', 'completed'];
 
 export default function ClientTaxReturns() {
   const { user } = useAuth();
+  const features = useOutletContext() ?? {};
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,30 +57,16 @@ export default function ClientTaxReturns() {
                   <div className="font-bold text-gray-800">Y/A {r.year}</div>
                   <div className="text-xs text-gray-400">Due: {fmtDate(r.due_date)}</div>
                 </div>
-                {statusBadge(r.status)}
+                {features.return_tracker !== false && r.stage
+                  ? <span className={r.stage === 'filed' ? 'badge-green' : 'badge-blue'}>{STAGES[stageIndex(r.stage)].emoji} {STAGES[stageIndex(r.stage)].label}</span>
+                  : statusBadge(r.status)}
               </div>
 
-              {/* Progress stepper */}
-              <div className="relative flex items-center justify-between mb-4">
-                <div className="absolute left-0 right-0 h-1 bg-gray-200 top-3 z-0" />
-                <div
-                  className="absolute left-0 h-1 bg-primary-600 top-3 z-0 transition-all"
-                  style={{ width: `${(STEPS.indexOf(r.status) / (STEPS.length - 1)) * 100}%` }}
-                />
-                {STEPS.map((step, i) => {
-                  const done = STEPS.indexOf(r.status) >= i;
-                  return (
-                    <div key={step} className="relative z-10 flex flex-col items-center gap-1">
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${done ? 'bg-primary-600 border-primary-600' : 'bg-white border-gray-300'}`}>
-                        {done && <div className="w-2 h-2 bg-white rounded-full" />}
-                      </div>
-                      <div className={`text-xs capitalize whitespace-nowrap ${done ? 'text-primary-700 font-semibold' : 'text-gray-400'}`}>
-                        {step.replace('_', ' ')}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {features.return_tracker !== false && (
+                <div className="mb-4 rounded-xl bg-gray-50/70 border border-gray-100 p-3">
+                  <ReturnStepper ret={r} showSinhala />
+                </div>
+              )}
 
               {(r.gross_income || r.total_tax) && (
                 <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">

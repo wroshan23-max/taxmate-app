@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import TopUpCalc from '../../components/TopUpCalc';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Wallet, Save, Send, Loader2, CheckCircle2, Clock, AlertTriangle, Copy, X, Table2, CalendarDays } from 'lucide-react';
@@ -17,8 +18,9 @@ function Money({ value, onChange, disabled }) {
   return (
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-gray-400">Rs.</span>
-      <input className="input pl-10 text-right tabular-nums" inputMode="decimal" placeholder="0" value={shown} disabled={disabled}
+      <input className="input pl-10 pr-8 text-right tabular-nums" inputMode="decimal" placeholder="0" value={shown} disabled={disabled}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChange={e => onChange(e.target.value.replace(/[^\d.]/g, ''))} />
+      <TopUpCalc value={value} onUse={onChange} disabled={disabled} />
     </div>
   );
 }

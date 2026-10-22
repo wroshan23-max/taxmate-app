@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import TopUpCalc from '../../components/TopUpCalc';
 import { useOutletContext, Link } from 'react-router-dom';
 import {
   Calculator, Globe2, MapPin, Shuffle, ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle2, MessageCircle, RotateCcw,
@@ -25,9 +26,10 @@ function Money({ value, onChange, placeholder = '0', suffix }) {
   return (
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-400">{suffix ?? 'Rs.'}</span>
-      <input className="input pl-11 text-right tabular-nums text-base" inputMode="decimal" placeholder={placeholder} value={shown}
+      <input className="input pl-11 pr-9 text-right tabular-nums text-base" inputMode="decimal" placeholder={placeholder} value={shown}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
         onChange={e => onChange(e.target.value.replace(/[^\d.]/g, ''))} />
+      <TopUpCalc value={value} onUse={onChange} />
     </div>
   );
 }

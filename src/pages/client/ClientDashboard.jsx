@@ -6,6 +6,8 @@ import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight, Exte
 import { safeUrl } from '../../components/LinkifiedText';
 import { yearInfo } from '../../lib/assets';
 import DueDatesWidget from '../../components/DueDatesWidget';
+import { ReturnStepper } from '../../components/ReturnTracker';
+import { FolderLock, UploadCloud } from 'lucide-react';
 
 export default function ClientDashboard() {
   const { user, profile } = useAuth();
@@ -80,6 +82,34 @@ export default function ClientDashboard() {
           <ChevronRight size={18} className="text-amber-700" />
         </Link>
       ))}
+
+      {features.return_tracker !== false && data.returns.length > 0 && (
+        <div className="card overflow-hidden">
+          <div className="card-header"><FileText size={16} /> My Tax Return progress
+            <Link to="/client/tax-returns" className="ml-auto text-xs font-semibold text-primary-600 hover:underline flex items-center gap-0.5">Details <ChevronRight size={13} /></Link>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {data.returns.slice(0, 2).map(r => (
+              <div key={r.id} className="px-4 sm:px-6 py-4">
+                <div className="text-sm font-bold text-gray-800 mb-2">Y/A {r.year}</div>
+                <ReturnStepper ret={r} showSinhala />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {features.documents !== false && (
+        <Link to="/client/documents" className="group flex items-center gap-4 rounded-2xl border border-primary-100 bg-gradient-to-r from-primary-50 via-white to-gold-500/10 p-4 hover:shadow-md transition-all">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-105 transition-transform"><FolderLock size={22} /></div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-primary-800">My Documents</div>
+            <div className="text-xs text-gray-500">Upload salary slips, bank certificates &amp; more — snap a photo from your phone · ලේඛන මෙතනින් එවන්න</div>
+          </div>
+          <span className="hidden sm:inline-flex items-center gap-1 text-sm font-bold bg-gold-500 text-primary-900 rounded-xl px-3 py-1.5"><UploadCloud size={15} /> Upload</span>
+          <ChevronRight size={18} className="sm:hidden text-primary-600" />
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(({ label, value, icon: Icon, color, link }) => (
