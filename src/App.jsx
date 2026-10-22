@@ -21,6 +21,7 @@ import ClientAssets from './pages/client/ClientAssets';
 import ClientTaxCalculator from './pages/client/ClientTaxCalculator';
 import ClientIncome from './pages/client/ClientIncome';
 import ClientInvite from './pages/client/ClientInvite';
+import ClientDocuments from './pages/client/ClientDocuments';
 import TaxCalendar from './pages/TaxCalendar';
 import ClientDashboard from './pages/client/ClientDashboard';
 import ClientCalculations from './pages/client/ClientCalculations';
@@ -114,6 +115,7 @@ export default function App() {
         <Route path="income" element={<ClientIncome />} />
         <Route path="calendar" element={<TaxCalendar role="client" />} />
         <Route path="invite" element={<ClientInvite />} />
+        <Route path="documents" element={<ClientDocuments />} />
         <Route path="invoices" element={<ClientInvoices />} />
         <Route path="profile" element={<ClientProfile />} />
         <Route path="updates" element={<ClientTaxUpdates />} />
