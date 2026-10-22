@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useOutletContext, Link } from 'react-router-dom';
 import {
   Calculator, Globe2, MapPin, Shuffle, ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle2, MessageCircle, RotateCcw,
 } from 'lucide-react';
@@ -61,6 +62,7 @@ export default function ClientTaxCalculator() {
     residency: 'resident', solar: '', donCharity: '', donGovt: '', apitPaid: '', otherTaxPaid: '', whtInterestAuto: true,
   });
   const [more, setMore] = useState(false);
+  const features = useOutletContext() ?? { tax_calculator: true };
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
   const mult = period === 'monthly' ? 12 : 1;
   const per = period === 'monthly' ? 'per month' : 'per year';
@@ -94,6 +96,15 @@ export default function ClientTaxCalculator() {
   const reset = () => setF(s => ({ ...s, salary: '', business: '', rent: '', interest: '', otherLocal: '', fxAmount: '', fxRate: '', foreignOther: '', solar: '', donCharity: '', donGovt: '', apitPaid: '', otherTaxPaid: '' }));
   const bands = [...r.local.detail.map(b => ({ ...b, kind: 'local' })), ...r.foreign.bands.map(b => ({ ...b, kind: 'foreign' }))];
   const maxBandTax = Math.max(1, ...bands.map(b => b.tax));
+
+  if (features.loaded && !features.tax_calculator) return (
+    <div className="card p-8 text-center space-y-3">
+      <Calculator size={36} className="mx-auto text-gray-300" />
+      <p className="text-gray-600">The Tax Calculator is not available right now.</p>
+      <p className="text-sm text-gray-400">Please contact TaxMate for help with your tax.</p>
+      <Link to="/client" className="btn-secondary text-sm inline-flex">Back to dashboard</Link>
+    </div>
+  );
 
   return (
     <div className="space-y-5 pb-6">

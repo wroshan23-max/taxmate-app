@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight, ExternalLink } from 'lucide-react';
+import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight, ExternalLink, Wallet } from 'lucide-react';
 import { safeUrl } from '../../components/LinkifiedText';
 import { yearInfo } from '../../lib/assets';
 
 export default function ClientDashboard() {
   const { user, profile } = useAuth();
-  const [data, setData] = useState({ calcs: [], returns: [], invoices: [], updates: [], assets: [] });
+  const [data, setData] = useState({ calcs: [], returns: [], invoices: [], updates: [], assets: [], sheets: [] });
   const [loading, setLoading] = useState(true);
+  const features = useOutletContext() ?? { tax_calculator: true };
 
   useEffect(() => {
     const load = async () => {
@@ -23,14 +24,15 @@ export default function ClientDashboard() {
       if (!clientRow) { setLoading(false); return; }
       const cid = clientRow.id;
 
-      const [{ data: calcs }, { data: returns }, { data: invoices }, { data: updates }, { data: assets }] = await Promise.all([
+      const [{ data: calcs }, { data: returns }, { data: invoices }, { data: updates }, { data: assets }, { data: sheets }] = await Promise.all([
         supabase.from('iit_calculations').select('*').eq('client_id', cid).eq('shared_with_client', true).order('created_at', { ascending: false }).limit(3),
         supabase.from('tax_returns').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(3),
         supabase.from('invoices').select('*').eq('client_id', cid).neq('status', 'draft').order('created_at', { ascending: false }).limit(3),
         supabase.from('tax_updates').select('*').eq('published', true).order('created_at', { ascending: false }).limit(3),
         supabase.from('asset_statements').select('id, year, status, admin_note').eq('client_id', cid).eq('status', 'open').order('year', { ascending: false }),
+        supabase.from('income_sheets').select('id, year, status, admin_note').eq('client_id', cid).eq('status', 'open').order('year', { ascending: false }),
       ]);
-      setData({ calcs: calcs ?? [], returns: returns ?? [], invoices: invoices ?? [], updates: updates ?? [], assets: assets ?? [] });
+      setData({ calcs: calcs ?? [], returns: returns ?? [], invoices: invoices ?? [], updates: updates ?? [], assets: assets ?? [], sheets: sheets ?? [] });
       setLoading(false);
     };
     load();
@@ -53,6 +55,18 @@ export default function ClientDashboard() {
         <h1 className="text-2xl font-bold text-primary-800">Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'} 👋</h1>
         <p className="text-sm text-gray-500">Your TaxMate dashboard</p>
       </div>
+
+      {data.sheets.map(sh => (
+        <Link key={sh.id} to={`/client/income?year=${encodeURIComponent(sh.year)}`}
+          className="flex items-center gap-3 rounded-xl border border-orange-300 bg-orange-50 p-4 hover:bg-orange-100 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-orange-200 text-orange-900 flex items-center justify-center flex-shrink-0"><Wallet size={20} /></div>
+          <div className="flex-1">
+            <div className="font-semibold text-orange-900">{sh.admin_note ? 'Please update' : 'Please fill'} your monthly income for Y/A {sh.year}</div>
+            <div className="text-xs text-orange-800">Salary, rent, interest, foreign income and business income &amp; expenses · මාසික ආදායම ඇතුළත් කරන්න</div>
+          </div>
+          <ChevronRight size={18} className="text-orange-700" />
+        </Link>
+      ))}
 
       {data.assets.map(a => (
         <Link key={a.id} to={`/client/assets?year=${encodeURIComponent(a.year)}`}
@@ -138,9 +152,16 @@ export default function ClientDashboard() {
       <div className="card p-4">
         <div className="text-sm font-semibold text-gray-600 mb-3">Quick Actions</div>
         <div className="flex flex-wrap gap-3">
-          <Link to="/client/tax-calculator" className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-primary-900 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
-            <Calculator size={15} /> Tax Calculator
-          </Link>
+          {features.tax_calculator && (
+            <Link to="/client/tax-calculator" className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-primary-900 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity">
+              <Calculator size={15} /> Tax Calculator
+            </Link>
+          )}
+          {features.income_sheets > 0 && (
+            <Link to="/client/income" className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-800 rounded-lg text-sm font-semibold hover:bg-orange-100 transition-colors">
+              <Wallet size={15} /> Monthly Income
+            </Link>
+          )}
           <Link to="/client/profile" className="flex items-center gap-2 px-4 py-2 bg-primary-50 text-primary-700 rounded-lg text-sm font-semibold hover:bg-primary-100 transition-colors">
             <User size={15} /> Update My Profile
           </Link>
