@@ -8,9 +8,13 @@ import App from './App';
 import './index.css';
 import { registerSW } from './lib/pwa';
 
-registerSW();
+// The app's address is now app.taxmatesolutions.com — old vercel links (invites, /join/…, /verify/…) move there with the same path.
+const NEW_HOST = 'app.taxmatesolutions.com';
+const moving = window.location.hostname === 'taxmate-app.vercel.app';
+if (moving) window.location.replace(`https://${NEW_HOST}${window.location.pathname}${window.location.search}${window.location.hash}`);
+else registerSW();
 
-createRoot(document.getElementById('root')).render(
+if (!moving) createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
