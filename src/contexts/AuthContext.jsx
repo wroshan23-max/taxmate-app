@@ -4,7 +4,8 @@ import { mfaStatus } from '../lib/mfa';
 
 const AuthContext = createContext({});
 
-const NO_MFA = { current: 'aal1', next: 'aal1', factors: [], loaded: false };
+const NO_PIN = { pin_allowed: false, has_pin: false, pin_ok: false, second_step_ok: true };
+const NO_MFA = { current: 'aal1', next: 'aal1', factors: [], pin: NO_PIN, loaded: false };
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -56,11 +57,13 @@ export function AuthProvider({ children }) {
 
   const isAdmin = profile?.role === 'admin';
   const isClient = profile?.role === 'client';
-  const needsCode = mfa.next === 'aal2' && mfa.current !== 'aal2';
-  const has2fa = mfa.factors.length > 0;
+  // Second step still needed (authenticator code or PIN) — decided by the database
+  const needsCode = !!user && mfa.loaded && mfa.pin?.second_step_ok === false;
+  const hasPin = !!(mfa.pin?.pin_allowed && mfa.pin?.has_pin);
+  const has2fa = mfa.factors.length > 0 || hasPin;
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isClient, signIn, signOut, mfa, refreshMfa, needsCode, has2fa }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isClient, signIn, signOut, mfa, refreshMfa, needsCode, has2fa, hasPin }}>
       {children}
     </AuthContext.Provider>
   );
