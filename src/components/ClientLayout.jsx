@@ -7,8 +7,9 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
-  Zap, CalendarCheck,
+  Zap, CalendarCheck, Globe,
 } from 'lucide-react';
+import { websiteUrl } from '../lib/iitStatement';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -100,6 +101,11 @@ export default function ClientLayout() {
           <LogOut size={14} />
           Sign Out
         </button>
+        <a href={websiteUrl()} target="_blank" rel="noreferrer"
+          className="flex items-center gap-2 text-primary-300 hover:text-white text-xs px-3 py-1.5 rounded-lg hover:bg-primary-700 w-full transition-colors">
+          <Globe size={14} />
+          TaxMate website
+        </a>
       </div>
     </div>
   );
