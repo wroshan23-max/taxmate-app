@@ -22,6 +22,8 @@ export default function Clients() {
     else navigate(`/admin/clients/${id}`);
   };
   const [clients, setClients] = useState([]);
+  const [ird, setIrd] = useState({});   // { client_id: { pin, ssid } } — flags only, no secrets
+  useEffect(() => { supabase.rpc('admin_ird_flags').then(({ data }) => data && setIrd(data)); }, []);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
@@ -150,6 +152,9 @@ export default function Clients() {
                       <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
                         {c.tin ?? '—'}
                       </span>
+                      {(ird[c.id]?.pin || ird[c.id]?.ssid) && (
+                        <div className="mt-1 text-[10px] font-semibold text-emerald-700 flex items-center gap-0.5" title="RAMIS login details saved (encrypted)">🔑 {ird[c.id]?.pin ? 'PIN' : ''}{ird[c.id]?.pin && ird[c.id]?.ssid ? ' + ' : ''}{ird[c.id]?.ssid ? 'SSID' : ''}</div>
+                      )}
                     </td>
                     <td className="table-td hidden sm:table-cell text-gray-600">{c.nic ?? '—'}</td>
                     <td className="table-td hidden md:table-cell text-gray-600">{c.mobile ?? '—'}</td>

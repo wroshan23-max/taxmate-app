@@ -18,6 +18,7 @@ import ContactPersonFields, { contactPatch } from '../../components/ContactPerso
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
 import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCircle, RotateCcw } from 'lucide-react';
 import DocumentVault from '../../components/DocumentVault';
+import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
 
 export default function ClientDetail() {
@@ -234,6 +235,7 @@ export default function ClientDetail() {
           </div>
         </div>
       )}
+      {tab === 'overview' && <IrdDetailsAdmin client={client} onClientChange={(p) => { setClient(c => ({ ...c, ...p })); setForm(fm => ({ ...fm, ...p })); }} />}
       {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
       {tab === 'overview' && client.profile_id && (
         <div className="card p-4 flex items-center gap-3 flex-wrap">
