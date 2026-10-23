@@ -1,28 +1,43 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { mfaStatus } from '../lib/mfa';
 
 const AuthContext = createContext({});
+
+const NO_MFA = { current: 'aal1', next: 'aal1', factors: [], loaded: false };
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Two-factor state: needsCode = password done, authenticator code still required
+  const [mfa, setMfa] = useState(NO_MFA);
+
+  const refreshMfa = useCallback(async () => {
+    try { const s = await mfaStatus(); setMfa({ ...s, loaded: true }); return s; }
+    catch { setMfa({ ...NO_MFA, loaded: true }); return NO_MFA; }
+  }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) { await refreshMfa(); fetchProfile(session.user.id); }
       else setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else { setProfile(null); setLoading(false); }
+      if (session?.user) {
+        // run outside the auth callback (Supabase recommends not awaiting inside it)
+        setTimeout(async () => {
+          await refreshMfa();
+          if (event === 'SIGNED_IN' || event === 'MFA_CHALLENGE_VERIFIED' || event === 'USER_UPDATED') fetchProfile(session.user.id);
+        }, 0);
+      } else { setProfile(null); setMfa(NO_MFA); setLoading(false); }
     });
 
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [refreshMfa]);
 
   const fetchProfile = async (userId) => {
     const { data } = await supabase
@@ -41,9 +56,11 @@ export function AuthProvider({ children }) {
 
   const isAdmin = profile?.role === 'admin';
   const isClient = profile?.role === 'client';
+  const needsCode = mfa.next === 'aal2' && mfa.current !== 'aal2';
+  const has2fa = mfa.factors.length > 0;
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isClient, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isClient, signIn, signOut, mfa, refreshMfa, needsCode, has2fa }}>
       {children}
     </AuthContext.Provider>
   );
