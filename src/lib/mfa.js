@@ -6,12 +6,16 @@
 import { supabase } from './supabase';
 
 export async function mfaStatus() {
-  const [{ data: aal }, { data: f }] = await Promise.all([
+  const [{ data: aal }, { data: f }, { data: sec, error: secErr }] = await Promise.all([
     supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
     supabase.auth.mfa.listFactors(),
+    supabase.rpc('my_login_security'),
   ]);
   const verified = (f?.totp ?? []).filter(x => x.status === 'verified');
-  return { current: aal?.currentLevel ?? 'aal1', next: aal?.nextLevel ?? 'aal1', factors: verified, all: f?.all ?? [] };
+  const current = aal?.currentLevel ?? 'aal1', next = aal?.nextLevel ?? 'aal1';
+  // The database decides whether this login has passed the second step (authenticator code OR PIN)
+  const s = secErr || !sec ? { pin_allowed: false, has_pin: false, pin_ok: false, second_step_ok: !(next === 'aal2' && current !== 'aal2') } : sec;
+  return { current, next, factors: verified, all: f?.all ?? [], pin: s };
 }
 
 /** Start setup: returns { factorId, qr (svg data url), secret, uri } */
@@ -39,6 +43,26 @@ export async function removeFactor(factorId) {
   if (error) throw error;
   await supabase.auth.refreshSession();
 }
+
+// ── Fixed login PIN (6 digits, admin can switch the option on/off) ──
+export async function setPin(pin) {
+  const { error } = await supabase.rpc('set_my_pin', { p_pin: String(pin) });
+  if (error) throw new Error(error.message);
+}
+/** Returns { ok, left, lockedUntil, error } */
+export async function verifyPin(pin) {
+  const { data, error } = await supabase.rpc('verify_my_pin', { p_pin: String(pin) });
+  if (error) return { ok: false, error: error.message };
+  return { ok: !!data?.ok, left: data?.left, lockedUntil: data?.locked_until, error: data?.error };
+}
+export async function removePin() {
+  const { error } = await supabase.rpc('remove_my_pin');
+  if (error) throw new Error(error.message);
+}
+export const lockText = (iso) => {
+  const m = Math.max(1, Math.ceil((new Date(iso) - Date.now()) / 60000));
+  return m >= 60 ? `${Math.ceil(m / 60)} hour${m >= 120 ? 's' : ''}` : `${m} minute${m === 1 ? '' : 's'}`;
+};
 
 export const deviceName = () => {
   const ua = navigator.userAgent;
