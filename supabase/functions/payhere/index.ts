@@ -20,7 +20,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const APP_URLS = ['https://app.taxmatesolutions.com', 'https://taxmate-app.vercel.app'];
 const appUrlFor = (req: Request) => {
   const o = (req.headers.get('origin') ?? '').replace(/\/$/, '');
-  return APP_URLS.includes(o) ? o : APP_URLS[1];
+  return APP_URLS.includes(o) ? o : APP_URLS[0];
 };
 const MD5U = (s: string) => md5(s).toUpperCase();
 const money = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
