@@ -202,7 +202,7 @@ export default function Activity() {
 
       <div className="card overflow-hidden">
         <div className="card-header flex-wrap gap-2">👥 Portal users
-          <span className="text-xs font-normal text-gray-400 flex items-center gap-1"><ShieldCheck size={12} /> 2FA: {s.mfa.clients_on} client{s.mfa.clients_on === 1 ? '' : 's'} · {s.mfa.admins_on}/{s.mfa.admins} admin{s.mfa.admins === 1 ? '' : 's'}</span>
+          <span className="text-xs font-normal text-gray-400 flex items-center gap-1"><ShieldCheck size={12} /> 2FA: {s.mfa.clients_on} client{s.mfa.clients_on === 1 ? '' : 's'} app{s.mfa.clients_pin ? ` · ${s.mfa.clients_pin} PIN` : ''} · {s.mfa.admins_on}/{s.mfa.admins} admin{s.mfa.admins === 1 ? '' : 's'}</span>
           <div className="ml-auto flex items-center gap-2">
             <select className="input py-1 text-xs w-auto" value={sort} onChange={e => setSort(e.target.value)}>
               <option value="recent">Recently active</option><option value="busy">Most active</option><option value="inactive">Inactive first</option>
@@ -232,7 +232,7 @@ export default function Activity() {
                     <td className="table-td text-right tabular-nums hidden md:table-cell">{u.views}</td>
                     <td className="table-td text-right tabular-nums hidden md:table-cell">{u.actions}</td>
                     <td className="table-td text-xs text-gray-500 hidden lg:table-cell">{u.top ? `${emo} ${label}` : '—'}</td>
-                    <td className="table-td">{u.mfa ? <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">ON</span> : <span className="text-[11px] text-gray-400">off</span>}</td>
+                    <td className="table-td">{u.mfa || u.pin ? <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">{u.mfa ? 'APP' : 'PIN'}</span> : <span className="text-[11px] text-gray-400">off</span>}</td>
                   </tr>
                 );
               })}

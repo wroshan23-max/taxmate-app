@@ -239,16 +239,16 @@ export default function ClientDetail() {
         <div className="card p-4 flex items-center gap-3 flex-wrap">
           <ShieldCheck size={18} className="text-primary-600" />
           <div className="flex-1 min-w-48">
-            <div className="text-sm font-semibold text-gray-800">Two-step login (2FA)</div>
-            <div className="text-xs text-gray-500">If the client lost their phone, reset it here. They can sign in with their password and turn it on again.</div>
+            <div className="text-sm font-semibold text-gray-800">Two-step login (PIN / authenticator app)</div>
+            <div className="text-xs text-gray-500">If the client forgot their PIN or lost their phone, reset it here. They sign in with their password and set it up again.</div>
           </div>
           <Link to={`/admin/messages?client=${id}`} className="btn-secondary text-xs py-1.5"><MessageCircle size={13} /> Message</Link>
           <button className="btn-secondary text-xs py-1.5" onClick={async () => {
             if (!window.confirm(`Reset two-step login for ${client.full_name}?`)) return;
             const { data, error } = await supabase.rpc('admin_reset_mfa', { p_client: id });
             if (error) return toast.error(error.message);
-            toast.success(data ? `Two-step login reset (${data} authenticator${data > 1 ? 's' : ''} removed)` : 'This client did not have two-step login on');
-          }}><RotateCcw size={13} /> Reset 2FA</button>
+            toast.success(data ? 'Two-step login reset — PIN / authenticator removed' : 'This client did not have two-step login on');
+          }}><RotateCcw size={13} /> Reset PIN / 2FA</button>
         </div>
       )}
       {tab === 'overview' && (

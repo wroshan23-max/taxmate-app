@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TwoFactorCard } from '../../components/TwoFactor';
+import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
 import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -248,6 +248,7 @@ function UsersTab() {
 
   return (
     <div className="space-y-5">
+      <LoginSecurityCard />
       {err && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm flex gap-2">
           <AlertTriangle size={18} className="flex-shrink-0" />
@@ -335,12 +336,61 @@ function UserTable({ title, icon: Icon, rows, onRole, onRemove, resetText }) {
   );
 }
 
+// ─── Login security: PIN option on/off ───────────────────
+function LoginSecurityCard() {
+  const { refreshMfa } = useAuth();
+  const [o, setO] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => supabase.rpc('admin_security_overview').then(({ data }) => data && setO(data));
+  useEffect(() => { load(); }, []);
+  if (!o) return null;
+
+  const toggle = async () => {
+    const next = !o.pin_login;
+    if (!next && (o.clients_pin > 0 || o.admins_pin_only > 0) && !window.confirm(
+      `Switch OFF the login PIN?\n\n• ${o.clients_pin} client(s) using a PIN will sign in with password only (unless they also use the app).` +
+      (o.admins_pin_only ? `\n• ${o.admins_pin_only} admin(s) using only a PIN must set up the authenticator app at their next visit.` : ''))) return;
+    setBusy(true);
+    const { data: cur } = await supabase.from('app_settings').select('value').eq('key', 'security').maybeSingle();
+    const { error } = await supabase.from('app_settings').upsert({ key: 'security', value: { ...(cur?.value ?? {}), pin_login: next } });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    toast.success(`Login PIN option ${next ? 'ON' : 'OFF'}`);
+    await load(); refreshMfa();
+  };
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="card-header"><ShieldCheck size={16} /> Login security</div>
+      <div className="p-5 grid md:grid-cols-[1fr_auto] gap-4 items-center">
+        <div>
+          <div className="font-semibold text-gray-800">🔢 Allow a fixed login PIN</div>
+          <p className="text-sm text-gray-500 mt-0.5">When ON, admins and clients can choose a secret 6-digit PIN as their second step instead of the authenticator app. When OFF, only the authenticator app counts.</p>
+          <div className="flex flex-wrap gap-2 mt-3 text-[11px]">
+            <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700">Admins: {o.admins_app} app · {o.admins_pin} PIN (of {o.admins})</span>
+            <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700">Clients: {o.clients_app} app · {o.clients_pin} PIN</span>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-2">The authenticator app is stronger (the code changes every 30 seconds). A PIN is simpler; it is stored only as a secure hash and locks after 5 wrong tries.</p>
+        </div>
+        <button onClick={toggle} disabled={busy} role="switch" aria-checked={o.pin_login}
+          className={`relative w-16 h-9 rounded-full transition-colors ${o.pin_login ? 'bg-emerald-500' : 'bg-gray-300'} disabled:opacity-50`}>
+          <span className={`absolute top-1 left-1 w-7 h-7 rounded-full bg-white shadow transition-transform ${o.pin_login ? 'translate-x-7' : ''}`} />
+          <span className="sr-only">{o.pin_login ? 'ON' : 'OFF'}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── My account ──────────────────────────────────────────
 function MyAccountTab() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       <ChangePassword />
-      <TwoFactorCard required />
+      <div className="space-y-5">
+        <PinCard required />
+        <TwoFactorCard required />
+      </div>
     </div>
   );
 }
