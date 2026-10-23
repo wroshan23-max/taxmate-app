@@ -608,7 +608,8 @@ function MyAccountTab() {
 
 // ─── Client Portal: features clients can use ─────────────
 export const PORTAL_FEATURES = [
-  ['tax_calculator', '🧮', 'Tax Calculator', 'Clients estimate their monthly / annual tax (local, foreign, mixed).'],
+  ['quick_tax', '⚡', 'Quick Tax Check', 'Simple calculator — clients type their local / foreign income and see the tax instantly.'],
+  ['tax_calculator', '🧮', 'Tax Calculator (detailed)', 'Full calculator — monthly / annual, local, foreign or mixed income, with reliefs.'],
   ['tax_calendar', '📅', 'Tax Calendar & due dates', 'IRD due dates on their dashboard and a full calendar.'],
   ['reminders', '🔔', 'Reminders', 'Clients see your reminders and can add their own.'],
   ['documents', '🗂️', 'Document vault', 'Clients upload salary slips, bank certificates etc. and download files you share.'],
