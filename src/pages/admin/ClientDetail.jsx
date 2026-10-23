@@ -20,6 +20,7 @@ import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCirc
 import DocumentVault from '../../components/DocumentVault';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
+import RamisDraftAdmin from '../../components/RamisDraftAdmin';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
 
 export default function ClientDetail() {
@@ -348,6 +349,7 @@ export default function ClientDetail() {
         </div>
       )}
 
+      {tab === 'returns' && <RamisDraftAdmin client={client} calculations={calculations} />}
       {tab === 'returns' && <SummaryLettersAdmin client={client} calculations={calculations} returns={returns} userId={user?.id} />}
 
       {tab === 'income' && <IncomeSheetsAdmin client={client} />}
