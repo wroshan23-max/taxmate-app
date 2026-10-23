@@ -16,7 +16,12 @@ const cors = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
-const APP_URL = 'https://taxmate-app.vercel.app';
+// Customers come back to the address they paid from (only these are allowed).
+const APP_URLS = ['https://app.taxmatesolutions.com', 'https://taxmate-app.vercel.app'];
+const appUrlFor = (req: Request) => {
+  const o = (req.headers.get('origin') ?? '').replace(/\/$/, '');
+  return APP_URLS.includes(o) ? o : APP_URLS[1];
+};
 const MD5U = (s: string) => md5(s).toUpperCase();
 const money = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
 
@@ -101,8 +106,8 @@ Deno.serve(async (req) => {
 
       const fields: Record<string, string> = {
         merchant_id: MID,
-        return_url: `${APP_URL}/client/invoices?payment=${encodeURIComponent(orderId)}`,
-        cancel_url: `${APP_URL}/client/invoices?payment=${encodeURIComponent(orderId)}&cancelled=1`,
+        return_url: `${appUrlFor(req)}/client/invoices?payment=${encodeURIComponent(orderId)}`,
+        cancel_url: `${appUrlFor(req)}/client/invoices?payment=${encodeURIComponent(orderId)}&cancelled=1`,
         notify_url: `${URL_}/functions/v1/payhere`,
         order_id: orderId,
         items: `TaxMate invoice ${inv.invoice_no ?? ''}`.trim(),
