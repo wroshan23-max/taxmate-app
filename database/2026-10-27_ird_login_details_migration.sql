@@ -89,9 +89,9 @@ BEGIN
     seen_at = CASE WHEN p_role = 'admin' THEN NOW() ELSE NULL END
   WHERE client_id = p_client;
 
-  IF p_tin IS NOT NULL THEN acted := acted || 'tin'; END IF;
-  IF pin IS NOT NULL THEN acted := acted || CASE WHEN pin = '' THEN 'clear_pin' ELSE 'pin' END; END IF;
-  IF ssid IS NOT NULL THEN acted := acted || CASE WHEN ssid = '' THEN 'clear_ssid' ELSE 'ssid' END; END IF;
+  IF p_tin IS NOT NULL THEN acted := array_append(acted, 'tin'); END IF;
+  IF pin IS NOT NULL THEN acted := array_append(acted, CASE WHEN pin = '' THEN 'clear_pin' ELSE 'pin' END); END IF;
+  IF ssid IS NOT NULL THEN acted := array_append(acted, CASE WHEN ssid = '' THEN 'clear_ssid' ELSE 'ssid' END); END IF;
   INSERT INTO public.ird_access_log (client_id, user_id, action) VALUES (p_client, auth.uid(), 'update:' || array_to_string(acted, ','));
   RETURN jsonb_build_object('ok', true);
 END $$;
