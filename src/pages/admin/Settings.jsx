@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { payhereStatus } from '../../lib/payments';
 import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
-import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon } from 'lucide-react';
+import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon, CreditCard, ExternalLink, Mail, Send, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,11 +20,13 @@ const TABS = [
   ['bank', Landmark, 'Bank & Signature'],
   ['users', Users, 'Users & Access'],
   ['portal', MonitorSmartphone, 'Client Portal'],
+  ['payments', CreditCard, 'Payments'],
+  ['email', Mail, 'Email reminders'],
   ['me', UserCog, 'My Account'],
 ];
 
 export default function Settings() {
-  const [tab, setTab] = useState('firm');
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'firm');
   return (
     <div className="space-y-5">
       <div>
@@ -43,6 +46,8 @@ export default function Settings() {
       {tab === 'bank' && <BankTab />}
       {tab === 'users' && <UsersTab />}
       {tab === 'portal' && <PortalTab />}
+      {tab === 'payments' && <PaymentsTab />}
+      {tab === 'email' && <EmailTab />}
       {tab === 'me' && <MyAccountTab />}
     </div>
   );
@@ -382,6 +387,211 @@ function LoginSecurityCard() {
   );
 }
 
+// ─── Payments: PayHere + bank transfer ───────────────────
+function PaymentsTab() {
+  const [cfg, setCfg] = useState(null);
+  const [ph, setPh] = useState(null);
+  const [note, setNote] = useState('');
+  const load = async () => {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'payments').maybeSingle();
+    const v = { payhere: false, bank: true, bank_note: '', ...(data?.value ?? {}) };
+    setCfg(v); setNote(v.bank_note || '');
+    payhereStatus().then(setPh).catch(() => setPh({ configured: false }));
+  };
+  useEffect(() => { load(); }, []);
+  const save = async (patch, msg) => {
+    const next = { ...cfg, ...patch };
+    const { error } = await supabase.from('app_settings').upsert({ key: 'payments', value: next });
+    if (error) return toast.error(error.message);
+    setCfg(next); toast.success(msg);
+  };
+  if (!cfg) return <div className="card p-6 text-gray-400 text-sm">Loading…</div>;
+  const Switch = ({ on, onClick, disabled }) => (
+    <button onClick={onClick} disabled={disabled} role="switch" aria-checked={on}
+      className={`relative w-14 h-8 rounded-full transition-colors flex-shrink-0 ${on ? 'bg-emerald-500' : 'bg-gray-300'} disabled:opacity-40`}>
+      <span className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-6' : ''}`} />
+    </button>
+  );
+  const notify = 'https://qipehxixvulvrubjifvi.supabase.co/functions/v1/payhere';
+  return (
+    <div className="grid lg:grid-cols-2 gap-5 items-start">
+      <div className="card overflow-hidden">
+        <div className="card-header"><CreditCard size={16} /> PayHere — card, eZ Cash, mCash, internet banking
+          {ph?.configured && <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${ph.sandbox ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>{ph.sandbox ? 'SANDBOX (test)' : 'LIVE'}</span>}
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="font-semibold text-gray-800">Clients can pay invoices online</div>
+              <p className="text-sm text-gray-500">A "Pay now" button on every unpaid invoice. Paid invoices update automatically.</p>
+            </div>
+            <Switch on={cfg.payhere} disabled={!ph?.configured && !cfg.payhere} onClick={() => save({ payhere: !cfg.payhere }, `Online payment ${!cfg.payhere ? 'ON' : 'OFF'}`)} />
+          </div>
+          {ph === null ? <div className="text-xs text-gray-400">Checking PayHere setup…</div> : ph.configured ? (
+            <div className="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm p-3">✓ PayHere is connected (merchant {ph.merchant}). {ph.sandbox && 'Test mode — no real money moves. Remove PAYHERE_SANDBOX to go live.'}</div>
+          ) : (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 space-y-2">
+              <div className="font-bold">One-time setup (5 minutes)</div>
+              <ol className="list-decimal ml-4 space-y-1.5">
+                <li>PayHere → <b>Settings → Domains &amp; Credentials</b> → Add domain <code className="bg-white px-1 rounded">taxmate-app.vercel.app</code>. PayHere approves it and shows a <b>Merchant Secret</b> for it.</li>
+                <li>Supabase → <b>Edge Functions → Secrets</b> → add <code className="bg-white px-1 rounded">PAYHERE_MERCHANT_ID</code> (your Merchant ID) and <code className="bg-white px-1 rounded">PAYHERE_MERCHANT_SECRET</code> (the secret from step 1). To test first, also add <code className="bg-white px-1 rounded">PAYHERE_SANDBOX</code> = <code>true</code> with sandbox credentials.</li>
+                <li>Come back here and switch online payment ON.</li>
+              </ol>
+              <div className="text-xs">Payment notifications go to <code className="bg-white px-1 rounded break-all">{notify}</code> (sent automatically with each payment).</div>
+              <div className="flex gap-2 flex-wrap">
+                <a href="https://www.payhere.lk/merchant/" target="_blank" rel="noreferrer" className="btn-secondary text-xs"><ExternalLink size={13} /> Open PayHere</a>
+                <a href="https://supabase.com/dashboard/project/qipehxixvulvrubjifvi/settings/functions" target="_blank" rel="noreferrer" className="btn-secondary text-xs"><ExternalLink size={13} /> Open Supabase secrets</a>
+                <button onClick={load} className="btn-secondary text-xs"><RefreshCw size={13} /> Check again</button>
+              </div>
+            </div>
+          )}
+          <p className="text-[11px] text-gray-400">PayHere charges its own fee per payment (see your PayHere plan). The secret never reaches the browser — prices are signed on the server.</p>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="card-header"><Landmark size={16} /> Bank transfer with slip</div>
+        <div className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="font-semibold text-gray-800">Clients can upload a bank slip</div>
+              <p className="text-sm text-gray-500">They see your bank accounts (Settings → Bank &amp; Signature), pay, and upload the slip. You confirm it in <b>Payments</b>.</p>
+            </div>
+            <Switch on={cfg.bank} onClick={() => save({ bank: !cfg.bank }, `Bank transfer ${!cfg.bank ? 'ON' : 'OFF'}`)} />
+          </div>
+          <label className="block text-xs font-semibold text-gray-600">Extra note for clients (optional)
+            <div className="flex gap-2 mt-1">
+              <input className="input flex-1" maxLength={200} placeholder="e.g. CDM / online transfer accepted. Use the invoice number as reference." value={note} onChange={e => setNote(e.target.value)} />
+              <button onClick={() => save({ bank_note: note.trim() }, 'Note saved')} className="btn-secondary text-sm">Save</button>
+            </div>
+          </label>
+          <Link to="/admin/payments" className="btn-primary text-sm inline-flex"><CreditCard size={14} /> Open Payments</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Email reminders ─────────────────────────────────────
+const EMAIL_TYPES = [
+  ['due_dates', '📅', 'Income tax deadlines', '7 days and 1 day before 30 Nov (return) and 7 days before 30 Sep (payment) — only clients whose return is not filed yet.'],
+  ['invoices', '🧾', 'Unpaid invoices', '3 days before the due date, on the due date, and 7 days late.'],
+  ['documents', '📤', 'Documents needed', 'Return started but nothing uploaded after 7 and 21 days.'],
+  ['reminders', '🔔', 'Your reminders', 'Reminders you add for a client or all clients — the day before.'],
+  ['messages', '💬', 'Unread messages', 'When your message is unread for 24 hours (once a day).'],
+];
+function EmailTab() {
+  const [cfg, setCfg] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [log, setLog] = useState([]);
+  const [busy, setBusy] = useState(null);
+  const call = async (action) => {
+    const { data, error } = await supabase.functions.invoke('reminders', { body: { action } });
+    if (error) throw new Error(error.message);
+    if (data?.error) throw new Error(data.error);
+    return data;
+  };
+  const load = async () => {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'email').maybeSingle();
+    setCfg({ enabled: false, from_email: '', from_name: 'TaxMate Solutions', reply_to: '', types: {}, ...(data?.value ?? {}) });
+    call('status').then(setStatus).catch(() => setStatus({ provider: null }));
+    const { data: l } = await supabase.from('email_log').select('*, clients(full_name)').order('created_at', { ascending: false }).limit(25);
+    setLog(l ?? []);
+  };
+  useEffect(() => { load(); }, []);
+  const save = async (patch, msg) => {
+    const next = { ...cfg, ...patch };
+    const { error } = await supabase.from('app_settings').upsert({ key: 'email', value: next });
+    if (error) return toast.error(error.message);
+    setCfg(next); if (msg) toast.success(msg);
+  };
+  const run = async (action) => {
+    setBusy(action);
+    try {
+      const r = await call(action);
+      toast.success(action === 'test' ? `Test email sent to ${r.to}` : `Done — ${r.sent} sent${r.failed ? `, ${r.failed} failed` : ''}${r.note ? ` (${r.note})` : ''}`);
+      if (r.errors?.length) toast.error(r.errors[0]);
+      load();
+    } catch (e) { toast.error(e.message); }
+    setBusy(null);
+  };
+  if (!cfg) return <div className="card p-6 text-gray-400 text-sm">Loading…</div>;
+  const types = { due_dates: true, invoices: true, documents: true, reminders: true, messages: true, ...(cfg.types ?? {}) };
+  const ready = status?.provider && cfg.from_email;
+  return (
+    <div className="grid lg:grid-cols-[1.2fr_1fr] gap-5 items-start">
+      <div className="space-y-5">
+        <div className="card overflow-hidden">
+          <div className="card-header"><Mail size={16} /> Automatic email reminders
+            {status?.provider && <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 uppercase">{status.provider} connected</span>}
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex-1"><div className="font-semibold text-gray-800">Send reminders every morning (8:37 am)</div>
+                <p className="text-sm text-gray-500">Clients can switch emails off in their portal (Security). Max 250 emails a day.</p></div>
+              <button onClick={() => save({ enabled: !cfg.enabled }, `Email reminders ${!cfg.enabled ? 'ON' : 'OFF'}`)} disabled={!ready && !cfg.enabled} role="switch" aria-checked={cfg.enabled}
+                className={`relative w-14 h-8 rounded-full transition-colors flex-shrink-0 ${cfg.enabled ? 'bg-emerald-500' : 'bg-gray-300'} disabled:opacity-40`}>
+                <span className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-white shadow transition-transform ${cfg.enabled ? 'translate-x-6' : ''}`} />
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold text-gray-600">Sender email (verified in Brevo / Resend)
+                <input className="input mt-1" type="email" placeholder="taxmatesolutions@gmail.com" value={cfg.from_email} onChange={e => setCfg({ ...cfg, from_email: e.target.value })} onBlur={() => save({ from_email: cfg.from_email.trim() })} />
+              </label>
+              <label className="text-xs font-semibold text-gray-600">Sender name
+                <input className="input mt-1" value={cfg.from_name} onChange={e => setCfg({ ...cfg, from_name: e.target.value })} onBlur={() => save({ from_name: cfg.from_name.trim() })} />
+              </label>
+            </div>
+            <div className="divide-y divide-gray-50 rounded-xl border border-gray-100">
+              {EMAIL_TYPES.map(([k, e, t, d]) => (
+                <label key={k} className="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
+                  <input type="checkbox" className="mt-1" checked={types[k] !== false} onChange={ev => save({ types: { ...types, [k]: ev.target.checked } })} />
+                  <span className="text-lg">{e}</span>
+                  <span className="flex-1"><span className="block text-sm font-semibold text-gray-800">{t}</span><span className="block text-xs text-gray-500">{d}</span></span>
+                </label>
+              ))}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => run('test')} disabled={!ready || !!busy} className="btn-secondary text-sm">{busy === 'test' ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />} Send me a test email</button>
+              <button onClick={() => run('run')} disabled={!ready || !cfg.enabled || !!busy} className="btn-primary text-sm">{busy === 'run' ? <RefreshCw size={14} className="animate-spin" /> : <Play size={14} />} Run today's reminders now</button>
+            </div>
+          </div>
+        </div>
+        {!status?.provider && status !== null && (
+          <div className="card p-5 text-sm text-amber-900 bg-amber-50 border-amber-200 space-y-2">
+            <div className="font-bold">One-time setup — free (Brevo: 300 emails a day)</div>
+            <ol className="list-decimal ml-4 space-y-1.5">
+              <li>Create a free account at <b>brevo.com</b> and verify your sender email (Senders &amp; IP → Senders → Add a sender).</li>
+              <li>Brevo → <b>SMTP &amp; API → API keys</b> → Generate a new API key.</li>
+              <li>Supabase → <b>Edge Functions → Secrets</b> → add <code className="bg-white px-1 rounded">BREVO_API_KEY</code> with that key.</li>
+              <li>Come back, enter the sender email above, send a test, then switch reminders ON.</li>
+            </ol>
+            <div className="flex gap-2 flex-wrap pt-1">
+              <a href="https://app.brevo.com/settings/keys/api" target="_blank" rel="noreferrer" className="btn-secondary text-xs"><ExternalLink size={13} /> Brevo API keys</a>
+              <a href="https://supabase.com/dashboard/project/qipehxixvulvrubjifvi/settings/functions" target="_blank" rel="noreferrer" className="btn-secondary text-xs"><ExternalLink size={13} /> Supabase secrets</a>
+              <button onClick={load} className="btn-secondary text-xs"><RefreshCw size={13} /> Check again</button>
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="card overflow-hidden">
+        <div className="card-header">📬 Recent emails</div>
+        {log.length === 0 ? <div className="p-6 text-center text-sm text-gray-400">Nothing sent yet.</div> : (
+          <div className="divide-y divide-gray-50 max-h-[520px] overflow-y-auto">
+            {log.map(l => (
+              <div key={l.id} className="px-4 py-2 text-xs">
+                <div className="flex items-center gap-2"><span className={`font-bold ${l.status === 'sent' ? 'text-emerald-700' : 'text-red-600'}`}>{l.status === 'sent' ? '✓' : '✗'}</span>
+                  <span className="font-semibold text-gray-800 truncate flex-1">{l.subject}</span><span className="text-gray-400">{fmtDate(l.created_at)}</span></div>
+                <div className="text-gray-500 truncate">{l.clients?.full_name ?? l.to_email}{l.error ? ` — ${l.error}` : ''}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── My account ──────────────────────────────────────────
 function MyAccountTab() {
   return (
@@ -404,6 +614,8 @@ export const PORTAL_FEATURES = [
   ['documents', '🗂️', 'Document vault', 'Clients upload salary slips, bank certificates etc. and download files you share.'],
   ['return_tracker', '🚦', 'Return progress tracker', 'Clients see where their return is: Documents received → Computing → Ready to review → Filed in RAMIS.'],
   ['messages', '💬', 'Messages', 'Clients read your announcements and chat privately with TaxMate (only with you, never with other clients).'],
+  ['services', '📅', 'Book a service', 'Clients request services (VAT, TIN, company return…) and pick a preferred date & time.'],
+  ['summary_letters', '📄', 'Income & Tax summary letters', 'Clients request a letter for visa / bank loans; you issue it (free or with a fee).'],
   ['referrals', '🎁', 'Invite friends', 'Each client gets a personal invite link; friends who register are linked to them.'],
 ];
 

@@ -5,7 +5,7 @@ import StorageMeter from '../../components/StorageMeter';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import {
   Users, FileText, Receipt, Calculator, Clock, AlertCircle, ArrowRight, MessageSquareWarning,
-  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark, Sparkles, FolderLock, MessageCircle, Fingerprint,
+  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark, Sparkles, FolderLock, MessageCircle, Fingerprint, CreditCard, CalendarCheck, FileBadge2,
 } from 'lucide-react';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -31,7 +31,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird] = await Promise.all([
+      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird, pays, srs, lets] = await Promise.all([
         supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').is('archived_at', null).order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
@@ -43,10 +43,13 @@ export default function Dashboard() {
         supabase.from('client_documents').select('id, client_id, year, title, created_at, clients(full_name)').eq('uploaded_role', 'client').is('seen_at', null).order('created_at', { ascending: false }).limit(200),
         supabase.from('messages').select('id, client_id, body, created_at, clients(full_name)').eq('sender_role', 'client').is('read_at', null).order('created_at', { ascending: false }).limit(200),
         supabase.rpc('admin_ird_updates'),
+        supabase.from('payments').select('id, amount, created_at, clients(full_name), invoices(invoice_no)').eq('status', 'review').order('created_at', { ascending: false }),
+        supabase.from('service_requests').select('id, client_id, service, created_at, preferred_date, clients(full_name)').eq('status', 'new').order('created_at', { ascending: false }),
+        supabase.from('summary_letters').select('id, client_id, year, purpose, created_at, clients(full_name)').eq('status', 'requested').order('created_at', { ascending: false }),
       ]);
       setD({
         clients: cl.data ?? [], returns: rt.data ?? [], invoices: inv.data ?? [], calcs: calc.data ?? [],
-        requests: req.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
+        requests: req.data ?? [], pays: pays.data ?? [], srs: srs.data ?? [], lets: lets.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
       });
     })();
   }, []);
@@ -71,6 +74,9 @@ export default function Dashboard() {
     const msgGroups = Object.values(d.msgs.reduce((m, x) => { (m[x.client_id] ??= { client_id: x.client_id, name: x.clients?.full_name ?? 'Client', items: [] }).items.push(x); return m; }, {}));
     const attention = [
       ...msgGroups.map(g => ({ key: `msg${g.client_id}`, icon: MessageCircle, tone: 'blue', text: `${g.name} sent you ${g.items.length} message${g.items.length > 1 ? 's' : ''}`, note: g.items[0].body, to: `/admin/messages?client=${g.client_id}`, when: g.items[0].created_at })),
+      ...d.pays.map(x => ({ key: `pay${x.id}`, icon: CreditCard, tone: 'green', text: `${x.clients?.full_name ?? 'Client'} sent a bank slip — ${x.invoices?.invoice_no ?? ''} · ${fmtRs(x.amount)}. Check & confirm`, to: '/admin/payments', when: x.created_at })),
+      ...d.srs.map(x => ({ key: `sr${x.id}`, icon: CalendarCheck, tone: 'blue', text: `${x.clients?.full_name ?? 'Client'} requested: ${x.service}${x.preferred_date ? ` (prefers ${fmtDate(x.preferred_date)})` : ''}`, to: '/admin/service-requests', when: x.created_at })),
+      ...d.lets.map(x => ({ key: `let${x.id}`, icon: FileBadge2, tone: 'blue', text: `${x.clients?.full_name ?? 'Client'} asked for an Income & Tax summary letter — Y/A ${x.year}`, to: `/admin/clients/${x.client_id}?tab=returns`, when: x.created_at })),
       ...d.ird.map(x => ({ key: `ird${x.client_id}`, icon: Fingerprint, tone: 'green', text: `${x.name} updated IRD filing details (TIN${x.has_pin ? ' · RAMIS PIN' : ''}${x.has_ssid ? ' · SSID' : ''})`, to: `/admin/clients/${x.client_id}`, when: x.at })),
       ...docGroups.map(g => ({ key: `doc${g.client_id}`, icon: FolderLock, tone: 'green', text: `${g.name} uploaded ${g.items.length} new document${g.items.length > 1 ? 's' : ''}`, note: g.items.slice(0, 3).map(x => x.title).join(', '), to: `/admin/clients/${g.client_id}?tab=documents`, when: g.items[0].created_at })),
       ...d.clients.filter(c => c.source === 'self_registration' && !c.reviewed_at).map(c => ({ key: `reg${c.id}`, icon: Sparkles, tone: 'green', text: `New client registered online${c.registration?.via && c.registration.via !== 'personal link' ? ` (${c.registration.via})` : ''} — ${c.full_name}${c.registration?.filled_by === 'contact' && c.contact_name ? ` (by ${c.contact_name}${c.contact_relation ? `, ${c.contact_relation.toLowerCase()}` : ''})` : ''}`, note: c.registration?.services?.join(', '), to: `/admin/clients/${c.id}`, when: c.registered_at })),
