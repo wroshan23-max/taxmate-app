@@ -89,6 +89,11 @@ Deno.serve(async (req) => {
     if (!caller?.user) return reply({ error: 'Please sign in again.' });
     const { data: me } = await admin.from('profiles').select('role').eq('id', caller.user.id).single();
     if (me?.role !== 'admin') return reply({ error: 'Admins only.' });
+    // Two-step login: an admin who has 2FA on must have entered the code (aal2)
+    let aal = 'aal1';
+    try { aal = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).aal ?? 'aal1'; } catch { /* keep aal1 */ }
+    const has2fa = (caller.user.factors ?? []).some((f: { status: string }) => f.status === 'verified');
+    if (has2fa && aal !== 'aal2') return reply({ error: 'Please sign in again with your 6-digit code.' });
     const myId = caller.user.id;
 
     if (action === 'list_users') {
