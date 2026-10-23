@@ -17,7 +17,7 @@ export const LETTER_STATUS = {
   rejected:  { label: 'Not issued', cls: 'bg-red-100 text-red-700' },
   cancelled: { label: 'Cancelled', cls: 'bg-gray-100 text-gray-600' },
 };
-export const APP_URL = 'https://taxmate-app.vercel.app';
+export const APP_URL = 'https://app.taxmatesolutions.com';
 const errMsg = (e) => (e?.message || String(e)).replace(/^.*?ERROR:\s*/, '');
 
 const yaRange = (ya) => { const s = parseInt(ya, 10); return `1 April ${s} – 31 March ${s + 1}`; };
