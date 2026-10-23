@@ -433,7 +433,7 @@ function PaymentsTab() {
             <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 space-y-2">
               <div className="font-bold">One-time setup (5 minutes)</div>
               <ol className="list-decimal ml-4 space-y-1.5">
-                <li>PayHere → <b>Settings → Domains &amp; Credentials</b> → Add domain <code className="bg-white px-1 rounded">taxmate-app.vercel.app</code>. PayHere approves it and shows a <b>Merchant Secret</b> for it.</li>
+                <li>PayHere → <b>Integrations → Add Domain/App</b> → domain <code className="bg-white px-1 rounded">taxmatesolutions.com</code> (PayHere does not accept vercel.app). After PayHere approves it, copy its <b>Merchant Secret</b>. Clients pay from <code className="bg-white px-1 rounded">app.taxmatesolutions.com</code>.</li>
                 <li>Supabase → <b>Edge Functions → Secrets</b> → add <code className="bg-white px-1 rounded">PAYHERE_MERCHANT_ID</code> (your Merchant ID) and <code className="bg-white px-1 rounded">PAYHERE_MERCHANT_SECRET</code> (the secret from step 1). To test first, also add <code className="bg-white px-1 rounded">PAYHERE_SANDBOX</code> = <code>true</code> with sandbox credentials.</li>
                 <li>Come back here and switch online payment ON.</li>
               </ol>
