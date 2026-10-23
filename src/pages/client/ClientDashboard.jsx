@@ -8,6 +8,7 @@ import { yearInfo } from '../../lib/assets';
 import DueDatesWidget from '../../components/DueDatesWidget';
 import { ReturnStepper } from '../../components/ReturnTracker';
 import InstallAppCard from '../../components/InstallAppCard';
+import { myPlans, rsPlan } from '../../lib/plans';
 import { FolderLock, UploadCloud, MessageCircle, Zap, CalendarCheck, FileBadge2 } from 'lucide-react';
 
 export default function ClientDashboard() {
@@ -127,6 +128,8 @@ export default function ClientDashboard() {
       )}
 
       <InstallAppCard />
+
+      {features.plans !== false && <PlanBanner />}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {features.quick_tax !== false && (
@@ -261,5 +264,20 @@ export default function ClientDashboard() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Clients without a plan: a gentle nudge to the monthly plans
+function PlanBanner() {
+  const [d, setD] = useState(null);
+  useEffect(() => { myPlans().then(setD).catch(() => setD(null)); }, []);
+  if (!d || d.current || d.request || !(d.plans ?? []).length) return null;
+  const from = Math.min(...d.plans.map(p => Number(p.price) || 0));
+  return (
+    <Link to="/client/plan" className="card p-4 flex items-center gap-3 bg-gradient-to-r from-amber-50 via-white to-primary-50 hover:shadow-md transition-all">
+      <div className="text-3xl">👑</div>
+      <div className="flex-1"><div className="font-bold text-gray-800">Monthly plans from {rsPlan(from)}</div><div className="text-xs text-gray-500">Tax return, bookkeeping & APIT handled every month — one simple fee · මාසික සැලසුම්</div></div>
+      <ChevronRight size={18} className="text-primary-600" />
+    </Link>
   );
 }

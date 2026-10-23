@@ -5,6 +5,7 @@ import { FileText } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { ReturnStepper } from '../../components/ReturnTracker';
 import SummaryLettersClient from '../../components/SummaryLettersClient';
+import TaxReviewsClient from '../../components/TaxReviewsClient';
 import { STAGES, stageIndex } from '../../lib/documents';
 
 const statusBadge = (s) => {
@@ -46,6 +47,7 @@ export default function ClientTaxReturns() {
         <p className="text-sm text-gray-500">{returns.length} return{returns.length !== 1 ? 's' : ''} on file</p>
       </div>
 
+      {clientId && features.tax_reviews !== false && <TaxReviewsClient clientId={clientId} />}
       {clientId && features.summary_letters !== false && <SummaryLettersClient clientId={clientId} />}
 
       {returns.length === 0 ? (
