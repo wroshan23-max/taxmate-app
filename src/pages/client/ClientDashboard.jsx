@@ -129,7 +129,7 @@ export default function ClientDashboard() {
       <InstallAppCard />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {features.tax_calculator !== false && (
+        {features.quick_tax !== false && (
           <Link to="/client/quick-tax" className="group card p-4 flex items-center gap-3 hover:shadow-md transition-all">
             <div className="w-11 h-11 rounded-2xl bg-gold-500 text-primary-900 flex items-center justify-center group-hover:scale-105 transition-transform"><Zap size={20} /></div>
             <div><div className="font-bold text-sm text-gray-800">Quick Tax Check</div><div className="text-[11px] text-gray-500">See your tax in seconds</div></div>
