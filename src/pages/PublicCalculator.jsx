@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { LogIn, MessageCircle, UserPlus, ShieldCheck, FileCheck2, Clock } from 'lucide-react';
+import { LogIn, MessageCircle, UserPlus, ShieldCheck, FileCheck2, Clock, Globe } from 'lucide-react';
 import SimpleTaxCalculator from '../components/SimpleTaxCalculator';
-import { FIRM } from '../lib/iitStatement';
+import { FIRM, websiteUrl } from '../lib/iitStatement';
 
 const wa = () => `https://wa.me/94${String(FIRM.whatsapp || FIRM.phone || '').replace(/\D/g, '').replace(/^0/, '')}?text=${encodeURIComponent('Hi TaxMate! I used your tax calculator. I would like help with my income tax return.')}`;
 
@@ -20,7 +20,8 @@ export default function PublicCalculator() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center gap-3">
           <div className="text-2xl font-black">Tax<span className="text-gold-500">Mate</span></div>
           <div className="text-xs text-primary-200 hidden sm:block">{FIRM.tagline}</div>
-          <Link to="/login" className="ml-auto inline-flex items-center gap-1.5 text-sm font-semibold bg-white/10 hover:bg-white/20 rounded-xl px-3 py-1.5"><LogIn size={15} /> Sign in</Link>
+          <a href={websiteUrl()} className="ml-auto inline-flex items-center gap-1.5 text-sm font-semibold text-primary-100 hover:text-white rounded-xl px-2 py-1.5"><Globe size={15} /> <span className="hidden sm:inline">Website</span></a>
+          <Link to="/login" className="inline-flex items-center gap-1.5 text-sm font-semibold bg-white/10 hover:bg-white/20 rounded-xl px-3 py-1.5"><LogIn size={15} /> Sign in</Link>
         </div>
         <div className="max-w-6xl mx-auto px-4 pt-6 pb-24">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider bg-white/15 rounded-full px-3 py-1">🇱🇰 Free · No sign-up</div>

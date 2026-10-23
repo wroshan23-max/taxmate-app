@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
-import { FIRM } from '../lib/iitStatement';
+import { LogIn, Eye, EyeOff, Globe } from 'lucide-react';
+import { FIRM, websiteUrl, websiteLabel } from '../lib/iitStatement';
 import { waNumber } from '../lib/share';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activity';
@@ -119,6 +119,9 @@ export default function Login() {
             <p className="text-xs text-gray-400 mt-1">
               📞 {FIRM.phone} · {FIRM.email}
             </p>
+            <a href={websiteUrl()} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline mt-2">
+              <Globe size={12} /> {websiteLabel()}
+            </a>
           </div>
         </div>
       </div>
