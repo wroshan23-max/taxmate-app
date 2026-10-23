@@ -1,10 +1,10 @@
 import { ShieldCheck, Lock, Smartphone, Eye } from 'lucide-react';
-import { TwoFactorCard } from '../../components/TwoFactor';
+import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 
 const TIPS = [
   [Lock, 'Use a strong password', 'At least 8 characters. Don\'t reuse your email or Facebook password.'],
-  [Smartphone, 'Turn on two-step login', 'Even if someone learns your password, they still need your phone.'],
-  [Eye, 'TaxMate never asks for your code', 'Never share the 6-digit code with anyone — not even us.'],
+  [Smartphone, 'Turn on two-step login', 'Even if someone learns your password, they still need your PIN or phone.'],
+  [Eye, 'TaxMate never asks for your PIN or code', 'Never share your PIN or 6-digit code with anyone — not even us.'],
 ];
 
 export default function ClientSecurity() {
@@ -17,6 +17,8 @@ export default function ClientSecurity() {
           <p className="text-sm text-gray-500">Keep your tax information safe · ඔබේ ගිණුම ආරක්ෂා කරගන්න</p>
         </div>
       </div>
+      <div className="text-xs text-gray-500">Choose one second step — a <b>login PIN</b> (simple) or an <b>authenticator app</b> (strongest).</div>
+      <PinCard />
       <TwoFactorCard />
       <div className="grid sm:grid-cols-3 gap-3">
         {TIPS.map(([Icon, t, d]) => (
