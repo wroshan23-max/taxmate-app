@@ -4,6 +4,11 @@ import Login from './pages/Login';
 import SharedDocument from './pages/SharedDocument';
 import { InvitePage, ResetPasswordPage } from './pages/AccountLinks';
 import Register from './pages/Register';
+import { MfaChallengeScreen, MfaSetupScreen } from './components/TwoFactor';
+import AdminMessages from './pages/admin/Messages';
+import Activity from './pages/admin/Activity';
+import ClientMessages from './pages/client/ClientMessages';
+import ClientSecurity from './pages/client/ClientSecurity';
 import Settings from './pages/admin/Settings';
 import { useSettings } from './contexts/SettingsContext';
 import AdminLayout from './components/AdminLayout';
@@ -44,19 +49,22 @@ function LoadingScreen() {
 }
 
 function ProtectedAdmin({ children }) {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading, needsCode, has2fa, mfa } = useAuth();
   const loc = useLocation();
-  if (loading) return <LoadingScreen />;
+  if (loading || (user && !mfa.loaded)) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
+  if (needsCode) return <MfaChallengeScreen />;
   if (!isAdmin) return <Navigate to="/client" replace />;
+  if (!has2fa) return <MfaSetupScreen />;          // admins must use two-step login
   return children;
 }
 
 function ProtectedClient({ children }) {
-  const { user, isClient, loading } = useAuth();
+  const { user, isClient, loading, needsCode, mfa } = useAuth();
   const loc = useLocation();
-  if (loading) return <LoadingScreen />;
+  if (loading || (user && !mfa.loaded)) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
+  if (needsCode) return <MfaChallengeScreen />;
   if (!isClient) return <Navigate to="/admin" replace />;
   return children;
 }
@@ -100,6 +108,8 @@ export default function App() {
         <Route path="invoices" element={<Invoices />} />
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
+        <Route path="messages" element={<AdminMessages />} />
+        <Route path="activity" element={<Activity />} />
         <Route path="settings" element={<Settings />} />
       </Route>
 
@@ -119,6 +129,8 @@ export default function App() {
         <Route path="invoices" element={<ClientInvoices />} />
         <Route path="profile" element={<ClientProfile />} />
         <Route path="updates" element={<ClientTaxUpdates />} />
+        <Route path="messages" element={<ClientMessages />} />
+        <Route path="security" element={<ClientSecurity />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
