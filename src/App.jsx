@@ -31,6 +31,8 @@ import ClientQuickTax from './pages/client/ClientQuickTax';
 import PublicCalculator from './pages/PublicCalculator';
 import VerifyLetter from './pages/VerifyLetter';
 import AdminPayments from './pages/admin/Payments';
+import AdminSubscriptions from './pages/admin/Subscriptions';
+import ClientPlan from './pages/client/ClientPlan';
 import ServiceRequests from './pages/admin/ServiceRequests';
 import ClientServices from './pages/client/ClientServices';
 import TaxCalendar from './pages/TaxCalendar';
@@ -120,6 +122,7 @@ export default function App() {
         <Route path="messages" element={<AdminMessages />} />
         <Route path="activity" element={<Activity />} />
         <Route path="payments" element={<AdminPayments />} />
+        <Route path="subscriptions" element={<AdminSubscriptions />} />
         <Route path="service-requests" element={<ServiceRequests />} />
         <Route path="settings" element={<Settings />} />
       </Route>
@@ -135,6 +138,7 @@ export default function App() {
         <Route path="tax-calculator" element={<ClientTaxCalculator />} />
         <Route path="quick-tax" element={<ClientQuickTax />} />
         <Route path="services" element={<ClientServices />} />
+        <Route path="plan" element={<ClientPlan />} />
         <Route path="income" element={<ClientIncome />} />
         <Route path="calendar" element={<TaxCalendar role="client" />} />
         <Route path="invite" element={<ClientInvite />} />
