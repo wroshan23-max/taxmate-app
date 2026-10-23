@@ -4,10 +4,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { Send, CheckCircle, Clock } from 'lucide-react';
 import ChangePassword from '../../components/ChangePassword';
+import IrdDetailsClient from '../../components/IrdDetailsClient';
 
 const FIELD_LABELS = {
   full_name: 'Full Name',
-  tin: 'TIN',
   nic: 'NIC',
   email: 'Email',
   mobile: 'Mobile',
@@ -34,7 +34,6 @@ export default function ClientProfile() {
       setClientId(cl.id);
       setChanges({
         full_name: cl.full_name ?? '',
-        tin: cl.tin ?? '',
         nic: cl.nic ?? '',
         email: cl.email ?? '',
         mobile: cl.mobile ?? '',
@@ -108,6 +107,9 @@ export default function ClientProfile() {
           ))}
         </div>
       </div>
+
+      {/* IRD filing details (TIN / RAMIS PIN / SSID) — saved directly */}
+      <IrdDetailsClient />
 
       {/* Update Request Form */}
       {showForm && (
