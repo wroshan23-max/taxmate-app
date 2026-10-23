@@ -7,13 +7,15 @@ import { safeUrl } from '../../components/LinkifiedText';
 import { yearInfo } from '../../lib/assets';
 import DueDatesWidget from '../../components/DueDatesWidget';
 import { ReturnStepper } from '../../components/ReturnTracker';
-import { FolderLock, UploadCloud } from 'lucide-react';
+import { FolderLock, UploadCloud, MessageCircle } from 'lucide-react';
 
 export default function ClientDashboard() {
   const { user, profile } = useAuth();
   const [data, setData] = useState({ calcs: [], returns: [], invoices: [], updates: [], assets: [], sheets: [] });
   const [loading, setLoading] = useState(true);
   const features = useOutletContext() ?? { tax_calculator: true };
+  const [unread, setUnread] = useState(0);
+  useEffect(() => { if (features.messages !== false) supabase.rpc('my_unread_messages').then(({ data }) => setUnread(Number(data) || 0)); }, [features.messages]);
 
   useEffect(() => {
     const load = async () => {
@@ -58,6 +60,18 @@ export default function ClientDashboard() {
         <h1 className="text-2xl font-bold text-primary-800">Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'} 👋</h1>
         <p className="text-sm text-gray-500">Your TaxMate dashboard</p>
       </div>
+
+      {unread > 0 && (
+        <Link to="/client/messages" className="flex items-center gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4 hover:bg-primary-100 transition-colors">
+          <div className="relative w-10 h-10 rounded-xl bg-primary-600 text-white flex items-center justify-center flex-shrink-0"><MessageCircle size={20} />
+            <span className="absolute -top-1.5 -right-1.5 text-[10px] font-black bg-red-500 text-white rounded-full px-1.5 min-w-[18px] text-center ring-2 ring-white">{unread}</span></div>
+          <div className="flex-1">
+            <div className="font-semibold text-primary-900">You have {unread} new message{unread > 1 ? 's' : ''} from TaxMate</div>
+            <div className="text-xs text-primary-700">Tap to read · TaxMate වෙතින් නව පණිවිඩ</div>
+          </div>
+          <ChevronRight size={18} className="text-primary-600" />
+        </Link>
+      )}
 
       {data.sheets.map(sh => (
         <Link key={sh.id} to={`/client/income?year=${encodeURIComponent(sh.year)}`}
