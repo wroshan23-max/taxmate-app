@@ -8,7 +8,7 @@ import { yearInfo } from '../../lib/assets';
 import DueDatesWidget from '../../components/DueDatesWidget';
 import { ReturnStepper } from '../../components/ReturnTracker';
 import InstallAppCard from '../../components/InstallAppCard';
-import { FolderLock, UploadCloud, MessageCircle } from 'lucide-react';
+import { FolderLock, UploadCloud, MessageCircle, Zap, CalendarCheck, FileBadge2 } from 'lucide-react';
 
 export default function ClientDashboard() {
   const { user, profile } = useAuth();
