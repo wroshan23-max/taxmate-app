@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
 import { FIRM } from '../lib/iitStatement';
 import { waNumber } from '../lib/share';
+import { supabase } from '../lib/supabase';
+import { logActivity } from '../lib/activity';
 
 export default function Login() {
   const { signIn, user, profile, loading: authLoading, isAdmin, isClient } = useAuth();
@@ -32,6 +34,10 @@ export default function Login() {
     setLoading(false);
     if (error) {
       toast.error('Email හෝ Password වැරදියි — Email or password is incorrect');
+    } else {
+      // with two-step login the "login" is recorded after the code is entered
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal?.nextLevel !== 'aal2') logActivity('login');
     }
     // Navigation handled by useEffect above when auth state updates
   };
