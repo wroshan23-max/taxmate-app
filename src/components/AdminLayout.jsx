@@ -6,7 +6,7 @@ import { useUnreadMessages } from '../lib/messages';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck
 } from 'lucide-react';
 
 const nav = [
@@ -18,6 +18,8 @@ const nav = [
   { to: '/admin/calendar', icon: CalendarDays, label: 'Tax Calendar' },
   { to: '/admin/messages', icon: MessageCircle, label: 'Messages', badge: true },
   { to: '/admin/invoices', icon: Receipt, label: 'Invoices' },
+  { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
+  { to: '/admin/service-requests', icon: CalendarCheck, label: 'Service Requests' },
   { to: '/admin/requests', icon: MessageSquarePlus, label: 'Update Requests' },
   { to: '/admin/updates', icon: Megaphone, label: 'Tax Updates' },
   { to: '/admin/activity', icon: Activity, label: 'Activity & Users' },
