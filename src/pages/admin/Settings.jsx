@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { payhereStatus } from '../../lib/payments';
 import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
+import { Crown } from 'lucide-react';
+import { loadPlans, savePlans, DEFAULT_PLANS, planStyle } from '../../lib/plans';
 import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon, CreditCard, ExternalLink, Mail, Send, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
@@ -21,6 +23,7 @@ const TABS = [
   ['users', Users, 'Users & Access'],
   ['portal', MonitorSmartphone, 'Client Portal'],
   ['payments', CreditCard, 'Payments'],
+  ['plans', Crown, 'Plans'],
   ['email', Mail, 'Email reminders'],
   ['me', UserCog, 'My Account'],
 ];
@@ -47,6 +50,7 @@ export default function Settings() {
       {tab === 'users' && <UsersTab />}
       {tab === 'portal' && <PortalTab />}
       {tab === 'payments' && <PaymentsTab />}
+      {tab === 'plans' && <PlansTab />}
       {tab === 'email' && <EmailTab />}
       {tab === 'me' && <MyAccountTab />}
     </div>
@@ -617,6 +621,8 @@ export const PORTAL_FEATURES = [
   ['messages', '💬', 'Messages', 'Clients read your announcements and chat privately with TaxMate (only with you, never with other clients).'],
   ['services', '📅', 'Book a service', 'Clients request services (VAT, TIN, company return…) and pick a preferred date & time.'],
   ['summary_letters', '📄', 'Income & Tax summary letters', 'Clients request a letter for visa / bank loans; you issue it (free or with a fee).'],
+  ['tax_reviews', '📈', 'Annual Tax Review', 'Clients request a yearly review report (this year vs last, how to save); you set the fee when issuing.'],
+  ['plans', '👑', 'Monthly plans', 'Clients see the Basic / Standard / Premium plans and can request one.'],
   ['referrals', '🎁', 'Invite friends', 'Each client gets a personal invite link; friends who register are linked to them.'],
 ];
 
@@ -691,6 +697,59 @@ function PortalTab() {
             ))}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Plans (monthly subscriptions) ───────────────────────
+function PlansTab() {
+  const [plans, setPlans] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { loadPlans().then(p => setPlans(p.map(x => ({ ...x, featuresText: (x.features || []).join('\n') })))); }, []);
+  if (!plans) return <div className="card p-8 text-center text-gray-400">Loading…</div>;
+  const upd = (i, patch) => setPlans(plans.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  const save = async () => {
+    setBusy(true);
+    try {
+      const saved = await savePlans(plans.map(p => ({ ...p, features: String(p.featuresText || '').split('\n') })));
+      setPlans(saved.map(x => ({ ...x, featuresText: x.features.join('\n') })));
+      toast.success('Plans saved — clients see the new prices; existing plans keep their own price');
+    } catch (e) { toast.error(e.message); }
+    setBusy(false);
+  };
+  return (
+    <div className="space-y-4">
+      <div className="card p-4 text-sm text-gray-600">
+        Monthly plans clients can request from their portal (<b>My Plan</b>). Changing a price here does not change clients already on a plan —
+        edit their price on the client page. Assign plans and see monthly income under <Link to="/admin/subscriptions" className="text-primary-700 font-semibold hover:underline">Subscriptions</Link>.
+      </div>
+      <div className="grid lg:grid-cols-3 gap-4">
+        {plans.map((p, i) => (
+          <div key={i} className={`card overflow-hidden ${p.active === false ? 'opacity-60' : ''}`}>
+            <div className={`bg-gradient-to-r ${planStyle(p.key).head} text-white px-4 py-2 flex items-center gap-2`}>
+              <span className="text-xl">{planStyle(p.key).emoji}</span><b className="flex-1">{p.name || 'Plan'}</b>
+              <label className="text-xs inline-flex items-center gap-1"><input type="checkbox" checked={p.active !== false} onChange={e => upd(i, { active: e.target.checked })} /> Show</label>
+            </div>
+            <div className="p-4 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-[11px] font-semibold text-gray-500">Name<input className="input mt-0.5 py-1 text-sm" value={p.name} maxLength={60} onChange={e => upd(i, { name: e.target.value })} /></label>
+                <label className="text-[11px] font-semibold text-gray-500">Price / month (Rs.)<input className="input mt-0.5 py-1 text-sm text-right" inputMode="numeric" value={p.price} onChange={e => upd(i, { price: e.target.value.replace(/[^\d]/g, '') })} /></label>
+              </div>
+              <label className="text-[11px] font-semibold text-gray-500 block">Short line<input className="input mt-0.5 py-1 text-sm" value={p.tagline || ''} maxLength={80} onChange={e => upd(i, { tagline: e.target.value })} /></label>
+              <label className="text-[11px] font-semibold text-gray-500 block">What's included (one per line)<textarea className="input mt-0.5 text-sm" rows={6} value={p.featuresText || ''} onChange={e => upd(i, { featuresText: e.target.value })} /></label>
+              <label className="text-xs inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.includes_review} onChange={e => upd(i, { includes_review: e.target.checked })} /> Annual Tax Review included (fee 0)</label>
+              <div className="flex items-center gap-2 text-[11px] text-gray-400"><span>Code: {p.key}</span>
+                {plans.length > 1 && <button onClick={() => setPlans(plans.filter((_, j) => j !== i))} className="ml-auto text-red-500 hover:underline inline-flex items-center gap-1"><Trash2 size={11} /> Remove</button>}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {plans.length < 6 && <button onClick={() => setPlans([...plans, { key: `plan${plans.length + 1}`, name: 'New plan', price: 0, active: true, includes_review: false, tagline: '', featuresText: '' }])} className="btn-secondary text-sm"><Plus size={14} /> Add plan</button>}
+        <button onClick={() => setPlans(DEFAULT_PLANS.map(x => ({ ...x, featuresText: x.features.join('\n') })))} className="btn-secondary text-sm"><RotateCcw size={14} /> Suggested plans</button>
+        <button onClick={save} disabled={busy} className="btn-primary text-sm ml-auto"><Save size={14} /> Save plans</button>
       </div>
     </div>
   );

@@ -21,6 +21,8 @@ import DocumentVault from '../../components/DocumentVault';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
 import RamisDraftAdmin from '../../components/RamisDraftAdmin';
+import TaxReviewsAdmin from '../../components/TaxReviewsAdmin';
+import SubscriptionAdmin from '../../components/SubscriptionAdmin';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
 
 export default function ClientDetail() {
@@ -237,6 +239,7 @@ export default function ClientDetail() {
           </div>
         </div>
       )}
+      {tab === 'overview' && <SubscriptionAdmin client={client} userId={user?.id} />}
       {tab === 'overview' && <IrdDetailsAdmin client={client} onClientChange={(p) => { setClient(c => ({ ...c, ...p })); setForm(fm => ({ ...fm, ...p })); }} />}
       {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
       {tab === 'overview' && client.profile_id && (
@@ -350,6 +353,7 @@ export default function ClientDetail() {
       )}
 
       {tab === 'returns' && <RamisDraftAdmin client={client} calculations={calculations} />}
+      {tab === 'returns' && <TaxReviewsAdmin client={client} calculations={calculations} userId={user?.id} />}
       {tab === 'returns' && <SummaryLettersAdmin client={client} calculations={calculations} returns={returns} userId={user?.id} />}
 
       {tab === 'income' && <IncomeSheetsAdmin client={client} />}
