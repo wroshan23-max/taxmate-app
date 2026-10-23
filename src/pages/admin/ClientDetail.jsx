@@ -16,7 +16,7 @@ import { PORTAL_FEATURES } from './Settings';
 import { invoiceMessage } from '../../lib/share';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
-import { UserRound, Sparkles, CheckCircle2, FolderLock } from 'lucide-react';
+import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCircle, RotateCcw } from 'lucide-react';
 import DocumentVault from '../../components/DocumentVault';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
 
@@ -235,6 +235,22 @@ export default function ClientDetail() {
         </div>
       )}
       {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
+      {tab === 'overview' && client.profile_id && (
+        <div className="card p-4 flex items-center gap-3 flex-wrap">
+          <ShieldCheck size={18} className="text-primary-600" />
+          <div className="flex-1 min-w-48">
+            <div className="text-sm font-semibold text-gray-800">Two-step login (2FA)</div>
+            <div className="text-xs text-gray-500">If the client lost their phone, reset it here. They can sign in with their password and turn it on again.</div>
+          </div>
+          <Link to={`/admin/messages?client=${id}`} className="btn-secondary text-xs py-1.5"><MessageCircle size={13} /> Message</Link>
+          <button className="btn-secondary text-xs py-1.5" onClick={async () => {
+            if (!window.confirm(`Reset two-step login for ${client.full_name}?`)) return;
+            const { data, error } = await supabase.rpc('admin_reset_mfa', { p_client: id });
+            if (error) return toast.error(error.message);
+            toast.success(data ? `Two-step login reset (${data} authenticator${data > 1 ? 's' : ''} removed)` : 'This client did not have two-step login on');
+          }}><RotateCcw size={13} /> Reset 2FA</button>
+        </div>
+      )}
       {tab === 'overview' && (
         <div className="card p-5">
           <div className="font-semibold text-primary-800 text-sm">Portal features for this client</div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TwoFactorCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
 import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -337,8 +338,9 @@ function UserTable({ title, icon: Icon, rows, onRole, onRemove, resetText }) {
 // ─── My account ──────────────────────────────────────────
 function MyAccountTab() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
       <ChangePassword />
+      <TwoFactorCard required />
     </div>
   );
 }
@@ -351,6 +353,7 @@ export const PORTAL_FEATURES = [
   ['reminders', '🔔', 'Reminders', 'Clients see your reminders and can add their own.'],
   ['documents', '🗂️', 'Document vault', 'Clients upload salary slips, bank certificates etc. and download files you share.'],
   ['return_tracker', '🚦', 'Return progress tracker', 'Clients see where their return is: Documents received → Computing → Ready to review → Filed in RAMIS.'],
+  ['messages', '💬', 'Messages', 'Clients read your announcements and chat privately with TaxMate (only with you, never with other clients).'],
   ['referrals', '🎁', 'Invite friends', 'Each client gets a personal invite link; friends who register are linked to them.'],
 ];
 
