@@ -14,7 +14,7 @@ import { websiteUrl } from '../lib/iitStatement';
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/client/calculations', icon: Calculator, label: 'My Calculations' },
-  { to: '/client/quick-tax', icon: Zap, label: 'Quick Tax Check', feature: 'tax_calculator' },
+  { to: '/client/quick-tax', icon: Zap, label: 'Quick Tax Check', feature: 'quick_tax' },
   { to: '/client/tax-calculator', icon: Percent, label: 'Tax Calculator', feature: 'tax_calculator' },
   { to: '/client/income', icon: Wallet, label: 'Monthly Income', feature: 'income_sheets' },
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
@@ -34,7 +34,7 @@ export default function ClientLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   // Features switched on by TaxMate (Tax Calculator on/off, Monthly Income sheet enabled)
-  const [features, setFeatures] = useState({ tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, services: true, summary_letters: true, income_sheets: 0, loaded: false });
+  const [features, setFeatures] = useState({ quick_tax: true, tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, services: true, summary_letters: true, income_sheets: 0, loaded: false });
   useEffect(() => {
     supabase.rpc('my_portal_features').then(({ data }) => { if (data) setFeatures({ ...data, loaded: true }); else setFeatures(f => ({ ...f, loaded: true })); });
   }, [profile?.id]);
