@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
-  Zap, CalendarCheck, Globe,
+  Zap, CalendarCheck, Globe, Crown,
 } from 'lucide-react';
 import { websiteUrl } from '../lib/iitStatement';
 
@@ -21,6 +21,7 @@ const nav = [
   { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals' },
   { to: '/client/messages', icon: MessageCircle, label: 'Messages', feature: 'messages', badge: true },
   { to: '/client/services', icon: CalendarCheck, label: 'Book a Service', feature: 'services' },
+  { to: '/client/plan', icon: Crown, label: 'My Plan', feature: 'plans' },
   { to: '/client/documents', icon: FolderLock, label: 'My Documents', feature: 'documents' },
   { to: '/client/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/client/assets', icon: Landmark, label: 'Assets & Liabilities' },
@@ -34,7 +35,7 @@ export default function ClientLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   // Features switched on by TaxMate (Tax Calculator on/off, Monthly Income sheet enabled)
-  const [features, setFeatures] = useState({ quick_tax: true, tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, services: true, summary_letters: true, income_sheets: 0, loaded: false });
+  const [features, setFeatures] = useState({ quick_tax: true, tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, services: true, summary_letters: true, plans: true, tax_reviews: true, income_sheets: 0, loaded: false });
   useEffect(() => {
     supabase.rpc('my_portal_features').then(({ data }) => { if (data) setFeatures({ ...data, loaded: true }); else setFeatures(f => ({ ...f, loaded: true })); });
   }, [profile?.id]);
