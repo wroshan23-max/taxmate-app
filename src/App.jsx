@@ -27,6 +27,12 @@ import ClientTaxCalculator from './pages/client/ClientTaxCalculator';
 import ClientIncome from './pages/client/ClientIncome';
 import ClientInvite from './pages/client/ClientInvite';
 import ClientDocuments from './pages/client/ClientDocuments';
+import ClientQuickTax from './pages/client/ClientQuickTax';
+import PublicCalculator from './pages/PublicCalculator';
+import VerifyLetter from './pages/VerifyLetter';
+import AdminPayments from './pages/admin/Payments';
+import ServiceRequests from './pages/admin/ServiceRequests';
+import ClientServices from './pages/client/ClientServices';
 import TaxCalendar from './pages/TaxCalendar';
 import ClientDashboard from './pages/client/ClientDashboard';
 import ClientCalculations from './pages/client/ClientCalculations';
@@ -93,6 +99,9 @@ export default function App() {
       <Route path="/register/:token" element={<Register />} />
       {/* Public: reusable link for Facebook / flyers (e.g. /join/fb) */}
       <Route path="/join/:code" element={<Register />} />
+      <Route path="/calculator" element={<PublicCalculator />} />
+      <Route path="/verify/:ref" element={<VerifyLetter />} />
+      <Route path="/tax-calculator" element={<PublicCalculator />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={
@@ -110,6 +119,8 @@ export default function App() {
         <Route path="updates" element={<TaxUpdates />} />
         <Route path="messages" element={<AdminMessages />} />
         <Route path="activity" element={<Activity />} />
+        <Route path="payments" element={<AdminPayments />} />
+        <Route path="service-requests" element={<ServiceRequests />} />
         <Route path="settings" element={<Settings />} />
       </Route>
 
@@ -122,6 +133,8 @@ export default function App() {
         <Route path="tax-returns" element={<ClientTaxReturns />} />
         <Route path="assets" element={<ClientAssets />} />
         <Route path="tax-calculator" element={<ClientTaxCalculator />} />
+        <Route path="quick-tax" element={<ClientQuickTax />} />
+        <Route path="services" element={<ClientServices />} />
         <Route path="income" element={<ClientIncome />} />
         <Route path="calendar" element={<TaxCalendar role="client" />} />
         <Route path="invite" element={<ClientInvite />} />
