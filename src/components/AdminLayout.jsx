@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { logActivity } from '../lib/activity';
+import { useUnreadMessages } from '../lib/messages';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark, CalendarDays
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity
 } from 'lucide-react';
 
 const nav = [
@@ -14,9 +16,11 @@ const nav = [
   { to: '/admin/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/admin/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/admin/calendar', icon: CalendarDays, label: 'Tax Calendar' },
+  { to: '/admin/messages', icon: MessageCircle, label: 'Messages', badge: true },
   { to: '/admin/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/admin/requests', icon: MessageSquarePlus, label: 'Update Requests' },
   { to: '/admin/updates', icon: Megaphone, label: 'Tax Updates' },
+  { to: '/admin/activity', icon: Activity, label: 'Activity & Users' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -24,6 +28,13 @@ export default function AdminLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const unread = useUnreadMessages('admin');
+  // "online now" for staff too (no page-view logging for admins)
+  useEffect(() => {
+    logActivity('ping', '/admin');
+    const t = setInterval(() => { if (document.visibilityState === 'visible') logActivity('ping', '/admin'); }, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -42,7 +53,7 @@ export default function AdminLayout() {
 
       {/* Nav */}
       <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto px-2">
-        {nav.map(({ to, icon: Icon, label, end }) => (
+        {nav.map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -57,7 +68,8 @@ export default function AdminLayout() {
             }
           >
             <Icon size={17} />
-            {label}
+            <span className="flex-1">{label}</span>
+            {badge && unread > 0 && <span className="text-[10px] font-black bg-red-500 text-white rounded-full px-1.5 min-w-[18px] text-center">{unread}</span>}
           </NavLink>
         ))}
       </nav>

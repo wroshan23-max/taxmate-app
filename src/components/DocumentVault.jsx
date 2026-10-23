@@ -9,6 +9,7 @@ import {
   DOC_CATS, CLIENT_CATS, ACCEPT, docYears, defaultDocYear, uploadDocument, signedUrl, deleteDocuments,
   fmtBytes, isImage, isPdf, extOf,
 } from '../lib/documents';
+import { logActivity } from '../lib/activity';
 
 const fileIcon = (mime = '', name = '') => {
   if (isImage(mime)) return FileImage;
@@ -74,7 +75,7 @@ export default function DocumentVault({ clientId, role, userId, onChange }) {
         set({ state: 'error', msg: e.message });
       }
     }
-    if (ok) { toast.success(`${ok} file${ok > 1 ? 's' : ''} uploaded`); setNote(''); onChange?.(); }
+    if (ok) { toast.success(`${ok} file${ok > 1 ? 's' : ''} uploaded`); setNote(''); onChange?.(); if (role === 'client') logActivity('upload', '/client/documents', `${ok} file${ok > 1 ? 's' : ''}`); }
   };
 
   const open = async (row) => {
@@ -87,6 +88,7 @@ export default function DocumentVault({ clientId, role, userId, onChange }) {
   const download = async (row) => {
     try {
       const url = await signedUrl(row.path, `${row.title}.${extOf(row.path)}`);
+      if (role === 'client') logActivity('download', '/client/documents', row.title);
       const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
     } catch (e) { toast.error(e.message); }
   };

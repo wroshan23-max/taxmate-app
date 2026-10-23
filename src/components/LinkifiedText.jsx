@@ -7,12 +7,12 @@ export const safeUrl = (u) => {
 };
 export const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
 
-export default function LinkifiedText({ text, className = '' }) {
+export default function LinkifiedText({ text, className = '', linkClassName = 'text-primary-600 underline hover:text-primary-800' }) {
   const parts = String(text ?? '').split(URL_RE);
   return (
     <p className={className}>
       {parts.map((p, i) => (i % 2 === 1
-        ? <a key={i} href={p} target="_blank" rel="noopener noreferrer" className="text-primary-600 underline break-all hover:text-primary-800">{p}</a>
+        ? <a key={i} href={p} target="_blank" rel="noopener noreferrer" className={`break-all ${linkClassName}`}>{p}</a>
         : p))}
     </p>
   );

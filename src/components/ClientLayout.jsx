@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { logActivity } from '../lib/activity';
+import { useUnreadMessages } from '../lib/messages';
 import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
-  LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock
+  LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck
 } from 'lucide-react';
 
 const nav = [
@@ -14,23 +16,33 @@ const nav = [
   { to: '/client/income', icon: Wallet, label: 'Monthly Income', feature: 'income_sheets' },
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
   { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals' },
+  { to: '/client/messages', icon: MessageCircle, label: 'Messages', feature: 'messages', badge: true },
   { to: '/client/documents', icon: FolderLock, label: 'My Documents', feature: 'documents' },
   { to: '/client/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/client/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/client/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/client/updates', icon: Megaphone, label: 'Tax Updates' },
   { to: '/client/profile', icon: User, label: 'My Profile' },
+  { to: '/client/security', icon: ShieldCheck, label: 'Security' },
 ];
 
 export default function ClientLayout() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   // Features switched on by TaxMate (Tax Calculator on/off, Monthly Income sheet enabled)
-  const [features, setFeatures] = useState({ tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, documents: true, return_tracker: true, income_sheets: 0, loaded: false });
+  const [features, setFeatures] = useState({ tax_calculator: true, tax_calendar: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, income_sheets: 0, loaded: false });
   useEffect(() => {
     supabase.rpc('my_portal_features').then(({ data }) => { if (data) setFeatures({ ...data, loaded: true }); else setFeatures(f => ({ ...f, loaded: true })); });
   }, [profile?.id]);
   const [open, setOpen] = useState(false);
+  const loc = useLocation();
+  const unread = useUnreadMessages('client', features.messages !== false);
+  // usage stats for TaxMate (page opened + "online now" heartbeat)
+  useEffect(() => { logActivity('view', loc.pathname); }, [loc.pathname]);
+  useEffect(() => {
+    const t = setInterval(() => { if (document.visibilityState === 'visible') logActivity('ping'); }, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -47,7 +59,7 @@ export default function ClientLayout() {
       </div>
 
       <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto px-2">
-        {nav.filter(n => !n.feature || features[n.feature]).map(({ to, icon: Icon, label, end }) => (
+        {nav.filter(n => !n.feature || features[n.feature]).map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -62,7 +74,8 @@ export default function ClientLayout() {
             }
           >
             <Icon size={17} />
-            {label}
+            <span className="flex-1">{label}</span>
+            {badge && unread > 0 && <span className="text-[10px] font-black bg-red-500 text-white rounded-full px-1.5 min-w-[18px] text-center">{unread}</span>}
           </NavLink>
         ))}
       </nav>
@@ -110,13 +123,20 @@ export default function ClientLayout() {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-          <button onClick={() => setOpen(true)} className="md:hidden text-gray-500 hover:text-gray-700">
+          <button onClick={() => setOpen(true)} className="md:hidden text-gray-500 hover:text-gray-700 relative">
             <Menu size={20} />
+            {unread > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
           </button>
           <div className="md:hidden text-lg font-black text-primary-700">
             Tax<span className="text-gold-500">Mate</span>
           </div>
           <div className="flex-1" />
+          {features.messages !== false && (
+            <NavLink to="/client/messages" title="Messages" className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100">
+              <MessageCircle size={19} />
+              {unread > 0 && <span className="absolute top-0.5 right-0.5 text-[9px] font-black bg-red-500 text-white rounded-full px-1 min-w-[15px] text-center">{unread}</span>}
+            </NavLink>
+          )}
           <div className="text-xs text-gray-500 hidden sm:block">
             Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'}
           </div>
