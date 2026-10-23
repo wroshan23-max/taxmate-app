@@ -1,5 +1,6 @@
 import { ShieldCheck, Lock, Smartphone, Eye } from 'lucide-react';
 import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
+import EmailPrefsCard from '../../components/EmailPrefsCard';
 
 const TIPS = [
   [Lock, 'Use a strong password', 'At least 8 characters. Don\'t reuse your email or Facebook password.'],
@@ -20,6 +21,7 @@ export default function ClientSecurity() {
       <div className="text-xs text-gray-500">Choose one second step — a <b>login PIN</b> (simple) or an <b>authenticator app</b> (strongest).</div>
       <PinCard />
       <TwoFactorCard />
+      <EmailPrefsCard />
       <div className="grid sm:grid-cols-3 gap-3">
         {TIPS.map(([Icon, t, d]) => (
           <div key={t} className="card p-4">

@@ -1,10 +1,13 @@
 import { waNumber } from '../../lib/share';
 import { FIRM } from '../../lib/iitStatement';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import PayInvoiceDialog from '../../components/PayInvoiceDialog';
+import { PAY_STATUS } from '../../lib/payments';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Receipt, Printer } from 'lucide-react';
+import { Receipt, Printer, CreditCard, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { isSent, isOverdue, openInvoice } from '../../lib/invoice';
 
 const STATUS_CLS = { unpaid: 'bg-blue-100 text-blue-700', overdue: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700' };
@@ -16,23 +19,51 @@ export default function ClientInvoices() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    const load = async () => {
-      const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).single();
-      if (!cl) { setLoading(false); return; }
-      const [{ data }, { data: bk }] = await Promise.all([
-        supabase.from('invoices')
-          .select('*, clients(full_name, tin, nic, mobile, email, address), invoice_items(*)')
-          .eq('client_id', cl.id).neq('status', 'draft')
-          .order('issue_date', { ascending: false }),
-        supabase.from('bank_accounts').select('*'),
-      ]);
-      setInvoices(data ?? []);
-      setBanks(bk ?? []);
-      setLoading(false);
-    };
-    load();
+  const [clientId, setClientId] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [paying, setPaying] = useState(null);
+  const [params, setParams] = useSearchParams();
+  const returned = params.get('payment');
+  const [returnState, setReturnState] = useState(null);   // pending | paid | failed | cancelled
+
+  const load = useCallback(async () => {
+    const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).single();
+    if (!cl) { setLoading(false); return; }
+    setClientId(cl.id);
+    const [{ data }, { data: bk }, { data: pays }] = await Promise.all([
+      supabase.from('invoices')
+        .select('*, clients(full_name, tin, nic, mobile, email, address), invoice_items(*)')
+        .eq('client_id', cl.id).neq('status', 'draft')
+        .order('issue_date', { ascending: false }),
+      supabase.from('bank_accounts').select('*'),
+      supabase.from('payments').select('id, invoice_id, method, amount, status, order_id, card, created_at').eq('client_id', cl.id).order('created_at', { ascending: false }),
+    ]);
+    setInvoices(data ?? []);
+    setBanks(bk ?? []);
+    setPayments(pays ?? []);
+    setLoading(false);
+    return pays ?? [];
   }, [user.id]);
+  useEffect(() => { load(); }, [load]);
+
+  // Back from PayHere: wait for the confirmation (PayHere notifies our server a few seconds later)
+  useEffect(() => {
+    if (!returned) return;
+    if (params.get('cancelled')) { setReturnState('cancelled'); return; }
+    let tries = 0, stop = false;
+    setReturnState('pending');
+    const tick = async () => {
+      const pays = await load();
+      const p = (pays || []).find(x => x.order_id === returned);
+      if (stop) return;
+      if (p?.status === 'paid') { setReturnState('paid'); return; }
+      if (p && ['failed', 'cancelled', 'chargedback'].includes(p.status)) { setReturnState('failed'); return; }
+      if (++tries < 12) setTimeout(tick, 2500); else setReturnState('slow');
+    };
+    tick();
+    return () => { stop = true; };
+  }, [returned]); // eslint-disable-line react-hooks/exhaustive-deps
+  const lastPay = (invId) => payments.find(p => p.invoice_id === invId);
 
   const filtered = invoices.filter(i => filter === 'all' || (filter === 'unpaid' ? isSent(i.status) : i.status === filter));
   const outstanding = invoices.filter(i => isSent(i.status)).reduce((s, i) => s + Number(i.total_amount || 0), 0);
@@ -49,6 +80,20 @@ export default function ClientInvoices() {
         <h1 className="text-2xl font-bold text-primary-800">My Invoices</h1>
         {outstanding > 0 && <p className="text-sm text-gray-500">Outstanding: <strong className="text-red-600">{fmtRs(outstanding)}</strong></p>}
       </div>
+
+      {returnState && (
+        <div className={`rounded-2xl p-4 flex items-center gap-3 text-sm ${returnState === 'paid' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : returnState === 'pending' ? 'bg-blue-50 border border-blue-200 text-blue-800' : 'bg-amber-50 border border-amber-200 text-amber-900'}`}>
+          {returnState === 'paid' ? <CheckCircle2 size={20} /> : returnState === 'pending' ? <Loader2 size={20} className="animate-spin" /> : <XCircle size={20} />}
+          <div className="flex-1">
+            {returnState === 'paid' && <><b>Payment received — thank you!</b> Your invoice is now marked paid.</>}
+            {returnState === 'pending' && <><b>Confirming your payment…</b> This takes a few seconds.</>}
+            {returnState === 'cancelled' && <>Payment was cancelled. You can try again any time.</>}
+            {returnState === 'failed' && <>The payment did not go through. Please try again or use bank transfer.</>}
+            {returnState === 'slow' && <>We haven't received PayHere's confirmation yet. If money was taken, it will show as paid shortly — or WhatsApp us.</>}
+          </div>
+          <button onClick={() => { setReturnState(null); setParams({}); }} className="text-xs font-semibold underline">Close</button>
+        </div>
+      )}
 
       <div className="flex gap-2">
         {[['all', 'All'], ['unpaid', 'Unpaid'], ['paid', 'Paid']].map(([s, l]) => (
@@ -82,6 +127,9 @@ export default function ClientInvoices() {
                     {inv.status === 'paid' ? '✅ Paid' : '⏳ Unpaid'}
                   </span>
                   <button onClick={() => print(inv)} className="btn-secondary text-xs py-1 px-2.5"><Printer size={13} /> View / PDF</button>
+                  {isSent(inv.status) && lastPay(inv.id)?.status !== 'review' && (
+                    <button onClick={() => setPaying(inv)} className="btn-primary text-xs py-1.5 px-3"><CreditCard size={13} /> Pay now</button>
+                  )}
                 </div>
               </div>
 
@@ -98,6 +146,13 @@ export default function ClientInvoices() {
                 </div>
               )}
 
+              {lastPay(inv.id) && (inv.status !== 'paid' || lastPay(inv.id).status === 'paid') && (
+                <div className="px-4 py-2 border-t border-gray-50 text-xs flex items-center gap-2">
+                  <span className={`font-semibold px-2 py-0.5 rounded-md ${PAY_STATUS[lastPay(inv.id).status]?.cls}`}>{PAY_STATUS[lastPay(inv.id).status]?.emoji} {PAY_STATUS[lastPay(inv.id).status]?.label}</span>
+                  <span className="text-gray-500">{lastPay(inv.id).method === 'payhere' ? `Online${lastPay(inv.id).card ? ` · ${lastPay(inv.id).card}` : ''}` : 'Bank transfer'} · {fmtRs(lastPay(inv.id).amount)} · {fmtDate(lastPay(inv.id).created_at)}</span>
+                </div>
+              )}
+
               {isSent(inv.status) && (
                 <div className="px-4 py-3 bg-amber-50 border-t border-amber-100">
                   <p className="text-xs text-amber-700">
@@ -110,6 +165,7 @@ export default function ClientInvoices() {
           ))}
         </div>
       )}
+      {paying && clientId && <PayInvoiceDialog invoice={paying} clientId={clientId} onClose={() => setPaying(null)} onSubmitted={load} />}
     </div>
   );
 }

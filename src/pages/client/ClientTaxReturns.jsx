@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { FileText } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { ReturnStepper } from '../../components/ReturnTracker';
+import SummaryLettersClient from '../../components/SummaryLettersClient';
 import { STAGES, stageIndex } from '../../lib/documents';
 
 const statusBadge = (s) => {
@@ -18,11 +19,13 @@ export default function ClientTaxReturns() {
   const features = useOutletContext() ?? {};
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [clientId, setClientId] = useState(null);
 
   useEffect(() => {
     const load = async () => {
       const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).single();
       if (!cl) { setLoading(false); return; }
+      setClientId(cl.id);
       const { data } = await supabase
         .from('tax_returns')
         .select('*')
@@ -42,6 +45,8 @@ export default function ClientTaxReturns() {
         <h1 className="text-2xl font-bold text-primary-800">My Tax Returns</h1>
         <p className="text-sm text-gray-500">{returns.length} return{returns.length !== 1 ? 's' : ''} on file</p>
       </div>
+
+      {clientId && features.summary_letters !== false && <SummaryLettersClient clientId={clientId} />}
 
       {returns.length === 0 ? (
         <div className="card p-12 text-center">

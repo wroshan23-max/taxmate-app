@@ -5,6 +5,7 @@ import {
   Calculator, Globe2, MapPin, Shuffle, ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle2, MessageCircle, RotateCcw,
 } from 'lucide-react';
 import { computePersonal, apitTable1, TAX_YEARS } from '../../lib/iitCalc';
+import TaxSavingTips from '../../components/TaxSavingTips';
 import { FIRM } from '../../lib/iitStatement';
 import { waNumber } from '../../lib/share';
 
@@ -75,7 +76,7 @@ export default function ClientTaxCalculator() {
   const fxLKR = f.fxCur === 'LKR' ? toNum(f.fxAmount) : toNum(f.fxAmount) * toNum(f.fxRate);
   const needRate = showForeign && f.fxCur !== 'LKR' && toNum(f.fxAmount) > 0 && !toNum(f.fxRate);
 
-  const r = useMemo(() => computePersonal(year, {
+  const px = useMemo(() => ({
     residency: f.residency,
     salary: showLocal ? toNum(f.salary) * mult : 0,
     business: showLocal ? toNum(f.business) * mult : 0,
@@ -88,7 +89,8 @@ export default function ClientTaxCalculator() {
     apitPaid: period === 'annual' ? toNum(f.apitPaid) : 0,
     otherTaxPaid: period === 'annual' ? toNum(f.otherTaxPaid) : 0,
     whtInterestAuto: period === 'annual' && f.whtInterestAuto,
-  }), [year, f, mult, showLocal, showForeign, fxLKR, period]);
+  }), [f, mult, showLocal, showForeign, fxLKR, period]);
+  const r = useMemo(() => computePersonal(year, px), [year, px]);
 
   const d = (n) => n / mult;    // show in the chosen period
   const hasIncome = r.totalAss > 0;
@@ -315,6 +317,8 @@ export default function ClientTaxCalculator() {
           </a>
         </div>
       </div>
+
+      {hasIncome && <TaxSavingTips year={year} x={px} mode="client" />}
 
       {/* Phone: live total pinned at the bottom while typing */}
       {hasIncome && (
