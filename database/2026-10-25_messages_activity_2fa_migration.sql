@@ -245,3 +245,13 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.my_portal_features() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.my_portal_features() TO authenticated;
+
+-- 5. Close the remaining "password only" paths for 2FA users
+DROP POLICY IF EXISTS "Clients can read own record" ON public.clients;
+CREATE POLICY "Clients can read own record" ON public.clients FOR SELECT USING (id = my_client_id());
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (id = auth.uid() AND _mfa_ok());
+DROP POLICY IF EXISTS "Clients can insert requests" ON public.update_requests;
+CREATE POLICY "Clients can insert requests" ON public.update_requests FOR INSERT WITH CHECK (profile_id = auth.uid() AND _mfa_ok());
+DROP POLICY IF EXISTS "Signed-in users read bank accounts" ON public.bank_accounts;
+CREATE POLICY "Signed-in users read bank accounts" ON public.bank_accounts FOR SELECT USING (auth.uid() IS NOT NULL AND _mfa_ok());
