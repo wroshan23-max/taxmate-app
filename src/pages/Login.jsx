@@ -3,8 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { LogIn, Eye, EyeOff, Globe } from 'lucide-react';
-import { FIRM, websiteUrl, websiteLabel } from '../lib/iitStatement';
-import { waNumber } from '../lib/share';
+import { FIRM, websiteUrl, websiteLabel, waNumber } from '../lib/firm';
 import { supabase } from '../lib/supabase';
 import { logActivity } from '../lib/activity';
 
