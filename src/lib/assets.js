@@ -342,13 +342,13 @@ function cell(c, r) {
   return `<td>${esc(v)}</td>`;
 }
 
-function sectionTable(s, data) {
+function sectionTable(s, data, clean = false) {
   const rows = rowsOf(data, s.key).filter(r => !isRowEmpty(s, r));
   const t = totals(data);
   const money = moneyCols(s);
   const textCols = s.cols.filter(c => c.type !== 'money');
   const total = s.key === 'business' ? t.business : t[s.key];
-  const head = `<div class="ph"><span>${esc(s.code)}. ${esc(s.en)}</span><i>${esc(s.si)}</i></div>`;
+  const head = `<div class="ph"><span>${esc(s.code)}. ${esc(s.en)}</span>${clean ? '' : `<i>${esc(s.si)}</i>`}</div>`;
   const th = `<tr><th class="n">#</th>${textCols.map(c => `<th>${esc(c.en)}</th>`).join('')}${money.map(c => `<th class="r">${esc(c.en)}</th>`).join('')}</tr>`;
   if (!rows.length) return `${head}<table class="d">${th}<tr class="nil"><td class="n"></td><td colspan="${textCols.length + money.length}">Nil</td></tr></table>`;
   const body = rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${textCols.map(c => cell(c, r)).join('')}${money.map(c => cell(c, r)).join('')}</tr>`).join('');
@@ -360,19 +360,35 @@ function sectionTable(s, data) {
 
 // stmt: { year, status, data, client_note, submitted_at, reviewed_at, updated_at }
 // client: { full_name, tin, nic, address, mobile, email }
-export function buildAssetStatementHtml(stmt, client = {}, { withToolbar = true } = {}) {
+// clean: plain statement for uploading to IRD with the return — no TaxMate branding, status strip,
+// client note, Sinhala headings or firm footer (admin only).
+const CLEAN_CSS = `<style>
+.sh{display:none}
+.tb{background:#fff!important;color:#111;border:1.5px solid #111;border-radius:0}
+.tb .yb{background:#fff;border-color:#111;color:#111}.tb .ts{opacity:1;color:#333}
+.vl,.pt,.fb,table.d .tot td,.sum .tot td{color:#111!important}
+.ph,.sum .hd td{background:#333!important}
+table.d th{background:#f2f2f2;color:#111;border-bottom-color:#ccc}
+table.d .tot td{border-top-color:#111;background:#f7f7f7}
+.sum .tot td{border-top-color:#111;background:#f2f2f2}
+.sum .nw td{background:#111!important;color:#fff}
+.dc{background:#fff;border-color:#ccc;color:#444}
+.pbt{background:#111}
+</style>`;
+
+export function buildAssetStatementHtml(stmt, client = {}, { withToolbar = true, clean = false } = {}) {
   const data = stmt.data || {};
   const y = yearInfo(stmt.year);
   const t = totals(data);
-  const title = `Assets_Liabilities_${String(stmt.year || '').replace('/', '-')}_${(client.full_name || 'Client').trim().replace(/\s+/g, '_')}`;
+  const title = `${clean ? 'Statement_of_Assets_and_Liabilities' : 'Assets_Liabilities'}_${String(stmt.year || '').replace('/', '-')}_${(client.full_name || 'Client').trim().replace(/\s+/g, '_')}`;
   const strip = stmt.status === 'reviewed'
     ? `<div class="vs fin">&#10004; Reviewed by ${esc(FIRM.name)}${stmt.reviewed_at ? ` on ${fmtD(stmt.reviewed_at)}` : ''}</div>`
     : stmt.status === 'submitted'
       ? `<div class="vs sub">&#10004; Submitted by the client${stmt.submitted_at ? ` on ${fmtD(stmt.submitted_at)}` : ''} — pending review by ${esc(FIRM.name)}</div>`
       : `<div class="vs drf">&#9998; DRAFT — not yet submitted. Figures may change.</div>`;
-  const header = `<div class="sh"><div><div class="bn">Tax<span>Mate</span> Solutions</div><div class="bt">${esc(FIRM.tagline)}</div></div>
-    <div class="sc">${esc(FIRM.email)}<br>${esc(FIRM.phone)}${FIRM.whatsapp && FIRM.whatsapp !== FIRM.phone ? ` · WhatsApp ${esc(FIRM.whatsapp)}` : ''}<br>${esc(FIRM.web)}${FIRM.address ? `<br>${esc(FIRM.address)}` : ''}</div></div>
-    <div class="tb"><div><div class="tt">Statement of Assets &amp; Liabilities</div><div class="ts">වත්කම් හා බැරකම් ප්‍රකාශය &nbsp;|&nbsp; As at ${y.asAt} &nbsp;|&nbsp; Return of Income — Inland Revenue Act No. 24 of 2017</div></div><div class="yb">Y/A ${esc(stmt.year)}</div></div>`;
+  const header = `${clean ? '' : `<div class="sh"><div><div class="bn">Tax<span>Mate</span> Solutions</div><div class="bt">${esc(FIRM.tagline)}</div></div>
+    <div class="sc">${esc(FIRM.email)}<br>${esc(FIRM.phone)}${FIRM.whatsapp && FIRM.whatsapp !== FIRM.phone ? ` · WhatsApp ${esc(FIRM.whatsapp)}` : ''}<br>${esc(FIRM.web)}${FIRM.address ? `<br>${esc(FIRM.address)}` : ''}</div></div>`}
+    <div class="tb"><div><div class="tt">Statement of Assets &amp; Liabilities</div><div class="ts">${clean ? '' : 'වත්කම් හා බැරකම් ප්‍රකාශය &nbsp;|&nbsp; '}As at ${y.asAt} &nbsp;|&nbsp; Return of Income — Inland Revenue Act No. 24 of 2017</div></div><div class="yb">Y/A ${esc(stmt.year)}</div></div>`;
   const ct = `<table class="ct"><tr>
       <td><div class="lb">Name</div><div class="vl">${esc(client.full_name || '—')}</div></td>
       <td><div class="lb">TIN</div><div class="vl">${esc(client.tin || '—')}</div></td>
@@ -382,40 +398,40 @@ export function buildAssetStatementHtml(stmt, client = {}, { withToolbar = true 
       <td><div class="lb">Mobile</div><div class="vl">${esc(client.mobile || '—')}</div></td>
       <td><div class="lb">Email</div><div class="vl">${esc(client.email || '—')}</div></td></tr></table>`;
 
-  const part1 = SECTIONS.filter(s => s.part === 1).map(s => sectionTable(s, data)).join('');
-  const part2 = SECTIONS.filter(s => s.part === 2).map(s => sectionTable(s, data)).join('');
+  const part1 = SECTIONS.filter(s => s.part === 1).map(s => sectionTable(s, data, clean)).join('');
+  const part2 = SECTIONS.filter(s => s.part === 2).map(s => sectionTable(s, data, clean)).join('');
   const prev = data._meta?.prev_totals;
   const line = (l, v, cls = '') => `<tr class="${cls}"><td>${l}</td><td class="r">${v}</td></tr>`;
   const summary = `<table class="sum">
-    <tr class="hd"><td>SUMMARY — NET WORTH &nbsp;·&nbsp; සාරාංශය — ශුද්ධ වත්කම</td><td class="r">Rs.</td></tr>
+    <tr class="hd"><td>SUMMARY — NET WORTH${clean ? '' : ' &nbsp;·&nbsp; සාරාංශය — ශුද්ධ වත්කම'}</td><td class="r">Rs.</td></tr>
     ${SECTIONS.filter(s => s.group === 'asset' && s.key !== 'business').map(s => line(`${esc(s.code)}. ${esc(s.en)}`, fmtMoney(t[s.key]))).join('')}
     ${line('C. Business — capital account', fmtMoney(t.business_capital))}
     ${line('C. Business — current account', fmtMoney(t.business_current))}
-    ${line('TOTAL ASSETS · මුළු වත්කම්', fmtMoney(t.assets), 'tot')}
-    ${line('D. TOTAL LIABILITIES · මුළු බැරකම්', `(${fmtMoney(t.liabilities_total)})`, 'tot')}
+    ${line(clean ? 'TOTAL ASSETS' : 'TOTAL ASSETS · මුළු වත්කම්', fmtMoney(t.assets), 'tot')}
+    ${line(clean ? 'D. TOTAL LIABILITIES' : 'D. TOTAL LIABILITIES · මුළු බැරකම්', `(${fmtMoney(t.liabilities_total)})`, 'tot')}
     ${line(`NET WORTH as at ${y.asAt}`, fmtMoney(t.net), 'nw')}
     ${prev ? line(`Net worth as at 31 March ${y.start} (Y/A ${esc(data._meta.prev_year)})`, fmtMoney(prev.net)) + line('Change in net worth', fmtMoney(t.net - prev.net)) : ''}
     ${line(`During the year — assets acquired / gifts received`, fmtMoney(t.acquired))}
     ${line(`During the year — assets disposed / sold`, fmtMoney(t.disposed))}
   </table>`;
-  const note = stmt.client_note ? `<div class="nt"><b>Client note:</b> ${esc(stmt.client_note)}</div>` : '';
+  const note = stmt.client_note && !clean ? `<div class="nt"><b>Client note:</b> ${esc(stmt.client_note)}</div>` : '';
   const bar = withToolbar ? '<div class="bar no-print"><button class="pbt" onclick="window.print()">&#128424; Print / Save as PDF</button></div>' : '';
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}</title>${CSS}</head><body>${bar}${strip}${header}${ct}
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}</title>${CSS}${clean ? CLEAN_CSS : ''}</head><body>${bar}${clean ? '' : strip}${header}${ct}
     <div class="pt">PART 1 — ASSETS &amp; LIABILITIES AS AT ${y.asAt.toUpperCase()}</div>${part1}
     ${summary}
     <div class="pt">PART 2 — CHANGES DURING THE YEAR (${y.period.toUpperCase()})</div>${part2}
     ${note}
     <div class="dc">Values are cost or market value in Sri Lankan Rupees, as declared by the taxpayer, of assets held in or outside Sri Lanka. This statement is for disclosure with the Return of Income to the Inland Revenue Department and is not used to compute income tax.</div>
     <div class="pr"><div><div class="sg">Signature of taxpayer &nbsp;·&nbsp; Date</div></div>
-    <div class="fb"><strong>${esc(FIRM.name)}</strong>${esc(FIRM.web)} · ${esc(FIRM.phone)}</div></div>
+    ${clean ? '' : `<div class="fb"><strong>${esc(FIRM.name)}</strong>${esc(FIRM.web)} · ${esc(FIRM.phone)}</div>`}</div>
     </body></html>`;
 }
 
-export function openAssetStatement(stmt, client = {}, win = null) {
+export function openAssetStatement(stmt, client = {}, win = null, opts = {}) {
   const w = win || window.open('', '_blank', 'width=920,height=900');
   if (!w) return false;
   w.document.open();
-  w.document.write(buildAssetStatementHtml(stmt, client));
+  w.document.write(buildAssetStatementHtml(stmt, client, opts));
   w.document.close();
   w.focus();
   return true;

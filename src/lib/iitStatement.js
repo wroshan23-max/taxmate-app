@@ -92,7 +92,29 @@ const yearInfo = (year) => {
   return { start: s, label: `${s}/${s + 1}`, returnDue: `30 November ${s + 1}`, overdue: Date.now() > due.getTime() };
 };
 
+// Clean (unbranded) mode — for uploading to IRD as a supporting document. Set only while building.
+let CLEAN = false;
+const CLEAN_CSS = `<style>
+.sh{display:none}
+.tb{background:#fff!important;color:#111;border:1.5px solid #111;border-radius:0}
+.tb .yb{background:#fff;border-color:#111;color:#111}.tb .ts{opacity:1;color:#333}
+.vl{color:#111}.ph{background:#fff;color:#111;border:1px solid #111;border-bottom:none;border-radius:0}
+.st .tot td,.sl .tot td{color:#111;border-top:2px solid #111;background:#f2f2f2}
+.st .ex td{background:#fafafa;color:#444}.st .det td:nth-child(2) i{color:#444!important}
+.sl th{background:#f2f2f2;color:#111;border-bottom:1px solid #111}
+.pb,.pb.pay,.pb.ref,.pb.nil,.pb.ins{background:#fff!important;color:#111!important;border:2px solid #111;border-radius:0}
+.sm .v.neg,.st .sub .r{color:#111}
+.dc{background:#fff;border:1px solid #ccc;color:#444}
+.cl{margin-top:8px;border-top:1px solid #ccc;padding-top:6px;display:flex;justify-content:space-between;align-items:flex-end;font-size:9.5px;color:#444;page-break-inside:avoid}
+.cl .sg{margin-top:22px;width:190px}
+.tb{padding:8px 14px;margin-bottom:9px}.ct{margin-bottom:8px}
+.st td,.sl td{padding:3.4px 12px}.ct td{padding:3.5px 12px}.ph{padding:5px 12px;margin-top:7px}.sm td{padding:2px 8px}.sw{margin-top:8px}.dc{margin-top:8px;padding:6px 10px}
+.pbt{background:#111}
+</style>`;
+
 function header(title, sub, year) {
+  if (CLEAN) return `<div class="tb"><div><div class="tt">${esc(title)}</div><div class="ts">${esc(sub)}</div></div>
+    ${year ? `<div class="yb">Y/A ${esc(year)}</div>` : ''}</div>`;
   return `<div class="sh">
     <div><div class="bn">Tax<span>Mate</span> Solutions</div><div class="bt">${esc(FIRM.tagline)}</div></div>
     <div class="sc">&#128231; ${FIRM.email}<br>&#128222; ${FIRM.phone}<br>&#127758; ${FIRM.web}</div></div>
@@ -139,6 +161,8 @@ function payNote(status, year) {
 }
 
 function footer(sourceNote) {
+  if (CLEAN) return `<div class="dc">Computed under the Inland Revenue Act No. 24 of 2017 (as amended) &mdash; ${sourceNote}.</div>
+  <div class="cl"><div>Date: ${today()}<div class="sg">Signature of Taxpayer</div></div><div style="text-align:right">I declare that the information given above is true and correct.</div></div>`;
   return `<div class="dc">&#9888;&#65039; This computation is prepared from information provided by the client and IRD guidelines (${sourceNote}).
     It is for guidance only and is not a formal IRD assessment. Final liability is as assessed by the Inland Revenue Department.</div>
   <div class="pr"><div><div>Prepared by: <strong>${FIRM.name}</strong></div>
@@ -307,27 +331,35 @@ function quarterlyBody(calc, client) {
 
 // Build the full statement HTML document for a saved (or unsaved) calculation.
 // calc: { year, calc_type, input_data }  client: { full_name, tin, nic, address, employer, resident_status }
-export function buildStatementHtml(calc, client = {}, { withToolbar = true } = {}) {
+export function buildStatementHtml(calc, client = {}, { withToolbar = true, clean = false } = {}) {
   const kind = calcKind(calc);
-  const body = kind === 'return' ? returnBody(calc, client) : kind === 'quarterly' ? quarterlyBody(calc, client) : annualBody(calc, client);
-  const title = `IIT_Computation_${String(calc.year || '').replace('/', '-')}_${(client.full_name || 'Client').trim().replace(/\s+/g, '_')}`;
+  CLEAN = !!clean;
+  let body;
+  try { body = kind === 'return' ? returnBody(calc, client) : kind === 'quarterly' ? quarterlyBody(calc, client) : annualBody(calc, client); }
+  finally { CLEAN = false; }
+  const who = (client.full_name || 'Client').trim().replace(/\s+/g, '_');
+  const yr = String(calc.year || '').replace('/', '-');
+  const title = clean ? `Income_Tax_Computation_${yr}_${who}` : `IIT_Computation_${yr}_${who}`;
   const bar = withToolbar
     ? '<div class="bar no-print"><button class="pbt" onclick="window.print()">&#128424; Print / Save as PDF</button></div>' : '';
   // Anything not explicitly finalised (including unsaved previews) prints as a DRAFT
   const isFinal = calc.status === 'final';
-  const statusStrip = isFinal
-    ? `<div class="vs fin">&#10004; FINAL computation${calc.label ? ` &mdash; ${esc(calc.label)}` : ''}</div>`
-    : `<div class="wm">DRAFT</div><div class="vs drf">&#9998; DRAFT${calc.label ? ` &mdash; ${esc(calc.label)}` : ''} &mdash; prepared for your verification. Figures may change before the final return is filed.</div>`;
+  const statusStrip = clean
+    ? (isFinal ? '' : '<div class="wm">DRAFT</div>')
+    : isFinal
+      ? `<div class="vs fin">&#10004; FINAL computation${calc.label ? ` &mdash; ${esc(calc.label)}` : ''}</div>`
+      : `<div class="wm">DRAFT</div><div class="vs drf">&#9998; DRAFT${calc.label ? ` &mdash; ${esc(calc.label)}` : ''} &mdash; prepared for your verification. Figures may change before the final return is filed.</div>`;
   const extraCss = '<style>.wm{position:fixed;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-size:120px;font-weight:900;color:rgba(192,57,43,.07);pointer-events:none;white-space:nowrap;z-index:0;letter-spacing:8px}.vs{border-radius:6px;padding:6px 12px;font-size:10px;font-weight:700;margin:0 0 10px}.vs.drf{background:#FDEDEC;border:1px solid #F5B7B1;color:#922B21}.vs.fin{background:#E9F7EF;border:1px solid #A9DFBF;color:#1E8449}</style>';
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}${isFinal ? '' : '_DRAFT'}</title>${CSS}${extraCss}</head><body>${bar}${statusStrip}${body}</body></html>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>${esc(title)}${isFinal ? '' : '_DRAFT'}</title>${CSS}${extraCss}${clean ? CLEAN_CSS : ''}</head><body>${bar}${statusStrip}${body}</body></html>`;
 }
 
 // Open the statement in a new window ready to print / save as PDF.
-export function openStatement(calc, client = {}) {
+// opts.clean = true → unbranded version for uploading to IRD (admin only).
+export function openStatement(calc, client = {}, opts = {}) {
   const w = window.open('', '_blank', 'width=920,height=900');
   if (!w) return false;
   w.document.open();
-  w.document.write(buildStatementHtml(calc, client));
+  w.document.write(buildStatementHtml(calc, client, opts));
   w.document.close();
   w.focus();
   return true;
