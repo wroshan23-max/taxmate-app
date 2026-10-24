@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight, ExternalLink, Wallet } from 'lucide-react';
@@ -11,8 +11,18 @@ import InstallAppCard from '../../components/InstallAppCard';
 import { myPlans, rsPlan } from '../../lib/plans';
 import { FolderLock, UploadCloud, MessageCircle, Zap, CalendarCheck, FileBadge2 } from 'lucide-react';
 
+// Friendly names for the "Continue to …" card shown after login from a link
+const PAGE_NAMES = {
+  calculations: 'My Calculations', 'quick-tax': 'Quick Tax Check', 'tax-calculator': 'Tax Calculator', income: 'Monthly Income',
+  calendar: 'Tax Calendar', 'ird-codes': 'IRD Payment Codes', invite: 'Invite Friends', messages: 'Messages', services: 'Book a Service',
+  plan: 'My Plan', documents: 'My Documents', 'tax-returns': 'Tax Returns', assets: 'Assets & Liabilities', invoices: 'Invoices',
+  updates: 'Tax Updates', profile: 'My Profile', security: 'Security',
+};
+
 export default function ClientDashboard() {
   const { user, profile } = useAuth();
+  const next = useLocation().state?.next;
+  const nextName = next ? (PAGE_NAMES[next.replace(/^\/client\//, '').split(/[/?#]/)[0]] ?? 'the page you opened') : null;
   const [data, setData] = useState({ calcs: [], returns: [], invoices: [], updates: [], assets: [], sheets: [] });
   const [loading, setLoading] = useState(true);
   const features = useOutletContext() ?? { tax_calculator: true };
@@ -62,6 +72,17 @@ export default function ClientDashboard() {
         <h1 className="text-2xl font-bold text-primary-800">Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'} 👋</h1>
         <p className="text-sm text-gray-500">Your TaxMate dashboard</p>
       </div>
+
+      {next && (
+        <Link to={next} className="flex items-center gap-3 rounded-xl border border-gold-500/40 bg-amber-50 p-4 hover:bg-amber-100 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-gold-500 text-primary-900 flex items-center justify-center flex-shrink-0"><ExternalLink size={19} /></div>
+          <div className="flex-1">
+            <div className="font-semibold text-gray-900">Continue to {nextName}</div>
+            <div className="text-xs text-gray-600">You opened a link to this page · ඔබ විවෘත කළ පිටුවට යන්න</div>
+          </div>
+          <ChevronRight size={18} className="text-amber-700" />
+        </Link>
+      )}
 
       {unread > 0 && (
         <Link to="/client/messages" className="flex items-center gap-3 rounded-xl border border-primary-200 bg-primary-50 p-4 hover:bg-primary-100 transition-colors">
