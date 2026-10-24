@@ -10,6 +10,7 @@ import {
   Zap, CalendarCheck, Globe, Crown,
 } from 'lucide-react';
 import { websiteUrl } from '../lib/iitStatement';
+import NotificationBell from './NotificationBell';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -141,6 +142,7 @@ export default function ClientLayout() {
             Tax<span className="text-gold-500">Mate</span>
           </div>
           <div className="flex-1" />
+          <NotificationBell />
           {features.messages !== false && (
             <NavLink to="/client/messages" title="Messages" className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100">
               <MessageCircle size={19} />

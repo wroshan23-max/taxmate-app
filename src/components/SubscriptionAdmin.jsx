@@ -34,7 +34,7 @@ export default function SubscriptionAdmin({ client, userId }) {
     const p = plans.find(x => x.key === f.plan);
     if (!p) throw new Error('Choose a plan');
     if (live) {
-      const { error: e1 } = await supabase.from('subscriptions').update({ status: 'cancelled', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', live.id);
+      const { error: e1 } = await supabase.from('subscriptions').update({ status: 'cancelled', cancelled_at: new Date().toISOString(), updated_at: new Date().toISOString(), admin_note: `${live.admin_note ? `${live.admin_note}\n` : ''}Replaced by ${p.name} plan`.slice(0, 1000) }).eq('id', live.id);
       if (e1) throw e1;
     }
     const { data: created, error } = await supabase.from('subscriptions').insert({
