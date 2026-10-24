@@ -71,7 +71,7 @@ export default function ClientInvite() {
   useEffect(() => {
     (async () => {
       const [{ data, error }, { data: refs }] = await Promise.all([supabase.rpc('my_referral_link'), supabase.rpc('my_referrals')]);
-      if (error) setErr(error.message); else setUrl(`${window.location.origin}/join/${data.code}`);
+      if (error || !data?.code) setErr(error?.message || 'Could not create your invite link — please try again or message TaxMate.'); else setUrl(`${window.location.origin}/join/${data.code}`);
       setFriends(Array.isArray(refs) ? refs : []);
       setLoading(false);
     })();
