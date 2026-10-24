@@ -615,6 +615,7 @@ export const PORTAL_FEATURES = [
   ['quick_tax', '⚡', 'Quick Tax Check', 'Simple calculator — clients type their local / foreign income and see the tax instantly.'],
   ['tax_calculator', '🧮', 'Tax Calculator (detailed)', 'Full calculator — monthly / annual, local, foreign or mixed income, with reliefs.'],
   ['tax_calendar', '📅', 'Tax Calendar & due dates', 'IRD due dates on their dashboard and a full calendar.'],
+  ['ird_codes', '#️⃣', 'IRD Payment Codes', 'Clients pick a tax (APIT, VAT, SSCL, income tax…) and month and see the Tax Type Code, Payment Period Code, category and due date.'],
   ['reminders', '🔔', 'Reminders', 'Clients see your reminders and can add their own.'],
   ['documents', '🗂️', 'Document vault', 'Clients upload salary slips, bank certificates etc. and download files you share.'],
   ['return_tracker', '🚦', 'Return progress tracker', 'Clients see where their return is: Documents received → Computing → Ready to review → Filed in RAMIS.'],
