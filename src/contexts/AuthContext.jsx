@@ -22,12 +22,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) { await refreshMfa(); fetchProfile(session.user.id); }
+      // two-step status and profile load at the same time (faster start on phones)
+      if (session?.user) await Promise.all([refreshMfa(), fetchProfile(session.user.id)]);
       else setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      if (event === 'INITIAL_SESSION') return;   // already handled by getSession() above
       if (session?.user) {
         // run outside the auth callback (Supabase recommends not awaiting inside it)
         setTimeout(async () => {

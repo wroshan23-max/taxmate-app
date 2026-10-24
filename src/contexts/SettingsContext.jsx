@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { applyFirm } from '../lib/iitStatement';
-import { applyInvoiceSettings } from '../lib/invoice';
+import { applyFirm } from '../lib/firm';
+import { applyInvoiceSettings } from '../lib/invoiceConfig';
 
 const SettingsContext = createContext({ version: 0, reload: () => {} });
 
