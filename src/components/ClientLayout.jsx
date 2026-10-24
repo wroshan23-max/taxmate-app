@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { websiteUrl } from '../lib/iitStatement';
 import NotificationBell from './NotificationBell';
+import MobileDrawer from './MobileDrawer';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -57,7 +58,7 @@ export default function ClientLayout() {
   };
 
   const Sidebar = () => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       <div className="px-5 py-5 border-b border-primary-700">
         <div className="text-2xl font-black text-white">
           Tax<span className="text-gold-500">Mate</span>
@@ -65,7 +66,7 @@ export default function ClientLayout() {
         <div className="text-primary-300 text-xs mt-0.5">Client Portal</div>
       </div>
 
-      <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto px-2">
+      <nav className="flex-1 min-h-0 py-3 space-y-0.5 overflow-y-auto overscroll-contain px-2">
         {nav.filter(n => !n.feature || features[n.feature]).map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
@@ -119,19 +120,15 @@ export default function ClientLayout() {
         <Sidebar />
       </aside>
 
-      {open && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
-          <aside className="absolute left-0 top-0 h-full w-64 bg-primary-800 z-50 flex flex-col">
-            <div className="absolute top-4 right-4">
-              <button onClick={() => setOpen(false)} className="text-primary-300 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-            <Sidebar />
-          </aside>
+      {/* Mobile menu — slides in (swipe from the left edge or tap ☰) */}
+      <MobileDrawer open={open} setOpen={setOpen}>
+        <div className="absolute top-4 right-4 z-10" style={{ marginTop: 'env(safe-area-inset-top)' }}>
+          <button onClick={() => setOpen(false)} className="text-primary-300 hover:text-white p-1" aria-label="Close menu">
+            <X size={20} />
+          </button>
         </div>
-      )}
+        <Sidebar />
+      </MobileDrawer>
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
