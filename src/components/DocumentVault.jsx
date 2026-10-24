@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   UploadCloud, Camera, FolderOpen, FileText, FileSpreadsheet, FileImage, File as FileIcon, Download, Eye, Trash2,
-  Loader2, X, CheckCircle2, AlertCircle, Lock, Search, Sparkles,
+  Loader2, X, CheckCircle2, AlertCircle, Lock, Search, Sparkles, MessageCircle,
 } from 'lucide-react';
+import { FIRM, waNumber } from '../lib/firm';
 import { supabase } from '../lib/supabase';
 import {
-  DOC_CATS, CLIENT_CATS, ACCEPT, docYears, defaultDocYear, uploadDocument, signedUrl, deleteDocuments,
+  DOC_CATS, CLIENT_CATS, ACCEPT, docYears, defaultDocYear, uploadDocument, signedUrl, previewUrl, deleteDocuments,
   fmtBytes, isImage, isPdf, extOf,
 } from '../lib/documents';
 import { logActivity } from '../lib/activity';
@@ -23,15 +24,34 @@ const iconTone = (mime = '') => (isImage(mime) ? 'from-pink-500 to-rose-500' : i
  * Shared document vault.
  *  role: 'client' | 'admin'
  *  clientId: the client's id   userId: auth user id
+ *  client (admin only, optional): { full_name, mobile } for the "Send on WhatsApp" message
  */
-export default function DocumentVault({ clientId, role, userId, onChange }) {
+// Documents TaxMate sends to the client → offer a ready WhatsApp message after uploading
+const SHARE_CATS = ['ack', 'voucher', 'return', 'ird'];
+function shareMessage(client, cat, year, count) {
+  const first = String(client?.full_name || '').trim().split(/\s+/)[0] || 'there';
+  const what = { ack: 'IRD acknowledgment', voucher: 'IRD payment voucher', return: 'filed return / receipt', ird: 'IRD letter' }[cat] || 'document';
+  return [
+    `Hi ${first} 👋`,
+    '',
+    `Your *${what}${count > 1 ? 's' : ''}*${year ? ` for Y/A ${year}` : ''} ${count > 1 ? 'are' : 'is'} ready in your TaxMate portal 📄`,
+    `ඔබගේ ${what} TaxMate portal එකේ ඇත.`,
+    '',
+    `👉 ${window.location.origin}/client/documents`,
+    '',
+    `_${FIRM.name}_`,
+  ].join('\n');
+}
+
+export default function DocumentVault({ clientId, role, userId, onChange, client }) {
   const years = useMemo(() => docYears(), []);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState('all');
   const [q, setQ] = useState('');
   const [upYear, setUpYear] = useState(defaultDocYear());
-  const [upCat, setUpCat] = useState(role === 'admin' ? 'return' : 'salary');
+  const [upCat, setUpCat] = useState(role === 'admin' ? 'ack' : 'salary');
+  const [shared, setShared] = useState(null);   // { cat, year, count } after TaxMate uploads an IRD document
   const [note, setNote] = useState('');
   const [queue, setQueue] = useState([]);   // {id,name,size,state,msg}
   const [drag, setDrag] = useState(false);
@@ -75,19 +95,26 @@ export default function DocumentVault({ clientId, role, userId, onChange }) {
         set({ state: 'error', msg: e.message });
       }
     }
-    if (ok) { toast.success(`${ok} file${ok > 1 ? 's' : ''} uploaded`); setNote(''); onChange?.(); if (role === 'client') logActivity('upload', '/client/documents', `${ok} file${ok > 1 ? 's' : ''}`); }
+    if (ok) {
+      toast.success(`${ok} file${ok > 1 ? 's' : ''} uploaded`); setNote(''); onChange?.();
+      if (role === 'client') logActivity('upload', '/client/documents', `${ok} file${ok > 1 ? 's' : ''}`);
+      if (role === 'admin' && SHARE_CATS.includes(upCat)) setShared({ cat: upCat, year: upYear || null, count: ok });
+    }
   };
 
   const open = async (row) => {
     try {
-      const url = await signedUrl(row.path);
-      if (isImage(row.mime) || isPdf(row.mime)) setPreview({ row, url });
-      else window.open(url, '_blank', 'noopener');
-    } catch (e) { toast.error(e.message); }
+      if (isImage(row.mime) || isPdf(row.mime)) {
+        setPreview({ row, url: null });
+        const p = await previewUrl(row);
+        setPreview(cur => { if (cur?.row?.id !== row.id) { p.revoke(); return cur; } return { row, url: p.url, revoke: p.revoke }; });
+      } else window.open(await signedUrl(row), '_blank', 'noopener');
+    } catch (e) { setPreview(null); toast.error(e.message); }
   };
+  const closePreview = () => { preview?.revoke?.(); setPreview(null); };
   const download = async (row) => {
     try {
-      const url = await signedUrl(row.path, `${row.title}.${extOf(row.path)}`);
+      const url = await signedUrl(row, `${row.title}.${extOf(row.path)}`);
       if (role === 'client') logActivity('download', '/client/documents', row.title);
       const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
     } catch (e) { toast.error(e.message); }
@@ -99,7 +126,7 @@ export default function DocumentVault({ clientId, role, userId, onChange }) {
       const ids = new Set(confirm.rows.map(r => r.id));
       setRows(rs => rs.filter(r => !ids.has(r.id)));
       toast.success(`${confirm.rows.length} file${confirm.rows.length > 1 ? 's' : ''} deleted`);
-      setConfirm(null); setPreview(null); onChange?.();
+      setConfirm(null); closePreview(); onChange?.();
     } catch (e) { toast.error(e.message); }
   };
 
@@ -143,7 +170,7 @@ export default function DocumentVault({ clientId, role, userId, onChange }) {
                 {busy ? <Loader2 size={26} className="animate-spin" /> : <UploadCloud size={26} />}
               </div>
               <div className="mt-2 font-semibold text-gray-800 text-sm">{busy ? 'Uploading…' : 'Drop files here'}</div>
-              <div className="text-xs text-gray-500">PDF, photo, Excel, Word or CSV · up to 10 MB each</div>
+              <div className="text-xs text-gray-500">PDF, photo, Excel, Word or CSV</div>
               <div className="mt-3 flex gap-2 justify-center flex-wrap">
                 <button type="button" disabled={busy} onClick={() => camRef.current?.click()} className="btn-primary text-sm"><Camera size={15} /> Take photo</button>
                 <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} className="btn-secondary text-sm"><FolderOpen size={15} /> Choose files</button>
@@ -164,6 +191,18 @@ export default function DocumentVault({ clientId, role, userId, onChange }) {
                   </div>
                 ))}
                 {queue.filter(f => f.state === 'error').map(f => <div key={`e${f.id}`} className="text-[11px] text-red-600 px-1">{f.msg}</div>)}
+              </div>
+            )}
+            {shared && role === 'admin' && (
+              <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 text-emerald-900"><b>{DOC_CATS[shared.cat]?.label}</b> shared — {client?.full_name?.split(' ')[0] || 'the client'} sees it in My Documents and gets a 🔔 notification.</div>
+                  <button onClick={() => setShared(null)} className="text-emerald-700/60 hover:text-emerald-800"><X size={15} /></button>
+                </div>
+                <a href={`https://wa.me/${waNumber(client?.mobile || '')}?text=${encodeURIComponent(shareMessage(client, shared.cat, shared.year, shared.count))}`} target="_blank" rel="noreferrer"
+                  onClick={() => setShared(null)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] hover:brightness-95 text-white font-semibold px-3 py-1.5 text-sm"><MessageCircle size={15} /> Send on WhatsApp{client?.mobile ? '' : ' (choose contact)'}</a>
               </div>
             )}
           </div>
@@ -238,21 +277,22 @@ export default function DocumentVault({ clientId, role, userId, onChange }) {
           ))}
         </div>
       )}
-      {rows.length > 0 && <p className="text-[11px] text-gray-400 text-right">{rows.length} file{rows.length > 1 ? 's' : ''} · {fmtBytes(total)} used{role === 'client' ? ' of 150 MB' : ''}</p>}
+      {rows.length > 0 && <p className="text-[11px] text-gray-400 text-right">{rows.length} file{rows.length > 1 ? 's' : ''} · {fmtBytes(total)}{rows.some(r => r.storage === 'onedrive') && role === 'admin' ? ' · stored in OneDrive' : ''}</p>}
 
       {/* Preview */}
       {preview && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3" onClick={() => setPreview(null)}>
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3" onClick={closePreview}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
               <Eye size={16} className="text-primary-600" />
               <div className="font-semibold text-gray-800 truncate flex-1">{preview.row.title}</div>
               <button onClick={() => download(preview.row)} className="btn-secondary text-xs py-1.5"><Download size={14} /> Download</button>
               {canDelete(preview.row) && <button onClick={() => setConfirm({ rows: [preview.row], label: `"${preview.row.title}"` })} className="p-2 rounded-lg text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>}
-              <button onClick={() => setPreview(null)} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"><X size={18} /></button>
+              <button onClick={closePreview} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"><X size={18} /></button>
             </div>
             <div className="flex-1 bg-gray-100 overflow-auto flex items-center justify-center min-h-[50vh]">
-              {isImage(preview.row.mime)
+              {!preview.url ? <div className="text-gray-400 text-sm flex items-center gap-2"><Loader2 size={18} className="animate-spin" /> Opening…</div>
+                : isImage(preview.row.mime)
                 ? <img src={preview.url} alt={preview.row.title} className="max-w-full max-h-[80vh] object-contain" />
                 : <iframe src={preview.url} title={preview.row.title} className="w-full h-[80vh] bg-white" />}
             </div>
