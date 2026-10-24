@@ -119,8 +119,19 @@ export default function Register() {
           )}
 
           {state === 'ok' && !done && invitedBy && (
-            <div className="mb-4 rounded-xl bg-gradient-to-r from-gold-500/20 to-pink-100 border border-gold-500/40 px-4 py-3 text-sm text-primary-900 flex items-center gap-2">
+            <div className="mb-3 rounded-xl bg-gradient-to-r from-gold-500/20 to-pink-100 border border-gold-500/40 px-4 py-3 text-sm text-primary-900 flex items-center gap-2">
               <span className="text-xl">🎉</span> <span><b>{invitedBy}</b> invited you to {FIRM.name}. <span className="text-gray-600">ඔබට ආරාධනා කළේ {invitedBy}.</span></span>
+            </div>
+          )}
+          {state === 'ok' && !done && isPublic && (
+            <div className="mb-5 grid grid-cols-2 gap-2">
+              {[['🧮', 'Free tax calculator', 'බද්ද ක්ෂණිකව බලන්න'], ['📑', 'Returns filed in RAMIS', 'Expert කෙනෙක් file කරනවා'],
+                ['⏰', 'IRD due-date reminders', 'කල් ඉකුත් වීමට පෙර මතක් කිරීම්'], ['📲', 'Your own client portal', 'Documents & invoices phone එකෙන්']].map(([e, t, si]) => (
+                <div key={t} className="rounded-xl bg-primary-50/70 border border-primary-100 px-3 py-2 flex gap-2 items-start">
+                  <span className="text-lg leading-none mt-0.5">{e}</span>
+                  <div className="min-w-0"><div className="text-[13px] font-semibold text-primary-900 leading-tight">{t}</div><div className="text-[11px] text-gray-500 leading-tight mt-0.5">{si}</div></div>
+                </div>
+              ))}
             </div>
           )}
           {state === 'ok' && !done && (
