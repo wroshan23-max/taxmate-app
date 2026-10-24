@@ -7,27 +7,8 @@ import {
   calcKind, computeAnnual, computeQuarterly, computeReturn, yearCfg,
 } from './iitCalc';
 
-// Firm profile used on every statement, invoice and message.
-// Defaults below; Settings → Firm Profile overrides them (loaded at app start).
-export const FIRM_DEFAULTS = {
-  name: 'TaxMate Solutions',
-  tagline: 'Your Trusted Tax & Accounting Partner in Sri Lanka',
-  email: 'info@taxmatesolutions.com',
-  phone: '0719 404 604',
-  whatsapp: '0719 404 604',
-  web: 'www.taxmatesolutions.com',
-  facebook: 'TaxMateSolutions.lk',
-  address: '',
-  regNo: '',
-};
-export const FIRM = { ...FIRM_DEFAULTS };
-// Full link to the firm website (Firm Profile → Web), e.g. https://www.taxmatesolutions.com
-export const websiteUrl = () => { const w = String(FIRM.web || FIRM_DEFAULTS.web).trim(); return /^https?:\/\//i.test(w) ? w : `https://${w}`; };
-export const websiteLabel = () => websiteUrl().replace(/^https?:\/\//i, '').replace(/\/$/, '');
-export function applyFirm(v) {
-  Object.assign(FIRM, FIRM_DEFAULTS);
-  if (v) for (const [k, val] of Object.entries(v)) if (k in FIRM_DEFAULTS && val !== null && val !== undefined && String(val).trim() !== '') FIRM[k] = String(val).trim();
-}
+import { FIRM, FIRM_DEFAULTS, websiteUrl, websiteLabel, applyFirm } from './firm';
+export { FIRM, FIRM_DEFAULTS, websiteUrl, websiteLabel, applyFirm };
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const m = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

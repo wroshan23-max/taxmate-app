@@ -10,15 +10,8 @@ const rs = (v) => 'Rs. ' + Math.round(Math.abs(v || 0)).toLocaleString('en-LK');
 
 export const shareUrl = (token) => `${window.location.origin}/share/${token}`;
 
-// Sri Lankan numbers → international format for wa.me (0771234567 → 94771234567)
-export function waNumber(phone) {
-  let d = String(phone || '').replace(/\D/g, '');
-  if (!d) return '';
-  if (d.startsWith('00')) d = d.slice(2);
-  if (d.startsWith('0')) d = '94' + d.slice(1);
-  if (d.length === 9) d = '94' + d;
-  return d;
-}
+import { waNumber } from './firm';
+export { waNumber };
 
 // Return the record's share token, creating one if needed
 export async function ensureShareToken(supabase, table, row) {
