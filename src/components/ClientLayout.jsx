@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import PageLoader from './PageLoader';
 import { supabase } from '../lib/supabase';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { logActivity } from '../lib/activity';
@@ -9,7 +10,7 @@ import {
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
   Zap, CalendarCheck, Globe, Crown, Hash,
 } from 'lucide-react';
-import { websiteUrl } from '../lib/iitStatement';
+import { websiteUrl } from '../lib/firm';
 import NotificationBell from './NotificationBell';
 import MobileDrawer from './MobileDrawer';
 
@@ -153,7 +154,7 @@ export default function ClientLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Outlet context={features} />
+          <Suspense fallback={<PageLoader />}><Outlet context={features} /></Suspense>
         </main>
       </div>
     </div>

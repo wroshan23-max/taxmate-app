@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import PageLoader from './PageLoader';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { logActivity } from '../lib/activity';
@@ -136,7 +137,7 @@ export default function AdminLayout() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}><Outlet /></Suspense>
         </main>
       </div>
     </div>
