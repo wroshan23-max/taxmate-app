@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { LogIn, MessageCircle, UserPlus, ShieldCheck, FileCheck2, Clock, Globe } from 'lucide-react';
+import { LogIn, MessageCircle, UserPlus, ShieldCheck, FileCheck2, Clock, Globe, Hash } from 'lucide-react';
 import SimpleTaxCalculator from '../components/SimpleTaxCalculator';
 import { FIRM, websiteUrl } from '../lib/iitStatement';
 
@@ -49,6 +49,7 @@ export default function PublicCalculator() {
             <div className="space-y-2">
               <Link to="/join/calc" className="w-full btn-primary justify-center py-3 text-base"><UserPlus size={18} /> Register in 2 minutes</Link>
               <a href={wa()} target="_blank" rel="noreferrer" className="w-full rounded-xl bg-[#25D366] hover:brightness-95 text-white font-semibold py-3 flex items-center justify-center gap-2"><MessageCircle size={18} /> WhatsApp {FIRM.whatsapp}</a>
+              <Link to="/ird-codes" className="w-full btn-secondary justify-center py-2.5"><Hash size={16} /> IRD payment codes finder</Link>
             </div>
           </div>
         </section>

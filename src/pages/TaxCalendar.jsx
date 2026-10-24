@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CalendarDays, ChevronLeft, ChevronRight, List, LayoutGrid, Plus, Bell, X, Check, Trash2, Info, Users, User, Lock } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, List, LayoutGrid, Plus, Bell, X, Check, Trash2, Info, Users, User, Lock, Hash } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { CATS, IRD_CATS, CLIENT_DEFAULT_CATS, irdBetween, iso, todayIso, daysUntil, dueLabel, fmtDay, reminderEvent } from '../lib/taxCalendar';
@@ -180,6 +180,7 @@ export default function TaxCalendar({ role = 'admin' }) {
             <h1 className="text-xl sm:text-2xl font-bold">Tax Calendar</h1>
             <p className="text-sm text-primary-200">බදු දින දර්ශනය · Due dates from the IRD Tax Calendar{canRemind ? ' + your reminders' : ''}</p>
           </div>
+          {(!isClient || features.ird_codes !== false) && <Link to={isClient ? '/client/ird-codes' : '/admin/ird-codes'} className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 font-semibold text-sm flex items-center gap-1.5"><Hash size={15} /> Payment codes</Link>}
           {canRemind && <button onClick={() => setAdding(true)} className="px-3 py-2 rounded-xl bg-gold-500 text-primary-900 font-semibold text-sm flex items-center gap-1.5"><Plus size={15} /> Reminder</button>}
         </div>
         <div className="mt-4 flex items-center gap-2 flex-wrap">
