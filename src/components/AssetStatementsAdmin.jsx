@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Landmark, Plus, Printer, Save, X, RotateCcw, CheckCircle2, Eye, EyeOff, Trash2, Edit2, AlertTriangle, MessageSquare } from 'lucide-react';
+import { Landmark, Plus, Printer, FileCheck2, Save, X, RotateCcw, CheckCircle2, Eye, EyeOff, Trash2, Edit2, AlertTriangle, MessageSquare } from 'lucide-react';
 import { supabase, fmtDate } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -88,9 +88,9 @@ export default function AssetStatementsAdmin({ client }) {
     setBusy(false);
   };
 
-  const pdf = (s, data) => {
+  const pdf = (s, data, clean = false) => {
     const w = window.open('', '_blank', 'width=920,height=900');
-    if (!openAssetStatement({ ...s, data: data ?? s.data }, client, w)) toast.error('Pop-up blocked — allow pop-ups for this site');
+    if (!openAssetStatement({ ...s, data: data ?? s.data }, client, w, { clean })) toast.error('Pop-up blocked — allow pop-ups for this site');
   };
 
   const requestText = (s) => async () => {
@@ -146,6 +146,7 @@ export default function AssetStatementsAdmin({ client }) {
                   <div className="flex gap-1.5 flex-wrap">
                     <button onClick={() => openEditor(s)} className="btn-secondary text-xs py-1 px-2.5"><Edit2 size={13} /> Open</button>
                     <button onClick={() => pdf(s)} className="btn-secondary text-xs py-1 px-2.5"><Printer size={13} /> PDF</button>
+                    <button onClick={() => pdf(s, null, true)} className="btn-secondary text-xs py-1 px-2.5" title="Unbranded PDF — no TaxMate header or details. Upload to IRD as a supporting document."><FileCheck2 size={13} /> IRD copy</button>
                     {s.status === 'open' && (
                       <MessageMenu label="Send to client" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
                         subject={`Assets & Liabilities Y/A ${s.year} — TaxMate`} getText={requestText(s)} />
@@ -171,6 +172,7 @@ export default function AssetStatementsAdmin({ client }) {
                 <span className="text-xs text-gray-400">Changes you save here are visible to the client.</span></div>
             </div>
             <button onClick={() => pdf(edit, draft)} className="btn-secondary text-sm"><Printer size={14} /> PDF</button>
+            <button onClick={() => pdf(edit, draft, true)} className="btn-secondary text-sm" title="Unbranded PDF for uploading to IRD"><FileCheck2 size={14} /> IRD copy</button>
             <button onClick={saveEditor} disabled={busy} className="btn-primary text-sm"><Save size={14} /> Save</button>
             <button onClick={() => { setEdit(null); setDraft(null); }} className="btn-secondary text-sm"><X size={14} /> Close</button>
           </div>
