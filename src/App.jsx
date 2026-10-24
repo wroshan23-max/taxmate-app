@@ -29,6 +29,9 @@ import ClientInvite from './pages/client/ClientInvite';
 import ClientDocuments from './pages/client/ClientDocuments';
 import ClientQuickTax from './pages/client/ClientQuickTax';
 import PublicCalculator from './pages/PublicCalculator';
+import PublicIrdCodes from './pages/PublicIrdCodes';
+import IrdCodes from './pages/admin/IrdCodes';
+import ClientIrdCodes from './pages/client/ClientIrdCodes';
 import VerifyLetter from './pages/VerifyLetter';
 import AdminPayments from './pages/admin/Payments';
 import AdminSubscriptions from './pages/admin/Subscriptions';
@@ -102,6 +105,7 @@ export default function App() {
       {/* Public: reusable link for Facebook / flyers (e.g. /join/fb) */}
       <Route path="/join/:code" element={<Register />} />
       <Route path="/calculator" element={<PublicCalculator />} />
+      <Route path="/ird-codes" element={<PublicIrdCodes />} />
       <Route path="/verify/:ref" element={<VerifyLetter />} />
       <Route path="/tax-calculator" element={<PublicCalculator />} />
 
@@ -116,6 +120,7 @@ export default function App() {
         <Route path="tax-returns" element={<TaxReturns />} />
         <Route path="assets" element={<AssetStatements />} />
         <Route path="calendar" element={<TaxCalendar role="admin" />} />
+        <Route path="ird-codes" element={<IrdCodes />} />
         <Route path="invoices" element={<Invoices />} />
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
@@ -137,6 +142,7 @@ export default function App() {
         <Route path="assets" element={<ClientAssets />} />
         <Route path="tax-calculator" element={<ClientTaxCalculator />} />
         <Route path="quick-tax" element={<ClientQuickTax />} />
+        <Route path="ird-codes" element={<ClientIrdCodes />} />
         <Route path="services" element={<ClientServices />} />
         <Route path="plan" element={<ClientPlan />} />
         <Route path="income" element={<ClientIncome />} />
