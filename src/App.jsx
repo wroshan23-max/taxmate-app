@@ -1,50 +1,55 @@
+import { Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { lazyPage, whenIdle } from './lib/lazyPage';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
-import SharedDocument from './pages/SharedDocument';
-import { InvitePage, ResetPasswordPage } from './pages/AccountLinks';
-import Register from './pages/Register';
 import { MfaChallengeScreen, MfaSetupScreen } from './components/TwoFactor';
-import AdminMessages from './pages/admin/Messages';
-import Activity from './pages/admin/Activity';
-import ClientMessages from './pages/client/ClientMessages';
-import ClientSecurity from './pages/client/ClientSecurity';
-import Settings from './pages/admin/Settings';
 import { useSettings } from './contexts/SettingsContext';
 import AdminLayout from './components/AdminLayout';
 import ClientLayout from './components/ClientLayout';
-import Dashboard from './pages/admin/Dashboard';
-import Clients from './pages/admin/Clients';
-import ClientDetail from './pages/admin/ClientDetail';
-import Calculator from './pages/admin/Calculator';
-import TaxReturns from './pages/admin/TaxReturns';
-import Invoices from './pages/admin/Invoices';
-import UpdateRequests from './pages/admin/UpdateRequests';
-import TaxUpdates from './pages/admin/TaxUpdates';
-import AssetStatements from './pages/admin/AssetStatements';
-import ClientAssets from './pages/client/ClientAssets';
-import ClientTaxCalculator from './pages/client/ClientTaxCalculator';
-import ClientIncome from './pages/client/ClientIncome';
-import ClientInvite from './pages/client/ClientInvite';
-import ClientDocuments from './pages/client/ClientDocuments';
-import ClientQuickTax from './pages/client/ClientQuickTax';
-import PublicCalculator from './pages/PublicCalculator';
-import PublicIrdCodes from './pages/PublicIrdCodes';
-import IrdCodes from './pages/admin/IrdCodes';
-import ClientIrdCodes from './pages/client/ClientIrdCodes';
-import VerifyLetter from './pages/VerifyLetter';
-import AdminPayments from './pages/admin/Payments';
-import AdminSubscriptions from './pages/admin/Subscriptions';
-import ClientPlan from './pages/client/ClientPlan';
-import ServiceRequests from './pages/admin/ServiceRequests';
-import ClientServices from './pages/client/ClientServices';
-import TaxCalendar from './pages/TaxCalendar';
-import ClientDashboard from './pages/client/ClientDashboard';
-import ClientCalculations from './pages/client/ClientCalculations';
-import ClientTaxReturns from './pages/client/ClientTaxReturns';
-import ClientInvoices from './pages/client/ClientInvoices';
-import ClientProfile from './pages/client/ClientProfile';
-import ClientTaxUpdates from './pages/client/ClientTaxUpdates';
+
+// Pages load on demand (smaller first download on phones). lazyPage() also lets us preload.
+const SharedDocument = lazyPage(() => import('./pages/SharedDocument'));
+const Register = lazyPage(() => import('./pages/Register'));
+const AdminMessages = lazyPage(() => import('./pages/admin/Messages'));
+const Activity = lazyPage(() => import('./pages/admin/Activity'));
+const ClientMessages = lazyPage(() => import('./pages/client/ClientMessages'));
+const ClientSecurity = lazyPage(() => import('./pages/client/ClientSecurity'));
+const Settings = lazyPage(() => import('./pages/admin/Settings'));
+const Dashboard = lazyPage(() => import('./pages/admin/Dashboard'));
+const Clients = lazyPage(() => import('./pages/admin/Clients'));
+const ClientDetail = lazyPage(() => import('./pages/admin/ClientDetail'));
+const Calculator = lazyPage(() => import('./pages/admin/Calculator'));
+const TaxReturns = lazyPage(() => import('./pages/admin/TaxReturns'));
+const Invoices = lazyPage(() => import('./pages/admin/Invoices'));
+const UpdateRequests = lazyPage(() => import('./pages/admin/UpdateRequests'));
+const TaxUpdates = lazyPage(() => import('./pages/admin/TaxUpdates'));
+const AssetStatements = lazyPage(() => import('./pages/admin/AssetStatements'));
+const ClientAssets = lazyPage(() => import('./pages/client/ClientAssets'));
+const ClientTaxCalculator = lazyPage(() => import('./pages/client/ClientTaxCalculator'));
+const ClientIncome = lazyPage(() => import('./pages/client/ClientIncome'));
+const ClientInvite = lazyPage(() => import('./pages/client/ClientInvite'));
+const ClientDocuments = lazyPage(() => import('./pages/client/ClientDocuments'));
+const ClientQuickTax = lazyPage(() => import('./pages/client/ClientQuickTax'));
+const PublicCalculator = lazyPage(() => import('./pages/PublicCalculator'));
+const PublicIrdCodes = lazyPage(() => import('./pages/PublicIrdCodes'));
+const IrdCodes = lazyPage(() => import('./pages/admin/IrdCodes'));
+const ClientIrdCodes = lazyPage(() => import('./pages/client/ClientIrdCodes'));
+const VerifyLetter = lazyPage(() => import('./pages/VerifyLetter'));
+const AdminPayments = lazyPage(() => import('./pages/admin/Payments'));
+const AdminSubscriptions = lazyPage(() => import('./pages/admin/Subscriptions'));
+const ClientPlan = lazyPage(() => import('./pages/client/ClientPlan'));
+const ServiceRequests = lazyPage(() => import('./pages/admin/ServiceRequests'));
+const ClientServices = lazyPage(() => import('./pages/client/ClientServices'));
+const TaxCalendar = lazyPage(() => import('./pages/TaxCalendar'));
+const ClientDashboard = lazyPage(() => import('./pages/client/ClientDashboard'));
+const ClientCalculations = lazyPage(() => import('./pages/client/ClientCalculations'));
+const ClientTaxReturns = lazyPage(() => import('./pages/client/ClientTaxReturns'));
+const ClientInvoices = lazyPage(() => import('./pages/client/ClientInvoices'));
+const ClientProfile = lazyPage(() => import('./pages/client/ClientProfile'));
+const ClientTaxUpdates = lazyPage(() => import('./pages/client/ClientTaxUpdates'));
+const InvitePage = lazyPage(() => import('./pages/AccountLinks').then(m => ({ default: m.InvitePage })));
+const ResetPasswordPage = lazyPage(() => import('./pages/AccountLinks').then(m => ({ default: m.ResetPasswordPage })));
 
 function LoadingScreen() {
   return (
@@ -89,9 +94,32 @@ function RootRedirect() {
   return <Navigate to="/login" replace />;
 }
 
+// Fetch the pages people open first in the background, so they appear instantly
+function Preload() {
+  const { user, isAdmin, isClient } = useAuth();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (!user) {
+      if (pathname === '/login') whenIdle(() => { ClientDashboard.preload(); Dashboard.preload(); });
+      return;
+    }
+    if (isClient) {
+      ClientDashboard.preload();
+      whenIdle(() => [ClientDocuments, ClientTaxReturns, ClientInvoices, ClientCalculations, ClientMessages].forEach(c => c.preload()));
+    }
+    if (isAdmin) {
+      Dashboard.preload();
+      whenIdle(() => [Clients, ClientDetail, TaxReturns, Invoices, Calculator].forEach(c => c.preload()));
+    }
+  }, [user, isAdmin, isClient, pathname]);
+  return null;
+}
+
 export default function App() {
   useSettings();   // re-render pages when firm / invoice settings load or change
   return (
+    <Suspense fallback={<LoadingScreen />}>
+    <Preload />
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
@@ -158,5 +186,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }
