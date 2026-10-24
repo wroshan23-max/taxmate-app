@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Plus, FileText, X, Search, Printer } from 'lucide-react';
+import { Plus, FileText, X, Search, Printer, FileCheck2 } from 'lucide-react';
 import { summarizeCalc } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
 import { ReturnStepper, setReturnStage } from '../../components/ReturnTracker';
@@ -132,7 +132,14 @@ export default function TaxReturns() {
                           className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-primary-200 text-primary-700 hover:bg-primary-50">
                           <Printer size={12} /> PDF
                         </button>
-                      ) : <span className="text-xs text-gray-300" title="No saved calculation for this year">no calc</span>}
+                      ) : null}
+                      {calc && (
+                        <button onClick={() => openStatement(calc, r.clients ?? {}, { clean: true })} title="Unbranded PDF for uploading to IRD"
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
+                          <FileCheck2 size={12} /> IRD copy
+                        </button>
+                      )}
+                      {calc ? null : <span className="text-xs text-gray-300" title="No saved calculation for this year">no calc</span>}
                       </div>
                     </td>
                   </tr>

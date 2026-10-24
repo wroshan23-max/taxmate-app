@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Landmark, Printer, CheckCircle2, Users, Search, Zap } from 'lucide-react';
+import { Landmark, Printer, FileCheck2, CheckCircle2, Users, Search, Zap } from 'lucide-react';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -75,9 +75,9 @@ export default function AssetStatements() {
     load();
   };
 
-  const pdf = (s, c) => {
+  const pdf = (s, c, clean = false) => {
     const w = window.open('', '_blank', 'width=920,height=900');
-    if (!openAssetStatement(s, c, w)) toast.error('Pop-up blocked — allow pop-ups for this site');
+    if (!openAssetStatement(s, c, w, { clean })) toast.error('Pop-up blocked — allow pop-ups for this site');
   };
 
   const tabs = [
@@ -144,6 +144,7 @@ export default function AssetStatements() {
                       </div>
                       <div className="flex gap-1.5">
                         <button onClick={() => pdf(s, c)} className="btn-secondary text-xs py-1 px-2.5"><Printer size={13} /> PDF</button>
+                        <button onClick={() => pdf(s, c, true)} className="btn-secondary text-xs py-1 px-2.5" title="Unbranded PDF — no TaxMate header or details. Upload to IRD as a supporting document."><FileCheck2 size={13} /> IRD copy</button>
                         {s.status === 'submitted' && <button onClick={() => markReviewed(s)} className="btn-primary text-xs py-1 px-2.5"><CheckCircle2 size={13} /> Reviewed</button>}
                         {s.status === 'open' && c.profile_id && (
                           <MessageMenu label="Send" phone={c.mobile} email={c.email} recipients={recipientsOf(c)} subject={`Assets & Liabilities Y/A ${year} — TaxMate`}

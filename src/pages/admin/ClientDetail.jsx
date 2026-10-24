@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Edit2, Save, X, Calculator, FileText, Receipt, Printer } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Calculator, FileText, Receipt, Printer, FileCheck2 } from 'lucide-react';
 import SavedCalculations from '../../components/SavedCalculations';
 import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
@@ -335,9 +335,14 @@ export default function ClientDetail() {
                         )}
                       </div>
                       {calc && (
-                        <button onClick={() => openStatement(calc, client)} className="btn-secondary text-xs py-1 px-2.5">
-                          <Printer size={13} /> PDF
-                        </button>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => openStatement(calc, client)} className="btn-secondary text-xs py-1 px-2.5">
+                            <Printer size={13} /> PDF
+                          </button>
+                          <button onClick={() => openStatement(calc, client, { clean: true })} className="btn-secondary text-xs py-1 px-2.5" title="Unbranded PDF — no TaxMate header or details. Upload to IRD as a supporting document.">
+                            <FileCheck2 size={13} /> IRD copy
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div className="rounded-xl bg-gray-50/70 border border-gray-100 p-3">
