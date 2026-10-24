@@ -371,7 +371,7 @@ export default function ClientDetail() {
         <div className="space-y-3">
           {client.feature_overrides?.documents === false && (
             <div className="card p-3 text-sm bg-amber-50 border-amber-200 text-amber-800 flex items-center gap-2"><FolderLock size={15} /> Document vault is switched off for this client — they can't see or upload files. Turn it on in Overview → Portal features.</div>)}
-          <DocumentVault clientId={id} role="admin" userId={user?.id} onChange={countNewDocs} />
+          <DocumentVault clientId={id} role="admin" userId={user?.id} onChange={countNewDocs} client={client} />
         </div>
       )}
 

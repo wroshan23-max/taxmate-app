@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { payhereStatus } from '../../lib/payments';
 import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
-import { Crown } from 'lucide-react';
+import { Crown, Cloud } from 'lucide-react';
 import { loadPlans, savePlans, DEFAULT_PLANS, planStyle } from '../../lib/plans';
 import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon, CreditCard, ExternalLink, Mail, Send, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -15,6 +15,7 @@ import { callPortal, inviteUrl, resetUrl, inviteMessage, resetMessage } from '..
 import { InvoiceSettings } from './Invoices';
 import MessageMenu from '../../components/MessageMenu';
 import ChangePassword from '../../components/ChangePassword';
+import StorageSettings from '../../components/StorageSettings';
 
 const TABS = [
   ['firm', Building2, 'Firm Profile'],
@@ -24,12 +25,14 @@ const TABS = [
   ['portal', MonitorSmartphone, 'Client Portal'],
   ['payments', CreditCard, 'Payments'],
   ['plans', Crown, 'Plans'],
+  ['storage', Cloud, 'File storage'],
   ['email', Mail, 'Email reminders'],
   ['me', UserCog, 'My Account'],
 ];
 
 export default function Settings() {
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'firm');
+  // ?code=… means we are back from the Microsoft (OneDrive) sign-in
+  const [tab, setTab] = useState(() => { const q = new URLSearchParams(window.location.search); return q.get('code') || q.get('error') ? 'storage' : (q.get('tab') || 'firm'); });
   return (
     <div className="space-y-5">
       <div>
@@ -51,6 +54,7 @@ export default function Settings() {
       {tab === 'portal' && <PortalTab />}
       {tab === 'payments' && <PaymentsTab />}
       {tab === 'plans' && <PlansTab />}
+      {tab === 'storage' && <StorageSettings />}
       {tab === 'email' && <EmailTab />}
       {tab === 'me' && <MyAccountTab />}
     </div>
