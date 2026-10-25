@@ -39,6 +39,7 @@ const VerifyLetter = lazyPage(() => import('./pages/VerifyLetter'));
 const AdminPayments = lazyPage(() => import('./pages/admin/Payments'));
 const AdminSubscriptions = lazyPage(() => import('./pages/admin/Subscriptions'));
 const ClientPlan = lazyPage(() => import('./pages/client/ClientPlan'));
+const ClientPayroll = lazyPage(() => import('./pages/client/ClientPayroll'));
 const ServiceRequests = lazyPage(() => import('./pages/admin/ServiceRequests'));
 const ClientServices = lazyPage(() => import('./pages/client/ClientServices'));
 const TaxCalendar = lazyPage(() => import('./pages/TaxCalendar'));
@@ -173,6 +174,7 @@ export default function App() {
         <Route path="ird-codes" element={<ClientIrdCodes />} />
         <Route path="services" element={<ClientServices />} />
         <Route path="plan" element={<ClientPlan />} />
+        <Route path="payroll" element={<ClientPayroll />} />
         <Route path="income" element={<ClientIncome />} />
         <Route path="calendar" element={<TaxCalendar role="client" />} />
         <Route path="invite" element={<ClientInvite />} />
