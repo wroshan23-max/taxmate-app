@@ -43,6 +43,7 @@ export function billTo(inv) {
   const c = inv.clients || {};
   return {
     name: s.name || c.full_name || '',
+    clientNo: s.client_no ?? c.client_no ?? '',
     tin: s.tin ?? c.tin ?? '',
     nic: s.nic ?? c.nic ?? '',
     phone: s.phone ?? c.mobile ?? '',
@@ -120,7 +121,7 @@ body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#111;backgro
     <div style="font-size:7.5pt;font-weight:800;color:#6b7a99;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Bill To (Client)</div>
     <div style="font-weight:800;color:#1a3c6e;font-size:11pt">${esc(c.name)}</div>
     <div style="font-size:9pt;color:#444;line-height:1.8;margin-top:3px">
-      ${c.tin ? 'TIN: ' + esc(c.tin) + '<br>' : ''}${c.nic ? 'NIC: ' + esc(c.nic) + '<br>' : ''}${c.phone ? esc(c.phone) + '<br>' : ''}${c.email ? esc(c.email) + '<br>' : ''}${c.address ? esc(c.address) : ''}
+      ${c.clientNo ? 'Client No: ' + esc(c.clientNo) + '<br>' : ''}${c.tin ? 'TIN: ' + esc(c.tin) + '<br>' : ''}${c.nic ? 'NIC: ' + esc(c.nic) + '<br>' : ''}${c.phone ? esc(c.phone) + '<br>' : ''}${c.email ? esc(c.email) + '<br>' : ''}${c.address ? esc(c.address) : ''}
     </div>
   </div>
 </div>
@@ -195,7 +196,7 @@ export function exportInvoicesCSV(rows, banks = []) {
 // Fetch everything needed to print one saved invoice
 export async function loadInvoiceForPrint(supabase, invoiceId) {
   const { data: inv, error } = await supabase.from('invoices')
-    .select('*, clients(full_name, tin, nic, mobile, email, address), invoice_items(*)').eq('id', invoiceId).single();
+    .select('*, clients(client_no, full_name, tin, nic, mobile, email, address), invoice_items(*)').eq('id', invoiceId).single();
   if (error) throw error;
   let bank = null;
   if (inv.bank_account_id) {
