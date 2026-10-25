@@ -8,6 +8,8 @@ import DeleteClientDialog from '../../components/DeleteClientDialog';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import RegistrationLinks from '../../components/RegistrationLinks';
 import { hasContact, contactLabel } from '../../lib/contacts';
+import { activePlansByClient, planStyle } from '../../lib/plans';
+import { PlanAvatar, PlanBadge } from '../../components/PlanBadge';
 
 const EMPTY = { full_name: '', tin: '', nic: '', email: '', mobile: '', address: '', employer: '', resident_status: 'resident', contact_name: '', contact_relation: '', contact_mobile: '', contact_email: '', contact_preferred: false };
 
@@ -24,6 +26,9 @@ export default function Clients() {
   const [clients, setClients] = useState([]);
   const [ird, setIrd] = useState({});   // { client_id: { pin, ssid } } — flags only, no secrets
   useEffect(() => { supabase.rpc('admin_ird_flags').then(({ data }) => data && setIrd(data)); }, []);
+  const [plans, setPlans] = useState({});   // { client_id: active subscription }
+  const [onlySubs, setOnlySubs] = useState(false);
+  useEffect(() => { activePlansByClient().then(setPlans).catch(() => {}); }, []);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
@@ -46,6 +51,7 @@ export default function Clients() {
   const newCount = clients.filter(isNew).length;
   const archivedCount = clients.filter(c => c.archived_at).length;
   const active = clients.filter(c => !c.archived_at);
+  const subCount = active.filter(c => plans[c.id]).length;
   const nameOf = Object.fromEntries(clients.map(c => [c.id, c.full_name]));
   const restore = async (c) => {
     const { error } = await supabase.from('clients').update({ archived_at: null }).eq('id', c.id);
@@ -56,6 +62,7 @@ export default function Clients() {
   const filtered = clients.filter(c =>
     (showArchived ? !!c.archived_at : !c.archived_at) &&
     (!onlyNew || isNew(c)) &&
+    (!onlySubs || !!plans[c.id]) &&
     [c.client_no, c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -81,6 +88,7 @@ export default function Clients() {
           <h1 className="text-2xl font-bold text-primary-800">Clients</h1>
           <p className="text-sm text-gray-500">{active.length} clients
             {archivedCount > 0 && <button onClick={() => setShowArchived(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${showArchived ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600'}`}><Archive size={11} className="inline -mt-0.5" /> {archivedCount} archived{showArchived ? ' ✕' : ''}</button>}
+            {subCount > 0 && <button onClick={() => setOnlySubs(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${onlySubs ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-white' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>👑 {subCount} subscriber{subCount > 1 ? 's' : ''}{onlySubs ? ' ✕' : ''}</button>}
             {newCount > 0 && <button onClick={() => setOnlyNew(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${onlyNew ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-800'}`}>{newCount} new registration{newCount > 1 ? 's' : ''}{onlyNew ? ' ✕' : ''}</button>}
           </p>
         </div>
@@ -128,16 +136,15 @@ export default function Clients() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(c => (
-                  <tr key={c.id} className="group cursor-pointer hover:bg-primary-50/50 transition-colors"
+                  <tr key={c.id} className={`group cursor-pointer hover:bg-primary-50/50 transition-colors ${plans[c.id] ? planStyle(plans[c.id].plan_key).row : ''}`}
                     onClick={(e) => openRow(e, c.id)} onAuxClick={(e) => e.button === 1 && openRow(e, c.id)}>
                     <td className="table-td">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm flex-shrink-0">
-                          {c.full_name?.[0] ?? '?'}
-                        </div>
+                        <PlanAvatar name={c.full_name} plan={plans[c.id]} />
                         <div>
                           <div className="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap">{c.full_name}
                             {c.client_no && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 border border-primary-100">{c.client_no}</span>}
+                            <PlanBadge plan={plans[c.id]} compact />
                             {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · {c.registration?.via && c.registration.via !== 'personal link' ? `via ${c.registration.via}` : 'self-registered'}</span>}</div>
                           <div className="text-xs text-gray-400">{c.email ?? '—'}</div>
                           {c.referred_by && <div className="text-[11px] text-purple-700 flex items-center gap-1 mt-0.5"><Gift size={11} /> Referred by {nameOf[c.referred_by] ?? 'a client'}</div>}

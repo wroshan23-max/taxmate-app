@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
+import { PlanAvatar, PlanBadge } from '../../components/PlanBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Edit2, Save, X, Calculator, FileText, Receipt, Printer, FileCheck2 } from 'lucide-react';
@@ -40,6 +41,11 @@ export default function ClientDetail() {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview');
 
   useEffect(() => { loadAll(); }, [id]);
+  const [plan, setPlan] = useState(null);   // active subscription → premium look in the header
+  useEffect(() => {
+    supabase.from('subscriptions').select('plan_key, plan_name, start_date').eq('client_id', id).eq('status', 'active').maybeSingle()
+      .then(({ data }) => setPlan(data ?? null));
+  }, [id]);
   const [newDocs, setNewDocs] = useState(0);
   const countNewDocs = () => supabase.from('client_documents').select('id', { count: 'exact', head: true })
     .eq('client_id', id).eq('uploaded_role', 'client').is('seen_at', null).then(({ count }) => setNewDocs(count ?? 0));
@@ -111,14 +117,13 @@ export default function ClientDetail() {
         <Link to="/admin/clients" className="text-gray-400 hover:text-gray-600">
           <ArrowLeft size={20} />
         </Link>
-        <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-xl">
-          {client.full_name?.[0]}
-        </div>
+        <PlanAvatar name={client.full_name} plan={plan} size="lg" />
         <div>
           <h1 className="text-2xl font-bold text-primary-800 flex items-center gap-2 flex-wrap">{client.full_name}
             {client.client_no && <button type="button" title="Client registration number — click to copy"
               onClick={() => { navigator.clipboard?.writeText(client.client_no).then(() => toast.success(`${client.client_no} copied`)).catch(() => {}); }}
-              className="font-mono text-xs font-bold px-2 py-1 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100">{client.client_no}</button>}</h1>
+              className="font-mono text-xs font-bold px-2 py-1 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100">{client.client_no}</button>}
+            {plan && <PlanBadge plan={plan} className="text-xs px-2.5 py-1" />}</h1>
           <div className="text-sm text-gray-500">TIN: {client.tin ?? '—'} · {client.email ?? '—'}</div>
           {hasContact(client) && (
             <div className="text-xs text-primary-700 mt-0.5 flex items-center gap-1"><UserRound size={12} /> Contact: {contactLabel(client)}{client.contact_mobile && ` · ${client.contact_mobile}`}{client.contact_preferred && ' ★ coordinates'}</div>

@@ -730,7 +730,7 @@ function PlansTab() {
         Monthly plans clients can request from their portal (<b>My Plan</b>). Changing a price here does not change clients already on a plan —
         edit their price on the client page. Assign plans and see monthly income under <Link to="/admin/subscriptions" className="text-primary-700 font-semibold hover:underline">Subscriptions</Link>.
       </div>
-      <div className="grid lg:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
         {plans.map((p, i) => (
           <div key={i} className={`card overflow-hidden ${p.active === false ? 'opacity-60' : ''}`}>
             <div className={`bg-gradient-to-r ${planStyle(p.key).head} text-white px-4 py-2 flex items-center gap-2`}>
