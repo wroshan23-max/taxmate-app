@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useOutletContext } from 'react-router-dom';
+import { PlanBadge } from '../../components/PlanBadge';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Calculator, FileText, Receipt, Bell, User, Landmark, ChevronRight, ExternalLink, Wallet } from 'lucide-react';
@@ -71,7 +72,8 @@ export default function ClientDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-primary-800">Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'} 👋</h1>
+        <h1 className="text-2xl font-bold text-primary-800 flex items-center gap-2 flex-wrap">Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'} 👋
+          {features.myPlan && <Link to="/client/plan"><PlanBadge plan={features.myPlan} className="text-xs px-2.5 py-1 align-middle" /></Link>}</h1>
         <p className="text-sm text-gray-500">Your TaxMate dashboard{clientNo && <> · Client No. <span className="font-mono font-bold text-primary-700">{clientNo}</span></>}</p>
       </div>
 

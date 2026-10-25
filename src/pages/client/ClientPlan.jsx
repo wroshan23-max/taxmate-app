@@ -40,7 +40,7 @@ export default function ClientPlan() {
   };
   const cur = d.current, req = d.request;
   const iitFrom = cur?.start_date ? plus3m(cur.start_date) : null;
-  const iitPending = iitFrom && iitFrom > new Date();
+  const iitPending = iitFrom && iitFrom > new Date() && cur.plan_key !== 'starter';   // Starter doesn't include IIT filing
 
   return (
     <div className="space-y-5">
@@ -64,14 +64,14 @@ export default function ClientPlan() {
         </div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className={`grid gap-4 ${d.plans.length >= 4 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3'}`}>
         {d.plans.map(p => {
           const st = planStyle(p.key); const mine = cur?.plan_key === p.key; const asked = req?.plan_key === p.key;
           return (
             <div key={p.key} className={`card overflow-hidden flex flex-col ${mine ? `ring-2 ${st.ring}` : ''} ${p.key === 'standard' ? 'md:-translate-y-1 shadow-lg' : ''}`}>
               <div className={`bg-gradient-to-br ${st.head} text-white p-5`}>
-                <div className="flex items-center gap-2"><span className="text-2xl">{st.emoji}</span><span className="text-lg font-bold">{p.name}</span>{p.key === 'standard' && <span className="ml-auto text-[10px] font-bold uppercase bg-white/20 rounded-full px-2 py-0.5">Most popular</span>}</div>
-                <div className="text-3xl font-black mt-3">{rsPlan(p.price)}<span className="text-sm font-normal opacity-80"> / month</span></div>
+                <div className="flex items-center gap-2"><span className="text-2xl">{st.emoji}</span><span className="text-lg font-bold">{p.name}</span>{p.key === 'standard' && <span className="ml-auto text-[10px] font-bold uppercase bg-white/20 rounded-full px-2 py-0.5 whitespace-nowrap">★ Popular</span>}</div>
+                <div className="text-3xl xl:text-[1.65rem] 2xl:text-3xl font-black mt-3 whitespace-nowrap">{rsPlan(p.price)}<span className="text-sm font-normal opacity-80"> / month</span></div>
                 <div className="text-xs opacity-90 mt-1">{p.tagline}</div>
               </div>
               <ul className="p-5 space-y-2 text-sm flex-1">
