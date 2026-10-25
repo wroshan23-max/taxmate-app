@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wallet, Plus, Eye, EyeOff, Trash2, RotateCcw, CheckCircle2, FileSpreadsheet, ChevronDown, ChevronUp, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Wallet, Plus, Eye, EyeOff, Trash2, RotateCcw, CheckCircle2, FileSpreadsheet, ChevronDown, ChevronUp, MessageSquare, AlertTriangle, PencilLine } from 'lucide-react';
+import IncomeSheetEditor from './IncomeSheetEditor';
 import { supabase, fmtDate } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { filingYear, alYears } from '../lib/assets';
@@ -57,6 +58,7 @@ export default function IncomeSheetsAdmin({ client }) {
   const [loading, setLoading] = useState(true);
   const [year, setYear] = useState(filingYear());
   const [openId, setOpenId] = useState(null);
+  const [editId, setEditId] = useState(null);
 
   const load = async () => {
     const { data, error } = await supabase.from('income_sheets').select('*').eq('client_id', client.id).order('year', { ascending: false });
@@ -66,11 +68,13 @@ export default function IncomeSheetsAdmin({ client }) {
   useEffect(() => { load(); }, [client.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const have = new Set(list.map(s => s.year));
 
-  const enable = async () => {
-    const { error } = await supabase.from('income_sheets').insert({ client_id: client.id, year, data: emptySheet(), created_by: user.id });
+  // forClient = the client fills it in the portal; otherwise TaxMate enters it (hidden from the client)
+  const enable = async (forClient = true) => {
+    const { data: row, error } = await supabase.from('income_sheets').insert({ client_id: client.id, year, data: emptySheet(), enabled: forClient, created_by: user.id }).select().single();
     if (error) return toast.error(/duplicate|unique/i.test(error.message) ? `A Y/A ${year} sheet already exists` : error.message);
-    toast.success(`Monthly income sheet enabled for Y/A ${year}`);
-    load();
+    toast.success(forClient ? `Monthly income sheet enabled for Y/A ${year}` : `Y/A ${year} sheet ready — enter the figures`);
+    await load();
+    if (!forClient && row) { setOpenId(null); setEditId(row.id); }
   };
   const patch = async (s, fields, msg) => {
     const { error } = await supabase.from('income_sheets').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', s.id);
@@ -125,9 +129,10 @@ WhatsApp ${FIRM.whatsapp}`;
               {alYears().map(y => <option key={y} value={y} disabled={have.has(y)}>{y}{have.has(y) ? ' ✓' : ''}</option>)}
             </select>
           </div>
-          <button onClick={enable} disabled={have.has(year)} className="btn-primary text-sm"><Plus size={15} /> Enable for Y/A {year}</button>
+          <button onClick={() => enable(true)} disabled={have.has(year) || !client.profile_id} title={client.profile_id ? '' : 'No portal login yet'} className="btn-primary text-sm"><Plus size={15} /> Enable for client · Y/A {year}</button>
+          <button onClick={() => enable(false)} disabled={have.has(year)} className="btn-secondary text-sm"><PencilLine size={15} /> I'll enter it myself</button>
         </div>
-        <p className="text-xs text-gray-400">The client enters each month's salary, rent, interest, foreign income and business income &amp; expenses, then submits. Use <b>Open in IIT Return</b> to turn it into a computation.</p>
+        <p className="text-xs text-gray-400">The client enters each month's salary, rent, interest, foreign income and business income &amp; expenses, then submits — or you enter / correct the figures yourself with <b>Edit</b> (e.g. from bank statements or a WhatsApp photo). Use <b>Open in IIT Return</b> to turn it into a computation.</p>
       </div>
       {loading ? <div className="p-6 text-sm text-gray-400">Loading…</div> : list.length === 0 ? (
         <div className="p-8 text-center text-gray-400 text-sm border-t border-gray-100">No income sheets yet</div>
@@ -146,7 +151,8 @@ WhatsApp ${FIRM.whatsapp}`;
                     {s.client_note && <div className="text-xs text-blue-800 mt-0.5 flex gap-1"><MessageSquare size={11} className="mt-0.5" /> {s.client_note}</div>}
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
-                    <button onClick={() => setOpenId(isOpen ? null : s.id)} className="btn-secondary text-xs py-1 px-2.5">{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} View</button>
+                    <button onClick={() => { setEditId(editId === s.id ? null : s.id); setOpenId(null); }} className={`text-xs py-1 px-2.5 ${editId === s.id ? 'btn-primary' : 'btn-secondary'}`}><PencilLine size={13} /> Edit</button>
+                    <button onClick={() => { setOpenId(isOpen ? null : s.id); setEditId(null); }} className="btn-secondary text-xs py-1 px-2.5">{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} View</button>
                     <button onClick={() => toReturn(s)} className="btn-primary text-xs py-1 px-2.5"><FileSpreadsheet size={13} /> Open in IIT Return</button>
                     {s.status === 'open' && <MessageMenu label="Send" phone={client.mobile} email={client.email} recipients={recipientsOf(client)} subject={`Monthly income Y/A ${s.year} — TaxMate`} getText={msg(s)} />}
                     {s.status === 'submitted' && <button onClick={() => patch(s, { status: 'reviewed', reviewed_at: new Date().toISOString() }, 'Marked reviewed')} className="btn-secondary text-xs py-1 px-2.5"><CheckCircle2 size={13} /> Reviewed</button>}
@@ -156,6 +162,7 @@ WhatsApp ${FIRM.whatsapp}`;
                   </div>
                 </div>
                 {isOpen && <div className="px-2 pb-4"><YearTable data={s.data} /></div>}
+                {editId === s.id && <IncomeSheetEditor key={s.id} sheet={s} client={client} onClose={() => setEditId(null)} onSaved={load} />}
               </div>
             );
           })}
