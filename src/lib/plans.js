@@ -2,13 +2,13 @@
 import { supabase } from './supabase';
 
 export const DEFAULT_PLANS = [
-  { key: 'starter', name: 'Starter', price: 500, active: true, includes_review: false, tagline: 'For self-filers & basic tax support',
+  { key: 'starter', name: 'Starter', price: 500, active: true, includes_review: false, includes_payroll: false, tagline: 'For self-filers & basic tax support',
     features: ['TaxMate client portal access', 'Tax calendar & deadline reminders', 'Annual income & expense checklist', 'Tax document checklist', 'Basic TIN / RAMIS guidance', 'Basic tax guidance', 'WhatsApp support – basic queries'] },
-  { key: 'basic', name: 'Basic', price: 2500, active: true, includes_review: false, tagline: 'For salaried & simple returns',
+  { key: 'basic', name: 'Basic', price: 2500, active: true, includes_review: false, includes_payroll: false, tagline: 'For salaried & simple returns',
     features: ['Annual income tax return (IIT) filing', 'TIN / RAMIS account support', 'Tax calendar & deadline reminders', 'Client portal & document vault', 'WhatsApp support'] },
-  { key: 'standard', name: 'Standard', price: 6500, active: true, includes_review: false, tagline: 'For freelancers & small businesses',
+  { key: 'standard', name: 'Standard', price: 6500, active: true, includes_review: false, includes_payroll: true, tagline: 'For freelancers & small businesses',
     features: ['Everything in Basic', 'Monthly bookkeeping (up to 50 transactions)', 'Monthly APIT / payroll tax computation', 'Quarterly instalment calculation', 'Income & Tax summary letter (1 per year)'] },
-  { key: 'premium', name: 'Premium', price: 15000, active: true, includes_review: true, tagline: 'Complete tax & accounting care',
+  { key: 'premium', name: 'Premium', price: 15000, active: true, includes_review: true, includes_payroll: true, tagline: 'Complete tax & accounting care',
     features: ['Everything in Standard', 'Payroll, EPF / ETF returns', 'VAT / SSCL returns (if registered)', 'Annual Tax Review report — free', 'Quarterly review call & priority WhatsApp'] },
 ];
 // Look of each plan. avatar/badge/row are used to highlight subscribers (admin lists + client portal).
@@ -47,7 +47,7 @@ export async function savePlans(plans) {
     key: String(p.key || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 30) || 'plan',
     name: String(p.name || '').trim().slice(0, 60) || 'Plan',
     price: Math.max(0, Math.round(Number(p.price) || 0)),
-    active: p.active !== false, includes_review: !!p.includes_review,
+    active: p.active !== false, includes_review: !!p.includes_review, includes_payroll: !!p.includes_payroll,
     tagline: String(p.tagline || '').trim().slice(0, 80),
     features: (p.features || []).map(f => String(f).trim()).filter(Boolean).slice(0, 12),
   }));
@@ -94,3 +94,51 @@ export async function myActivePlan() {
   return data ?? null;
 }
 export const monthly = (subs) => (subs ?? []).filter(s => s.status === 'active').reduce((a, s) => a + Number(s.price || 0), 0);
+
+// ─── Add-on services (monthly, without changing plan) ─────
+export const DEFAULT_ADDONS = [
+  { key: 'payroll', name: 'Payroll & APIT', price: 1500, active: true, tagline: 'Staff list, monthly APIT, EPF / ETF and payslips',
+    features: ['Staff list with salary & allowances', 'Monthly APIT (Tax Table 01) worked out automatically', 'EPF 8% + 12% and ETF 3%', 'Payslips — PDF or WhatsApp', 'EPF / ETF, APIT and bank transfer reports'] },
+];
+export const ADDON_EMOJI = { payroll: '👥' };
+export const addonEmoji = (k) => ADDON_EMOJI[k] ?? '🧩';
+export async function loadAddons() {
+  const { data } = await supabase.from('app_settings').select('value').eq('key', 'addons').maybeSingle();
+  return Array.isArray(data?.value?.addons) ? data.value.addons : DEFAULT_ADDONS;
+}
+export async function saveAddons(addons) {
+  const clean = addons.map(a => ({
+    key: String(a.key || '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 30) || 'service',
+    name: String(a.name || '').trim().slice(0, 60) || 'Service',
+    price: Math.max(0, Math.round(Number(a.price) || 0)), active: a.active !== false,
+    tagline: String(a.tagline || '').trim().slice(0, 100),
+    features: (a.features || []).map(f => String(f).trim()).filter(Boolean).slice(0, 10),
+  }));
+  const keys = clean.map(a => a.key);
+  if (new Set(keys).size !== keys.length) throw new Error('Each service needs a different code');
+  const { error } = await supabase.from('app_settings').upsert({ key: 'addons', value: { addons: clean } });
+  if (error) throw new Error(error.message);
+  return clean;
+}
+export async function myAddons() {
+  const { data, error } = await supabase.rpc('my_addons');
+  if (error) throw new Error(errMsg(error));
+  return data ?? { addons: [], mine: [], payroll: { on: false } };
+}
+export async function requestAddon(key, note) {
+  const { error } = await supabase.rpc('request_addon', { p_key: key, p_note: note || '' });
+  if (error) throw new Error(errMsg(error));
+}
+export async function cancelAddonRequest(key) {
+  const { error } = await supabase.rpc('cancel_my_addon_request', { p_key: key });
+  if (error) throw new Error(errMsg(error));
+}
+export async function myPayrollAccess() {
+  const { data } = await supabase.rpc('my_payroll_access');
+  return data ?? { on: false };
+}
+export async function billAddonNow(a) {
+  const { data, error } = await supabase.rpc('admin_bill_addon', { p_id: a.id });
+  if (error) throw new Error(errMsg(error));
+  return data;
+}
