@@ -27,6 +27,7 @@ export default function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const features = useOutletContext() ?? { tax_calculator: true };
   const [unread, setUnread] = useState(0);
+  const [clientNo, setClientNo] = useState('');
   useEffect(() => { if (features.messages !== false) supabase.rpc('my_unread_messages').then(({ data }) => setUnread(Number(data) || 0)); }, [features.messages]);
 
   useEffect(() => {
@@ -34,12 +35,13 @@ export default function ClientDashboard() {
       // Get client record linked to this user's profile
       const { data: clientRow } = await supabase
         .from('clients')
-        .select('id')
+        .select('id, client_no')
         .eq('profile_id', user.id)
         .single();
 
       if (!clientRow) { setLoading(false); return; }
       const cid = clientRow.id;
+      setClientNo(clientRow.client_no || '');
 
       const [{ data: calcs }, { data: returns }, { data: invoices }, { data: updates }, { data: assets }, { data: sheets }] = await Promise.all([
         supabase.from('iit_calculations').select('*').eq('client_id', cid).eq('shared_with_client', true).order('created_at', { ascending: false }).limit(3),
@@ -70,7 +72,7 @@ export default function ClientDashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-primary-800">Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'} 👋</h1>
-        <p className="text-sm text-gray-500">Your TaxMate dashboard</p>
+        <p className="text-sm text-gray-500">Your TaxMate dashboard{clientNo && <> · Client No. <span className="font-mono font-bold text-primary-700">{clientNo}</span></>}</p>
       </div>
 
       {next && (

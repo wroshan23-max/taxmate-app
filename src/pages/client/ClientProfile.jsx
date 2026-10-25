@@ -90,6 +90,17 @@ export default function ClientProfile() {
         <p className="text-sm text-gray-500">Submit a request to update your information</p>
       </div>
 
+      {client?.client_no && (
+        <div className="card p-4 flex items-center gap-3 bg-gradient-to-r from-primary-50 to-white">
+          <div className="w-10 h-10 rounded-xl bg-primary-600 text-white flex items-center justify-center font-black text-sm">#</div>
+          <div className="flex-1">
+            <div className="text-xs text-gray-500">Your TaxMate client number · ඔබගේ සේවාලාභී අංකය</div>
+            <div className="font-mono text-xl font-black text-primary-800 tracking-wide">{client.client_no}</div>
+          </div>
+          <div className="text-[11px] text-gray-400 max-w-[180px] text-right hidden sm:block">Mention this number when you contact TaxMate.</div>
+        </div>
+      )}
+
       {/* Current Profile */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-4">

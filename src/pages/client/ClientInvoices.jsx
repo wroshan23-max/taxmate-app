@@ -32,7 +32,7 @@ export default function ClientInvoices() {
     setClientId(cl.id);
     const [{ data }, { data: bk }, { data: pays }] = await Promise.all([
       supabase.from('invoices')
-        .select('*, clients(full_name, tin, nic, mobile, email, address), invoice_items(*)')
+        .select('*, clients(client_no, full_name, tin, nic, mobile, email, address), invoice_items(*)')
         .eq('client_id', cl.id).neq('status', 'draft')
         .order('issue_date', { ascending: false }),
       supabase.from('bank_accounts').select('*'),
