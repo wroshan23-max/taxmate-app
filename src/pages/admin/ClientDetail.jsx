@@ -24,6 +24,8 @@ import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
 import RamisDraftAdmin from '../../components/RamisDraftAdmin';
 import TaxReviewsAdmin from '../../components/TaxReviewsAdmin';
 import SubscriptionAdmin from '../../components/SubscriptionAdmin';
+import AddonsAdmin from '../../components/AddonsAdmin';
+import PayrollModule from '../../components/PayrollModule';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
 
 export default function ClientDetail() {
@@ -42,6 +44,9 @@ export default function ClientDetail() {
 
   useEffect(() => { loadAll(); }, [id]);
   const [plan, setPlan] = useState(null);   // active subscription → premium look in the header
+  const [payrollOn, setPayrollOn] = useState(null);
+  const [payrollKey, setPayrollKey] = useState(0);
+  useEffect(() => { supabase.rpc('_payroll_on', { p_client: id }).then(({ data }) => setPayrollOn(!!data)); }, [id, payrollKey]);
   useEffect(() => {
     supabase.from('subscriptions').select('plan_key, plan_name, start_date').eq('client_id', id).eq('status', 'active').maybeSingle()
       .then(({ data }) => setPlan(data ?? null));
@@ -147,7 +152,7 @@ export default function ClientDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
-        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['documents', 'Documents'], ['invoices', 'Invoices']].map(([t, label]) => (
+        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['documents', 'Documents'], ['payroll', 'Payroll'], ['invoices', 'Invoices']].map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -248,6 +253,7 @@ export default function ClientDetail() {
         </div>
       )}
       {tab === 'overview' && <SubscriptionAdmin client={client} userId={user?.id} />}
+      {tab === 'overview' && <AddonsAdmin client={client} userId={user?.id} onChange={() => setPayrollKey(k => k + 1)} />}
       {tab === 'overview' && <IrdDetailsAdmin client={client} onClientChange={(p) => { setClient(c => ({ ...c, ...p })); setForm(fm => ({ ...fm, ...p })); }} />}
       {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
       {tab === 'overview' && client.profile_id && (
@@ -384,6 +390,11 @@ export default function ClientDetail() {
       )}
 
       {/* Invoices Tab */}
+      {tab === 'payroll' && payrollOn === false && (
+        <div className="card p-3 text-sm bg-amber-50 border-amber-200 text-amber-900">Payroll is not switched on for this client (no Standard / Premium plan and no Payroll add-on). You can still prepare it here; the client sees it once you start the add-on in <button onClick={() => setTab('overview')} className="underline font-semibold">Overview → Add-on services</button>.</div>
+      )}
+      {tab === 'payroll' && <PayrollModule clientId={client.id} clientName={client.full_name} isAdmin canEdit userId={user?.id} />}
+
       {tab === 'invoices' && (
         <div className="card">
           <div className="card-header"><Receipt size={16} /> Invoices

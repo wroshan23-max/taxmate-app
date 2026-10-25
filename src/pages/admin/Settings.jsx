@@ -3,7 +3,7 @@ import { payhereStatus } from '../../lib/payments';
 import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
 import { Crown, Cloud } from 'lucide-react';
-import { loadPlans, savePlans, DEFAULT_PLANS, planStyle } from '../../lib/plans';
+import { loadPlans, savePlans, DEFAULT_PLANS, planStyle, loadAddons, saveAddons, addonEmoji } from '../../lib/plans';
 import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon, CreditCard, ExternalLink, Mail, Send, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
@@ -745,6 +745,7 @@ function PlansTab() {
               <label className="text-[11px] font-semibold text-gray-500 block">Short line<input className="input mt-0.5 py-1 text-sm" value={p.tagline || ''} maxLength={80} onChange={e => upd(i, { tagline: e.target.value })} /></label>
               <label className="text-[11px] font-semibold text-gray-500 block">What's included (one per line)<textarea className="input mt-0.5 text-sm" rows={6} value={p.featuresText || ''} onChange={e => upd(i, { featuresText: e.target.value })} /></label>
               <label className="text-xs inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.includes_review} onChange={e => upd(i, { includes_review: e.target.checked })} /> Annual Tax Review included (fee 0)</label>
+              <label className="text-xs inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.includes_payroll} onChange={e => upd(i, { includes_payroll: e.target.checked })} /> 👥 Payroll & APIT included</label>
               <div className="flex items-center gap-2 text-[11px] text-gray-400"><span>Code: {p.key}</span>
                 {plans.length > 1 && <button onClick={() => setPlans(plans.filter((_, j) => j !== i))} className="ml-auto text-red-500 hover:underline inline-flex items-center gap-1"><Trash2 size={11} /> Remove</button>}</div>
             </div>
@@ -755,6 +756,50 @@ function PlansTab() {
         {plans.length < 6 && <button onClick={() => setPlans([...plans, { key: `plan${plans.length + 1}`, name: 'New plan', price: 0, active: true, includes_review: false, tagline: '', featuresText: '' }])} className="btn-secondary text-sm"><Plus size={14} /> Add plan</button>}
         <button onClick={() => setPlans(DEFAULT_PLANS.map(x => ({ ...x, featuresText: x.features.join('\n') })))} className="btn-secondary text-sm"><RotateCcw size={14} /> Suggested plans</button>
         <button onClick={save} disabled={busy} className="btn-primary text-sm ml-auto"><Save size={14} /> Save plans</button>
+      </div>
+      <AddonsEditor />
+    </div>
+  );
+}
+
+// Add-on services clients can request on their own (e.g. Payroll & APIT)
+function AddonsEditor() {
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { loadAddons().then(a => setList(a.map(x => ({ ...x, featuresText: (x.features || []).join('\n') })))); }, []);
+  if (!list) return null;
+  const upd = (i, patch) => setList(list.map((a, j) => (j === i ? { ...a, ...patch } : a)));
+  const save = async () => {
+    setBusy(true);
+    try { const saved = await saveAddons(list.map(a => ({ ...a, features: String(a.featuresText || '').split('\n') }))); setList(saved.map(x => ({ ...x, featuresText: x.features.join('\n') }))); toast.success('Add-on services saved'); }
+    catch (e) { toast.error(e.message); }
+    setBusy(false);
+  };
+  return (
+    <div className="space-y-3 pt-4 border-t border-gray-200">
+      <div><h3 className="font-bold text-primary-800">Add-on services</h3>
+        <p className="text-xs text-gray-500">Monthly services a client can request without changing plan (My Plan → Add-on services). Payroll (code <b>payroll</b>) opens the Payroll module for the client. Other services are billed monthly only.</p></div>
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {list.map((a, i) => (
+          <div key={i} className={`card p-4 space-y-2 ${a.active === false ? 'opacity-60' : ''}`}>
+            <div className="flex items-center gap-2"><span className="text-xl">{addonEmoji(a.key)}</span><b className="flex-1">{a.name || 'Service'}</b>
+              <label className="text-xs inline-flex items-center gap-1"><input type="checkbox" checked={a.active !== false} onChange={e => upd(i, { active: e.target.checked })} /> Show</label></div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-[11px] font-semibold text-gray-500">Name<input className="input mt-0.5 py-1 text-sm" maxLength={60} value={a.name} onChange={e => upd(i, { name: e.target.value })} /></label>
+              <label className="text-[11px] font-semibold text-gray-500">Price / month (Rs.)<input className="input mt-0.5 py-1 text-sm text-right" inputMode="numeric" value={a.price} onChange={e => upd(i, { price: e.target.value.replace(/[^\d]/g, '') })} /></label>
+            </div>
+            <label className="text-[11px] font-semibold text-gray-500 block">Short line<input className="input mt-0.5 py-1 text-sm" maxLength={100} value={a.tagline || ''} onChange={e => upd(i, { tagline: e.target.value })} /></label>
+            <label className="text-[11px] font-semibold text-gray-500 block">What's included (one per line)<textarea className="input mt-0.5 text-sm" rows={4} value={a.featuresText || ''} onChange={e => upd(i, { featuresText: e.target.value })} /></label>
+            <div className="flex items-center gap-2 text-[11px] text-gray-400">
+              {a.isNew ? <label>Code <input className="input inline-block w-28 py-0.5 text-xs ml-1" maxLength={30} value={a.key} onChange={e => upd(i, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '') })} /></label> : <span>Code: {a.key}</span>}
+              {a.key !== 'payroll' && <button onClick={() => setList(list.filter((_, j) => j !== i))} className="ml-auto text-red-500 hover:underline inline-flex items-center gap-1"><Trash2 size={11} /> Remove</button>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        {list.length < 8 && <button onClick={() => setList([...list, { key: `service${list.length + 1}`, name: 'New service', price: 0, active: true, tagline: '', featuresText: '', isNew: true }])} className="btn-secondary text-sm"><Plus size={14} /> Add service</button>}
+        <button onClick={save} disabled={busy} className="btn-primary text-sm ml-auto"><Save size={14} /> Save add-on services</button>
       </div>
     </div>
   );
