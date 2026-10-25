@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useLocation, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Crown, Check, Loader2, Clock, X, Receipt, MessageCircle } from 'lucide-react';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
-import { myPlans, requestPlan, cancelPlanRequest, planStyle, rsPlan } from '../../lib/plans';
+import { myPlans, requestPlan, cancelPlanRequest, planStyle, rsPlan, myAddons, requestAddon, cancelAddonRequest, addonEmoji } from '../../lib/plans';
 import { FIRM } from '../../lib/iitStatement';
 import { waNumber } from '../../lib/share';
 
@@ -19,13 +19,18 @@ export default function ClientPlan() {
   const [pick, setPick] = useState(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [ad, setAd] = useState(null);          // add-on services
+  const [pickAd, setPickAd] = useState(null);
 
   const load = async () => {
     try { setD(await myPlans()); } catch (e) { toast.error(e.message); setD({ plans: [], current: null, request: null }); }
     const { data } = await supabase.from('invoices').select('id, invoice_no, period, total_amount, status, due_date').not('subscription_id', 'is', null).order('created_at', { ascending: false }).limit(12);
     setInvs(data ?? []);
+    myAddons().then(setAd).catch(() => setAd({ addons: [], mine: [], payroll: {} }));
   };
   useEffect(() => { load(); }, []);
+  const loc = useLocation();
+  useEffect(() => { if (ad && loc.hash === '#addons') setTimeout(() => document.getElementById('addons')?.scrollIntoView({ behavior: 'smooth' }), 100); }, [ad, loc.hash]);
 
   if (features.loaded && features.plans === false) return (
     <div className="card p-8 text-center space-y-3"><Crown size={36} className="mx-auto text-gray-300" /><p className="text-gray-600">Monthly plans are not available right now.</p><Link to="/client" className="btn-secondary text-sm inline-flex">Back to dashboard</Link></div>
@@ -100,6 +105,55 @@ export default function ClientPlan() {
             <p className="text-[11px] text-gray-400 -mt-1">* {IIT_NOTE}</p>
             <textarea className="input text-sm resize-none" rows={2} maxLength={500} placeholder="Anything we should know? (optional — e.g. I have 2 employees)" value={note} onChange={e => setNote(e.target.value)} />
             <button onClick={send} disabled={busy} className="btn-primary w-full justify-center">{busy ? <Loader2 size={15} className="animate-spin" /> : <Crown size={15} />} Send request</button>
+          </div>
+        </div>
+      )}
+
+      {ad?.addons?.length > 0 && (
+        <div id="addons" className="space-y-3 scroll-mt-4">
+          <div>
+            <h2 className="text-lg font-bold text-primary-800">Add-on services <span className="text-sm font-normal text-gray-500">· අමතර සේවා</span></h2>
+            <p className="text-xs text-gray-500">Add a service on its own — no need to change your plan.</p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            {ad.addons.map(a => {
+              const mine = ad.mine.find(m => m.addon_key === a.key && m.status !== 'requested');
+              const asked = ad.mine.find(m => m.addon_key === a.key && m.status === 'requested');
+              const inPlan = a.key === 'payroll' && ad.payroll?.plan;
+              const link = a.key === 'payroll' ? '/client/payroll' : null;
+              return (
+                <div key={a.key} className={`card p-5 flex flex-col gap-3 ${mine || inPlan ? 'ring-2 ring-emerald-200' : ''}`}>
+                  <div className="flex items-start gap-3">
+                    <div className="text-3xl">{addonEmoji(a.key)}</div>
+                    <div className="flex-1"><div className="font-bold text-gray-800">{a.name}</div><div className="text-xs text-gray-500">{a.tagline}</div></div>
+                    {!inPlan && <div className="text-right"><div className="font-black text-primary-800">{rsPlan(mine?.price ?? a.price)}</div><div className="text-[10px] text-gray-400">/ month</div></div>}
+                  </div>
+                  <ul className="space-y-1 text-sm flex-1">{(a.features ?? []).map((x, i) => <li key={i} className="flex gap-2"><Check size={15} className="text-emerald-600 flex-shrink-0 mt-0.5" /><span>{x}</span></li>)}</ul>
+                  {inPlan ? (
+                    <div className="flex items-center gap-2 flex-wrap"><span className="text-sm font-semibold text-emerald-700">✓ Included in your {ad.payroll.plan} plan</span>{link && <Link to={link} className="ml-auto btn-secondary text-xs py-1.5">Open {a.name.split(' ')[0]} →</Link>}</div>
+                  ) : mine ? (
+                    <div className="flex items-center gap-2 flex-wrap"><span className="text-sm font-semibold text-emerald-700">{mine.status === 'paused' ? '⏸ Paused' : `✓ Active since ${fmtDate(mine.start_date)}`}</span>{link && mine.status === 'active' && <Link to={link} className="ml-auto btn-secondary text-xs py-1.5">Open {a.name.split(' ')[0]} →</Link>}</div>
+                  ) : asked ? (
+                    <div className="flex items-center gap-2 flex-wrap text-sm"><Clock size={15} className="text-amber-600" /><span className="text-amber-800">Requested on {fmtDate(asked.created_at)} — TaxMate will confirm.</span>
+                      <button onClick={async () => { try { await cancelAddonRequest(a.key); load(); } catch (e) { toast.error(e.message); } }} className="ml-auto text-xs text-gray-500 hover:text-red-600">Cancel request</button></div>
+                  ) : (
+                    <button onClick={() => { setPickAd(a); setNote(''); }} className="btn-primary w-full justify-center">Request {a.name}</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {pickAd && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setPickAd(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2"><div className="text-2xl">{addonEmoji(pickAd.key)}</div><div className="font-bold text-lg flex-1">{pickAd.name} · {rsPlan(pickAd.price)}/month</div><button onClick={() => setPickAd(null)} className="p-1"><X size={18} /></button></div>
+            <p className="text-sm text-gray-600">TaxMate will confirm and add it to your monthly invoice. You can stop it any time.</p>
+            <textarea className="input text-sm resize-none" rows={2} maxLength={500} placeholder={pickAd.key === 'payroll' ? 'How many staff do you have? (optional)' : 'Anything we should know? (optional)'} value={note} onChange={e => setNote(e.target.value)} />
+            <button disabled={busy} onClick={async () => { setBusy(true); try { await requestAddon(pickAd.key, note); toast.success(`Request sent — TaxMate will confirm ${pickAd.name}`); setPickAd(null); setNote(''); load(); } catch (e) { toast.error(e.message); } setBusy(false); }}
+              className="btn-primary w-full justify-center">{busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Send request</button>
           </div>
         </div>
       )}
