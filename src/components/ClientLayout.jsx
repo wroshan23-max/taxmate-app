@@ -8,13 +8,13 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
-  Zap, CalendarCheck, Globe, Crown, Hash,
+  Zap, CalendarCheck, Globe, Crown, Hash, Users,
 } from 'lucide-react';
 import { websiteUrl } from '../lib/firm';
 import NotificationBell from './NotificationBell';
 import MobileDrawer from './MobileDrawer';
 import { PlanAvatar, PlanBadge } from './PlanBadge';
-import { myActivePlan, planStyle } from '../lib/plans';
+import { myActivePlan, myPayrollAccess, planStyle } from '../lib/plans';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -25,9 +25,9 @@ const nav = [
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
   { to: '/client/ird-codes', icon: Hash, label: 'IRD Payment Codes', feature: 'ird_codes' },
   { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals' },
-  { to: '/client/messages', icon: MessageCircle, label: 'Messages', feature: 'messages', badge: true },
   { to: '/client/services', icon: CalendarCheck, label: 'Book a Service', feature: 'services' },
   { to: '/client/plan', icon: Crown, label: 'My Plan', feature: 'plans' },
+  { to: '/client/payroll', icon: Users, label: 'Payroll', feature: 'payroll' },
   { to: '/client/documents', icon: FolderLock, label: 'My Documents', feature: 'documents' },
   { to: '/client/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/client/assets', icon: Landmark, label: 'Assets & Liabilities' },
@@ -48,6 +48,10 @@ export default function ClientLayout() {
   // Active monthly plan → member look (sidebar avatar, header badge, dashboard)
   const [plan, setPlan] = useState(null);
   useEffect(() => { if (profile?.id) myActivePlan().then(setPlan).catch(() => {}); }, [profile?.id]);
+  // Payroll menu: plan includes it or the add-on is active
+  const [payrollOn, setPayrollOn] = useState(false);
+  useEffect(() => { if (profile?.id) myPayrollAccess().then(a => setPayrollOn(!!a?.on)).catch(() => {}); }, [profile?.id]);
+  const feats = { ...features, payroll: payrollOn };
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const unread = useUnreadMessages('client', features.messages !== false);
@@ -73,7 +77,7 @@ export default function ClientLayout() {
       </div>
 
       <nav className="flex-1 min-h-0 py-3 space-y-0.5 overflow-y-auto overscroll-contain px-2">
-        {nav.filter(n => !n.feature || features[n.feature]).map(({ to, icon: Icon, label, end, badge }) => (
+        {nav.filter(n => !n.feature || feats[n.feature]).map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -141,7 +145,6 @@ export default function ClientLayout() {
         <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
           <button onClick={() => setOpen(true)} className="md:hidden text-gray-500 hover:text-gray-700 relative">
             <Menu size={20} />
-            {unread > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
           </button>
           <div className="md:hidden text-lg font-black text-primary-700">
             Tax<span className="text-gold-500">Mate</span>
@@ -161,7 +164,7 @@ export default function ClientLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Suspense fallback={<PageLoader />}><Outlet context={{ ...features, myPlan: plan }} /></Suspense>
+          <Suspense fallback={<PageLoader />}><Outlet context={{ ...feats, myPlan: plan }} /></Suspense>
         </main>
       </div>
     </div>
