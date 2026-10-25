@@ -246,10 +246,18 @@ Deno.serve(async (req) => {
       const { data: doc } = await asCaller.from('client_documents').select('id, storage, drive_item_id, title').eq('id', String(body.doc_id ?? '')).maybeSingle();
       if (!doc) return reply({ error: 'File not found.' });
       if (doc.storage !== 'onedrive') return reply({ error: 'This file is not in OneDrive.' });
-      const r = await graph(`/me/drive/items/${encodeURIComponent(doc.drive_item_id)}?$select=id,name,@microsoft.graph.downloadUrl`);
+      // Personal OneDrive leaves the download link out when $select is used → ask for the whole item,
+      // and if it is still missing, read the redirect of /content (also a short-lived link).
+      const r = await graph(`/me/drive/items/${encodeURIComponent(doc.drive_item_id)}`);
       const d = await r.json();
-      const url = d['@microsoft.graph.downloadUrl'];
-      if (!r.ok || !url) return reply({ error: r.status === 404 ? 'This file was removed from OneDrive.' : `OneDrive: ${d.error?.message ?? r.status}` });
+      if (r.status === 404) return reply({ error: 'This file was removed from OneDrive.' });
+      if (!r.ok) return reply({ error: `OneDrive: ${d.error?.message ?? r.status}` });
+      let url = d['@microsoft.graph.downloadUrl'];
+      if (!url) {
+        const c = await graph(`/me/drive/items/${encodeURIComponent(doc.drive_item_id)}/content`, { redirect: 'manual' });
+        url = c.headers.get('location') ?? undefined;
+      }
+      if (!url) return reply({ error: 'OneDrive did not give a download link — please try again.' });
       return reply({ url, name: d.name });
     }
 
