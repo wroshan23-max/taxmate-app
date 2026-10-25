@@ -115,7 +115,10 @@ export default function ClientDetail() {
           {client.full_name?.[0]}
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-primary-800">{client.full_name}</h1>
+          <h1 className="text-2xl font-bold text-primary-800 flex items-center gap-2 flex-wrap">{client.full_name}
+            {client.client_no && <button type="button" title="Client registration number — click to copy"
+              onClick={() => { navigator.clipboard?.writeText(client.client_no).then(() => toast.success(`${client.client_no} copied`)).catch(() => {}); }}
+              className="font-mono text-xs font-bold px-2 py-1 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100">{client.client_no}</button>}</h1>
           <div className="text-sm text-gray-500">TIN: {client.tin ?? '—'} · {client.email ?? '—'}</div>
           {hasContact(client) && (
             <div className="text-xs text-primary-700 mt-0.5 flex items-center gap-1"><UserRound size={12} /> Contact: {contactLabel(client)}{client.contact_mobile && ` · ${client.contact_mobile}`}{client.contact_preferred && ' ★ coordinates'}</div>

@@ -56,7 +56,7 @@ export default function Clients() {
   const filtered = clients.filter(c =>
     (showArchived ? !!c.archived_at : !c.archived_at) &&
     (!onlyNew || isNew(c)) &&
-    [c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
+    [c.client_no, c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
   );
 
   const openAdd = () => { setForm(EMPTY); setModal(true); };
@@ -137,6 +137,7 @@ export default function Clients() {
                         </div>
                         <div>
                           <div className="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap">{c.full_name}
+                            {c.client_no && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 border border-primary-100">{c.client_no}</span>}
                             {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · {c.registration?.via && c.registration.via !== 'personal link' ? `via ${c.registration.via}` : 'self-registered'}</span>}</div>
                           <div className="text-xs text-gray-400">{c.email ?? '—'}</div>
                           {c.referred_by && <div className="text-[11px] text-purple-700 flex items-center gap-1 mt-0.5"><Gift size={11} /> Referred by {nameOf[c.referred_by] ?? 'a client'}</div>}

@@ -51,7 +51,7 @@ export default function Invoices() {
 
   const loadAll = async () => {
     const [inv, cls, bk, st] = await Promise.all([
-      supabase.from('invoices').select('*, clients(full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').order('created_at', { ascending: false }),
+      supabase.from('invoices').select('*, clients(client_no, full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, full_name, tin, nic, mobile, email, address').is('archived_at', null).order('full_name'),
       supabase.from('bank_accounts').select('*').order('created_at'),
       supabase.from('app_settings').select('value').eq('key', 'firm_signature').maybeSingle(),
@@ -190,7 +190,7 @@ export default function Invoices() {
             onClick={async () => {
               toast.dismiss(t.id);
               const w = window.open('', '_blank', 'width=900,height=900');
-              const { data } = await supabase.from('invoices').select('*, clients(full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').eq('id', saved.id).single();
+              const { data } = await supabase.from('invoices').select('*, clients(client_no, full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').eq('id', saved.id).single();
               if (data) openInvoice(data, data.invoice_items ?? [], bankById(data.bank_account_id), {}, w); else w?.close();
             }}>
             🖨 Print
