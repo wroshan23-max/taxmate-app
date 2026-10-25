@@ -13,6 +13,8 @@ import {
 import { websiteUrl } from '../lib/firm';
 import NotificationBell from './NotificationBell';
 import MobileDrawer from './MobileDrawer';
+import { PlanAvatar, PlanBadge } from './PlanBadge';
+import { myActivePlan, planStyle } from '../lib/plans';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -43,6 +45,9 @@ export default function ClientLayout() {
   useEffect(() => {
     supabase.rpc('my_portal_features').then(({ data }) => { if (data) setFeatures({ ...data, loaded: true }); else setFeatures(f => ({ ...f, loaded: true })); });
   }, [profile?.id]);
+  // Active monthly plan → member look (sidebar avatar, header badge, dashboard)
+  const [plan, setPlan] = useState(null);
+  useEffect(() => { if (profile?.id) myActivePlan().then(setPlan).catch(() => {}); }, [profile?.id]);
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const unread = useUnreadMessages('client', features.messages !== false);
@@ -90,15 +95,16 @@ export default function ClientLayout() {
       </nav>
 
       <div className="p-3 border-t border-primary-700">
-        <div className="flex items-center gap-3 px-3 py-2 mb-1">
-          <div className="w-8 h-8 rounded-full bg-gold-500 flex items-center justify-center text-primary-900 font-bold text-sm flex-shrink-0">
-            {profile?.full_name?.[0] ?? 'C'}
-          </div>
+        <NavLink to="/client/plan" onClick={() => setOpen(false)} title={plan ? `${plan.plan_name} plan` : undefined}
+          className={`flex items-center gap-3 px-3 py-2 mb-1 rounded-xl ${plan && planStyle(plan.plan_key).tier >= 3 ? 'bg-gradient-to-r from-white/10 to-transparent ring-1 ring-white/10' : ''}`}>
+          <PlanAvatar name={profile?.full_name || 'C'} plan={plan} plain="bg-gold-500 text-primary-900" />
           <div className="flex-1 min-w-0">
             <div className="text-white text-xs font-semibold truncate">{profile?.full_name ?? 'Client'}</div>
-            <div className="text-primary-400 text-xs">Client Account</div>
+            {plan
+              ? <div className={`text-xs font-semibold truncate ${plan.plan_key === 'premium' ? 'text-gold-400' : 'text-primary-200'}`}>{planStyle(plan.plan_key).emoji} {plan.plan_name} member</div>
+              : <div className="text-primary-400 text-xs">Client Account</div>}
           </div>
-        </div>
+        </NavLink>
         <button
           onClick={handleSignOut}
           className="flex items-center gap-2 text-primary-300 hover:text-white text-xs px-3 py-1.5 rounded-lg hover:bg-primary-700 w-full transition-colors"
@@ -151,10 +157,11 @@ export default function ClientLayout() {
           <div className="text-xs text-gray-500 hidden sm:block">
             Welcome, {profile?.full_name?.split(' ')[0] ?? 'Client'}
           </div>
+          {plan && <NavLink to="/client/plan" title="My Plan"><PlanBadge plan={plan} compact /></NavLink>}
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          <Suspense fallback={<PageLoader />}><Outlet context={features} /></Suspense>
+          <Suspense fallback={<PageLoader />}><Outlet context={{ ...features, myPlan: plan }} /></Suspense>
         </main>
       </div>
     </div>
