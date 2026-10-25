@@ -7,6 +7,11 @@ import { myPlans, requestPlan, cancelPlanRequest, planStyle, rsPlan } from '../.
 import { FIRM } from '../../lib/iitStatement';
 import { waNumber } from '../../lib/share';
 
+// IIT filing is covered only after the plan is 3 months old
+const IIT_NOTE = 'If your plan is less than 3 months old when your Annual Income Tax Return (IIT) is filed, the relevant IIT filing charges apply.';
+const IIT_NOTE_SI = 'සැලසුම ආරම්භ කර මාස 3කට අඩු නම්, වාර්ෂික ආදායම් බදු වාර්තාව (IIT) ගොනු කිරීමට අදාළ ගාස්තු අය කෙරේ.';
+const plus3m = (d) => { const x = new Date(d); x.setMonth(x.getMonth() + 3); return x; };
+
 export default function ClientPlan() {
   const features = useOutletContext() ?? {};
   const [d, setD] = useState(null);
@@ -34,6 +39,8 @@ export default function ClientPlan() {
     setBusy(false);
   };
   const cur = d.current, req = d.request;
+  const iitFrom = cur?.start_date ? plus3m(cur.start_date) : null;
+  const iitPending = iitFrom && iitFrom > new Date();
 
   return (
     <div className="space-y-5">
@@ -80,11 +87,17 @@ export default function ClientPlan() {
         })}
       </div>
 
+      <p className="text-[11px] leading-relaxed text-gray-400 px-1">
+        * {IIT_NOTE} <span className="block sm:inline">{IIT_NOTE_SI}</span>
+        {iitPending && <span className="block mt-0.5">Your plan covers IIT filing from {fmtDate(iitFrom.toISOString())}.</span>}
+      </p>
+
       {pick && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setPick(null)}>
           <div className="bg-white rounded-2xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2"><div className="text-2xl">{planStyle(pick.key).emoji}</div><div className="font-bold text-lg flex-1">{pick.name} plan · {rsPlan(pick.price)}/month</div><button onClick={() => setPick(null)} className="p-1"><X size={18} /></button></div>
             <p className="text-sm text-gray-600">TaxMate will confirm your plan and send a monthly invoice. Pay online or by bank transfer. You can change or cancel any time.</p>
+            <p className="text-[11px] text-gray-400 -mt-1">* {IIT_NOTE}</p>
             <textarea className="input text-sm resize-none" rows={2} maxLength={500} placeholder="Anything we should know? (optional — e.g. I have 2 employees)" value={note} onChange={e => setNote(e.target.value)} />
             <button onClick={send} disabled={busy} className="btn-primary w-full justify-center">{busy ? <Loader2 size={15} className="animate-spin" /> : <Crown size={15} />} Send request</button>
           </div>
