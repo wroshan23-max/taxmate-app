@@ -1,6 +1,7 @@
 import { Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazyPage, whenIdle } from './lib/lazyPage';
+import { trackVisit } from './lib/visits';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import { MfaChallengeScreen, MfaSetupScreen } from './components/TwoFactor';
@@ -116,11 +117,19 @@ function Preload() {
   return null;
 }
 
+// Count page views for Activity & Users → Visitors (anonymous; admins are not counted)
+function VisitTracker() {
+  const { pathname } = useLocation();
+  useEffect(() => { trackVisit(pathname); }, [pathname]);
+  return null;
+}
+
 export default function App() {
   useSettings();   // re-render pages when firm / invoice settings load or change
   return (
     <Suspense fallback={<LoadingScreen />}>
     <Preload />
+    <VisitTracker />
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
