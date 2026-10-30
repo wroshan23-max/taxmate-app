@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader2, CheckCircle2, UserRound, User, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { trackVisit } from '../lib/visits';
 import { FIRM } from '../lib/iitStatement';
 import { waNumber } from '../lib/share';
 import { RELATIONS, SERVICES } from '../lib/contacts';
@@ -86,6 +87,7 @@ export default function Register() {
     setBusy(false);
     if (error) return setErr(error.message);
     setDone(data?.name ?? f.full_name);
+    trackVisit(window.location.pathname, 'register');   // counts as a sign-up for the link's source
   };
 
   const nicHint = f.nic && !NIC_RE.test(f.nic.trim()) ? 'NIC is usually 12 digits, or 9 digits + V/X' : null;
