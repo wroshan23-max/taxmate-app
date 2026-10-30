@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Users, UserCheck, Activity as ActivityIcon, Wifi, RefreshCw, ShieldCheck, Search, UserPlus, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { areaLabel, EVENT_LABEL, ago } from '../../lib/activity';
+import VisitorStats from '../../components/VisitorStats';
 
 const PERIODS = [[7, '7 days'], [30, '30 days'], [90, '90 days']];
 
@@ -59,6 +60,14 @@ function DailyChart({ daily }) {
 }
 
 export default function Activity() {
+  const [view, setView] = useState(() => (new URLSearchParams(window.location.search).get('view') === 'visitors' ? 'visitors' : 'users'));
+  const tabs = (
+    <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
+      {[['users', '👤 Portal users'], ['visitors', '🌐 Website visitors']].map(([k, l]) => (
+        <button key={k} onClick={() => setView(k)} className={`px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${view === k ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{l}</button>
+      ))}
+    </div>
+  );
   const [days, setDays] = useState(30);
   const [s, setS] = useState(null);
   const [err, setErr] = useState('');
@@ -83,6 +92,13 @@ export default function Activity() {
     return u;
   }, [s, q, sort]);
 
+  if (view === 'visitors') return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-bold text-primary-800">📊 Activity &amp; Users</h1>
+      {tabs}
+      <VisitorStats />
+    </div>
+  );
   if (err) return <div className="card p-6 text-red-600 text-sm">{err}</div>;
   if (!s) return <div className="flex items-center justify-center h-64 text-gray-400"><Loader2 className="animate-spin" /></div>;
 
@@ -96,6 +112,7 @@ export default function Activity() {
         <div>
           <h1 className="text-2xl font-bold text-primary-800">📊 Activity &amp; Users</h1>
           <p className="text-sm text-gray-500">Who uses the client portal, and what they use most · admin only</p>
+          <div className="mt-3">{tabs}</div>
         </div>
         <div className="ml-auto flex items-center gap-2">
           <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
