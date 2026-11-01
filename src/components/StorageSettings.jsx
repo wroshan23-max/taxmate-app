@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Cloud, CheckCircle2, Loader2, Link2, Unlink, RefreshCw, FolderTree, ShieldCheck, AlertTriangle, ExternalLink, KeyRound } from 'lucide-react';
 import { driveStatus, driveAuthUrl, driveExchange, driveDisconnect, fmtBytes } from '../lib/documents';
+import BackupSettings from './BackupSettings';
 
 const redirectUri = () => `${window.location.origin}/admin/settings`;
 
@@ -54,6 +55,7 @@ export default function StorageSettings() {
   const pct = q?.total ? Math.min(100, Math.round((q.used / q.total) * 100)) : 0;
 
   return (
+    <div className="space-y-5">
     <div className="grid lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-5 items-start">
       <div className="card overflow-hidden">
         <div className="bg-gradient-to-r from-[#0364B8] to-[#0F78D4] text-white p-5 flex items-center gap-3">
@@ -129,6 +131,8 @@ export default function StorageSettings() {
           </ul>
         </div>
       </div>
+    </div>
+    <BackupSettings connected={!!st.connected} />
     </div>
   );
 }
