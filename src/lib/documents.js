@@ -103,6 +103,7 @@ export const driveStatus = () => drive('status');
 export const driveAuthUrl = (redirect_uri) => drive('auth_url', { redirect_uri });
 export const driveExchange = (code, state, redirect_uri) => drive('exchange', { code, state, redirect_uri });
 export const driveDisconnect = () => drive('disconnect');
+export const driveBackupNow = () => drive('backup_now');   // V52: nightly backup, also on demand
 
 /** Upload one file + register it. Returns the inserted row. */
 export async function uploadDocument({ clientId, file, year, category, title, note, role, userId, onStage }) {
