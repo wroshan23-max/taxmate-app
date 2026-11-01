@@ -7,16 +7,20 @@
 //
 //  Secrets (Supabase → Edge Functions → Secrets):  MS_CLIENT_ID, MS_CLIENT_SECRET
 //
-//  Admin:   status, auth_url, exchange, disconnect, purge_client
+//  Admin:   status, auth_url, exchange, disconnect, purge_client, backup_now
+//  pg_cron (header x-cron-key): backup_cron — nightly backup of the app's data to OneDrive (V52)
 //  Signed-in admin or client (own files only):
 //           start_upload → (browser PUTs the file to OneDrive) → finish_upload,
 //           download, delete
 // ═══════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
+import { zipSync, strToU8 } from 'npm:fflate@0.8.2';
+
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const reply = (body: unknown) => new Response(JSON.stringify(body), { headers: { ...cors, 'Content-Type': 'application/json' } });
@@ -46,6 +50,55 @@ async function hmac(text: string) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(Deno.env.get('MS_CLIENT_SECRET') ?? 'x'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text));
   return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/[+/=]/g, (c) => ({ '+': '-', '/': '_', '=': '' }[c] as string));
+}
+
+// ═══ Backups (V52) ═════════════════════════════════════════
+const BACKUP_ROOT = 'TaxMate Backups';
+// Tables in the Excel copy (the .json.gz has every table)
+const XLSX_SHEETS: [string, string][] = [
+  ['clients', 'Clients'], ['invoices', 'Invoices'], ['invoice_items', 'Invoice items'], ['payments', 'Payments'],
+  ['tax_returns', 'Tax returns'], ['iit_calculations', 'Calculations'], ['subscriptions', 'Plans'], ['service_addons', 'Add-on services'],
+  ['client_documents', 'Documents'], ['service_requests', 'Service requests'], ['summary_letters', 'Summary letters'],
+  ['payroll_employees', 'Payroll staff'], ['payroll_runs', 'Payroll months'], ['asset_statements', 'Assets & liabilities'],
+  ['income_sheets', 'Monthly income'], ['profiles', 'Users'],
+];
+const slNow = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString();   // Sri Lanka time, as an ISO string
+async function gzip(text: string) {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+// A small .xlsx writer (inline strings, bold frozen header row) — no big library needed
+function buildXlsx(sheets: { name: string; rows: Record<string, unknown>[] }[]) {
+  const esc = (v: string) => v.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const col = (i: number) => { let out = ''; let n = i + 1; while (n > 0) { const m = (n - 1) % 26; out = String.fromCharCode(65 + m) + out; n = Math.floor((n - 1) / 26); } return out; };
+  const cell = (v: unknown, ref: string) => {
+    if (v === null || v === undefined || v === '') return '';
+    if (typeof v === 'number' && Number.isFinite(v)) return `<c r="${ref}"><v>${v}</v></c>`;
+    if (typeof v === 'boolean') return `<c r="${ref}" t="b"><v>${v ? 1 : 0}</v></c>`;
+    let t = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    if (t.length > 32000) t = `${t.slice(0, 32000)}…`;
+    return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${esc(t)}</t></is></c>`;
+  };
+  const used = new Set<string>();
+  const names = sheets.map((sh) => {
+    let nm = sh.name.replace(/[\[\]:*?/\\]/g, ' ').slice(0, 31) || 'Sheet'; let k = 2;
+    while (used.has(nm.toLowerCase())) nm = `${nm.slice(0, 28)} ${k++}`;
+    used.add(nm.toLowerCase()); return nm;
+  });
+  const files: Record<string, Uint8Array> = {};
+  sheets.forEach((sh, si) => {
+    const keys: string[] = []; const seen = new Set<string>();
+    for (const r of sh.rows) for (const key of Object.keys(r)) if (!seen.has(key)) { seen.add(key); keys.push(key); }
+    const rowsXml: string[] = [`<row r="1">${keys.map((key, i) => `<c r="${col(i)}1" t="inlineStr" s="1"><is><t>${esc(key)}</t></is></c>`).join('')}</row>`];
+    sh.rows.forEach((r, ri) => { rowsXml.push(`<row r="${ri + 2}">${keys.map((key, i) => cell(r[key], `${col(i)}${ri + 2}`)).join('')}</row>`); });
+    files[`xl/worksheets/sheet${si + 1}.xml`] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetData>${rowsXml.join('')}</sheetData></worksheet>`);
+  });
+  files['[Content_Types].xml'] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`);
+  files['_rels/.rels'] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  files['xl/workbook.xml'] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${names.map((nm, i) => `<sheet name="${esc(nm)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`);
+  files['xl/_rels/workbook.xml.rels'] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  files['xl/styles.xml'] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`);
+  return zipSync(files, { level: 6 });
 }
 
 Deno.serve(async (req) => {
@@ -108,9 +161,177 @@ Deno.serve(async (req) => {
     return folder;
   }
 
+  const isConnected = async () => {
+    const { data } = await svc.from('storage_connection').select('refresh_token').eq('id', 1).maybeSingle();
+    return !!data?.refresh_token && !!CLIENT_ID && !!CLIENT_SECRET;
+  };
+
+  // ═══ Backups (V52) ═══
+  const folderCache = new Set<string>();
+  async function ensureFolderCached(path: string) { if (folderCache.has(path)) return; await ensureFolder(path); folderCache.add(path); }
+  // Upload bytes to a OneDrive path (replaces a file of the same name)
+  async function putFile(path: string, data: Uint8Array | Blob, mime = 'application/octet-stream') {
+    const size = data instanceof Blob ? data.size : data.byteLength;
+    if (size <= 4 * 1024 * 1024) {
+      const r = await graph(`/me/drive/root:/${encPath(path)}:/content`, { method: 'PUT', headers: { 'Content-Type': mime }, body: data });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(`OneDrive upload failed for ${path.split('/').pop()} (${d.error?.message ?? r.status}).`);
+      return d;
+    }
+    const s = await graph(`/me/drive/root:/${encPath(path)}:/createUploadSession`, { method: 'POST', body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace' } }) });
+    const sd = await s.json();
+    if (!s.ok || !sd.uploadUrl) throw new Error(`OneDrive did not accept ${path.split('/').pop()} (${sd.error?.message ?? s.status}).`);
+    const buf = data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : data;
+    const CHUNK = 320 * 1024 * 30;   // ~9.4 MB, a multiple of 320 KiB as OneDrive requires
+    let last: Record<string, unknown> = {};
+    for (let i = 0; i < size; i += CHUNK) {
+      const end = Math.min(size, i + CHUNK);
+      const r = await fetch(sd.uploadUrl, { method: 'PUT', headers: { 'Content-Length': String(end - i), 'Content-Range': `bytes ${i}-${end - 1}/${size}` }, body: buf.slice(i, end) });
+      if (!r.ok) throw new Error(`OneDrive upload stopped for ${path.split('/').pop()} (${r.status}).`);
+      if (r.status !== 202) last = await r.json().catch(() => ({}));
+    }
+    return last;
+  }
+  // Keep the newest `keep` date folders (2026-10-31 / 2026-10) in a folder; older ones go to the recycle bin
+  async function pruneFolders(folder: string, keep: number) {
+    const r = await graph(`/me/drive/root:/${encPath(folder)}:/children?$select=id,name,folder&$top=999`);
+    if (!r.ok) return 0;
+    const d = await r.json();
+    const dated = (d.value ?? []).filter((x: { name: string; folder?: unknown }) => x.folder && /^\d{4}-\d{2}(-\d{2})?$/.test(x.name))
+      .sort((a: { name: string }, b: { name: string }) => b.name.localeCompare(a.name));
+    let n = 0;
+    for (const it of dated.slice(Math.max(1, keep))) { const x = await graph(`/me/drive/items/${encodeURIComponent(it.id)}`, { method: 'DELETE' }); if (x.ok || x.status === 404) n++; }
+    return n;
+  }
+  async function listBucket(bucket: string, prefix = '', depth = 0): Promise<{ path: string; size: number; updated: string }[]> {
+    const out: { path: string; size: number; updated: string }[] = [];
+    if (depth > 8) return out;
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await svc.storage.from(bucket).list(prefix, { limit: 1000, offset, sortBy: { column: 'name', order: 'asc' } });
+      if (error) throw new Error(`Could not list ${bucket}: ${error.message}`);
+      for (const it of data ?? []) {
+        const p = prefix ? `${prefix}/${it.name}` : it.name;
+        if (it.id === null) out.push(...await listBucket(bucket, p, depth + 1));
+        else if (it.name !== '.emptyFolderPlaceholder') out.push({ path: p, size: Number(it.metadata?.size ?? 0), updated: String(it.updated_at ?? it.created_at ?? '') });
+      }
+      if ((data ?? []).length < 1000) break;
+    }
+    return out;
+  }
+
+  async function runBackup(id: number) {
+    const t0 = Date.now();
+    const { data: st } = await svc.from('app_settings').select('value').eq('key', 'backup').maybeSingle();
+    const cfg = { keep_daily: 30, keep_monthly: 12, files: true, ...(st?.value ?? {}) };
+    const now = slNow(), day = now.slice(0, 10), stamp = `${day}-${now.slice(11, 13)}${now.slice(14, 16)}`;
+
+    // 1. Every table (except secrets) + the list of logins
+    const { data: names, error: e1 } = await svc.rpc('_backup_tables');
+    if (e1) throw new Error(`Could not list tables: ${e1.message}`);
+    const tables: Record<string, Record<string, unknown>[]> = {};
+    let rows = 0;
+    for (const t of (names ?? []) as string[]) {
+      const { data, error } = await svc.rpc('_backup_table', { p_name: t });
+      if (error) throw new Error(`Could not read ${t}: ${error.message}`);
+      tables[t] = (data ?? []) as Record<string, unknown>[]; rows += tables[t].length;
+    }
+    const users: Record<string, unknown>[] = [];
+    for (let page = 1; page < 50; page++) {
+      const { data, error } = await svc.auth.admin.listUsers({ page, perPage: 1000 });
+      if (error) break;
+      for (const u of data.users) users.push({ id: u.id, email: u.email, phone: u.phone, created_at: u.created_at, last_sign_in_at: u.last_sign_in_at, email_confirmed_at: u.email_confirmed_at });
+      if (data.users.length < 1000) break;
+    }
+    const counts = Object.fromEntries(Object.entries(tables).map(([k, v]) => [k, v.length]));
+    const json = JSON.stringify({ app: 'TaxMate Solutions', format: 'taxmate-backup-1', created_at: new Date().toISOString(), created_sl: now.slice(0, 16).replace('T', ' '),
+      project: 'qipehxixvulvrubjifvi', counts, auth_users: users, tables });
+    const gz = await gzip(json);
+    const summary = [
+      { Item: 'Backup made (Sri Lanka time)', Value: now.slice(0, 16).replace('T', ' ') },
+      { Item: 'Tables', Value: Object.keys(tables).length }, { Item: 'Rows', Value: rows }, { Item: 'App logins', Value: users.length },
+      { Item: 'Restore file', Value: `TaxMate-backup-${stamp}.json.gz (same folder)` },
+      { Item: 'Not included', Value: 'OneDrive sign-in, login PINs, encrypted RAMIS PIN/SSID, invite/reset links' },
+      ...Object.entries(counts).map(([k, v]) => ({ Item: `Rows in ${k}`, Value: v })),
+    ];
+    const xlsx = buildXlsx([{ name: 'Summary', rows: summary }, ...XLSX_SHEETS.filter(([t]) => tables[t]).map(([t, label]) => ({ name: label, rows: tables[t] }))]);
+
+    // 2. Upload to Daily/<date>, and the first backup of each month also to Monthly/<yyyy-mm>
+    const dailyFolder = `${BACKUP_ROOT}/Daily/${day}`;
+    await ensureFolderCached(dailyFolder);
+    await putFile(`${dailyFolder}/TaxMate-backup-${stamp}.json.gz`, gz, 'application/gzip');
+    await putFile(`${dailyFolder}/TaxMate-data-${stamp}.xlsx`, xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const monthFolder = `${BACKUP_ROOT}/Monthly/${day.slice(0, 7)}`;
+    if (!(await graph(`/me/drive/root:/${encPath(monthFolder)}`)).ok) {
+      await ensureFolderCached(monthFolder);
+      await putFile(`${monthFolder}/TaxMate-backup-${stamp}.json.gz`, gz, 'application/gzip');
+      await putFile(`${monthFolder}/TaxMate-data-${stamp}.xlsx`, xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
+    const fi = await graph(`/me/drive/root:/${encPath(dailyFolder)}?$select=webUrl`);
+    const webUrl = fi.ok ? (await fi.json()).webUrl ?? null : null;
+    await svc.from('backups').update({ tables: Object.keys(tables).length, rows, bytes: gz.byteLength, xlsx_bytes: xlsx.byteLength, folder: dailyFolder, web_url: webUrl }).eq('id', id);
+
+    // 3. App-storage files: copy new / changed ones (time-boxed; the rest continue in the next backup)
+    let copied = 0, copiedBytes = 0, pending = 0;
+    if (cfg.files !== false) {
+      const { data: buckets } = await svc.storage.listBuckets();
+      const { data: logRows } = await svc.from('backup_file_log').select('bucket, path, src_updated');
+      const done = new Map((logRows ?? []).map((r) => [`${r.bucket}/${r.path}`, r.src_updated]));
+      for (const b of buckets ?? []) {
+        const files = await listBucket(b.name);
+        for (const f of files) {
+          if (done.get(`${b.name}/${f.path}`) === f.updated) continue;
+          if (Date.now() - t0 > 100000 || copied >= 300) { pending++; continue; }
+          const { data: blob, error } = await svc.storage.from(b.name).download(f.path);
+          if (error || !blob) { pending++; continue; }
+          const parts = f.path.split('/').map((x) => clean(x, 120));
+          const target = `${BACKUP_ROOT}/App files/${clean(b.name)}/${parts.join('/')}`;
+          await ensureFolderCached(target.split('/').slice(0, -1).join('/'));
+          const it = await putFile(target, blob, blob.type || 'application/octet-stream');
+          await svc.from('backup_file_log').upsert({ bucket: b.name, path: f.path, size: f.size || blob.size, src_updated: f.updated, drive_item_id: (it as { id?: string })?.id ?? null, copied_at: new Date().toISOString() });
+          copied++; copiedBytes += blob.size;
+        }
+      }
+    }
+
+    // 4. Old backups → recycle bin
+    await pruneFolders(`${BACKUP_ROOT}/Daily`, Number(cfg.keep_daily) || 30);
+    await pruneFolders(`${BACKUP_ROOT}/Monthly`, Number(cfg.keep_monthly) || 12);
+
+    await svc.from('backups').update({ status: pending ? 'partial' : 'ok', finished_at: new Date().toISOString(), files_copied: copied, files_bytes: copiedBytes, files_pending: pending }).eq('id', id);
+  }
+
+  async function startBackup(kind: 'auto' | 'manual', by: string | null) {
+    await svc.from('backups').update({ status: 'error', error: 'Stopped — it took too long.', finished_at: new Date().toISOString() })
+      .eq('status', 'running').lt('started_at', new Date(Date.now() - 15 * 60000).toISOString());
+    const { data: busy } = await svc.from('backups').select('id').eq('status', 'running').limit(1);
+    if (busy?.length) return { error: 'A backup is already running — please wait a few minutes.' };
+    if (!(await isConnected())) {
+      await svc.from('backups').insert({ kind, started_by: by, status: 'error', finished_at: new Date().toISOString(), error: 'OneDrive is not connected (Settings → File storage).' });
+      return { error: 'Connect OneDrive first (Settings → File storage).' };
+    }
+    const { data: row, error } = await svc.from('backups').insert({ kind, started_by: by }).select('id').single();
+    if (error || !row) return { error: error?.message ?? 'Could not start the backup.' };
+    const job = runBackup(row.id).catch(async (e) => {
+      await svc.from('backups').update({ status: 'error', error: String((e as Error)?.message ?? e).slice(0, 500), finished_at: new Date().toISOString() }).eq('id', row.id);
+    });
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(job); else await job;
+    return { ok: true, id: row.id };
+  }
+
   try {
     const body = await req.json();
     const action = String(body?.action ?? '');
+
+    // ── Nightly backup from pg_cron (checked with the secret cron key, no login) ──
+    const cronKey = req.headers.get('x-cron-key');
+    if (cronKey) {
+      const { data: okKey } = await svc.rpc('check_cron_key', { p_key: cronKey });
+      if (okKey !== true) return reply({ error: 'Not allowed.' });
+      if (action !== 'backup_cron') return reply({ error: 'Unknown action.' });
+      const { data: st } = await svc.from('app_settings').select('value').eq('key', 'backup').maybeSingle();
+      if (st?.value?.enabled === false) return reply({ skipped: 'Backups are switched off.' });
+      return reply(await startBackup('auto', null));
+    }
 
     // ── Who is calling? ──
     const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
@@ -125,10 +346,7 @@ Deno.serve(async (req) => {
     const { data: me } = await svc.from('profiles').select('role').eq('id', uid).single();
     const isAdmin = me?.role === 'admin';
     const adminOnly = () => { if (!isAdmin) throw new Error('Admins only.'); };
-    const connected = async () => {
-      const { data } = await svc.from('storage_connection').select('refresh_token').eq('id', 1).maybeSingle();
-      return !!data?.refresh_token && !!CLIENT_ID && !!CLIENT_SECRET;
-    };
+    const connected = isConnected;
 
     // ════ Admin: connect / status ════
     if (action === 'status') {
@@ -276,6 +494,12 @@ Deno.serve(async (req) => {
       const { error } = await svc.from('client_documents').delete().in('id', allowed.map((d) => d.id));
       if (error) return reply({ error: error.message });
       return reply({ ok: true, deleted: allowed.length });
+    }
+
+    // ════ Admin: back up now (runs in the background; Settings → File storage shows progress) ════
+    if (action === 'backup_now') {
+      adminOnly();
+      return reply(await startBackup('manual', uid));
     }
 
     // ════ Admin: client deleted permanently → move their OneDrive folder to the recycle bin ════
