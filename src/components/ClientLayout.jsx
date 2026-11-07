@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
-  Zap, CalendarCheck, Globe, Crown, Hash, Users, Eye,
+  Zap, CalendarCheck, Globe, Crown, Hash, Users, Eye, ListTree,
 } from 'lucide-react';
 import { websiteUrl } from '../lib/firm';
 import NotificationBell from './NotificationBell';
@@ -24,6 +24,7 @@ const nav = [
   { to: '/client/income', icon: Wallet, label: 'Monthly Income', feature: 'income_sheets' },
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
   { to: '/client/ird-codes', icon: Hash, label: 'IRD Payment Codes', feature: 'ird_codes' },
+  { to: '/client/activity-codes', icon: ListTree, label: 'Activity Codes', feature: 'ird_codes' },
   { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals' },
   { to: '/client/services', icon: CalendarCheck, label: 'Book a Service', feature: 'services' },
   { to: '/client/plan', icon: Crown, label: 'My Plan', feature: 'plans' },

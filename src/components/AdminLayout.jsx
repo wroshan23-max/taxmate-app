@@ -8,7 +8,7 @@ import MobileDrawer from './MobileDrawer';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree
 } from 'lucide-react';
 
 const nav = [
@@ -19,6 +19,7 @@ const nav = [
   { to: '/admin/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/admin/calendar', icon: CalendarDays, label: 'Tax Calendar' },
   { to: '/admin/ird-codes', icon: Hash, label: 'IRD Payment Codes' },
+  { to: '/admin/activity-codes', icon: ListTree, label: 'RAMIS Activity Codes' },
   { to: '/admin/messages', icon: MessageCircle, label: 'Messages', badge: true },
   { to: '/admin/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
