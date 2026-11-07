@@ -4,6 +4,7 @@ import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
 import { Crown, Cloud } from 'lucide-react';
 import { loadPlans, savePlans, DEFAULT_PLANS, planStyle, loadAddons, saveAddons, addonEmoji } from '../../lib/plans';
+import { DEFAULT_CALC_SETTINGS } from '../../lib/calcCredits';
 import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon, CreditCard, ExternalLink, Mail, Send, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
@@ -746,6 +747,7 @@ function PlansTab() {
               <label className="text-[11px] font-semibold text-gray-500 block">What's included (one per line)<textarea className="input mt-0.5 text-sm" rows={6} value={p.featuresText || ''} onChange={e => upd(i, { featuresText: e.target.value })} /></label>
               <label className="text-xs inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.includes_review} onChange={e => upd(i, { includes_review: e.target.checked })} /> Annual Tax Review included (fee 0)</label>
               <label className="text-xs inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.includes_payroll} onChange={e => upd(i, { includes_payroll: e.target.checked })} /> 👥 Payroll & APIT included</label>
+              <label className="text-xs inline-flex items-center gap-1.5"><input type="checkbox" checked={!!p.includes_calc} onChange={e => upd(i, { includes_calc: e.target.checked })} /> 🧮 Unlimited Tax Calculator</label>
               <div className="flex items-center gap-2 text-[11px] text-gray-400"><span>Code: {p.key}</span>
                 {plans.length > 1 && <button onClick={() => setPlans(plans.filter((_, j) => j !== i))} className="ml-auto text-red-500 hover:underline inline-flex items-center gap-1"><Trash2 size={11} /> Remove</button>}</div>
             </div>
@@ -758,6 +760,76 @@ function PlansTab() {
         <button onClick={save} disabled={busy} className="btn-primary text-sm ml-auto"><Save size={14} /> Save plans</button>
       </div>
       <AddonsEditor />
+      <CalcCreditsEditor />
+    </div>
+  );
+}
+
+// V53: Tax Calculator credits — packs, auto-add after payment, free Quick Tax Checks
+function CalcCreditsEditor() {
+  const [c, setC] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    supabase.from('app_settings').select('value').eq('key', 'calc_credits').maybeSingle()
+      .then(({ data }) => setC({ ...DEFAULT_CALC_SETTINGS, ...(data?.value ?? {}) }));
+  }, []);
+  if (!c) return null;
+  const setPack = (i, patch) => setC({ ...c, packs: c.packs.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+  const save = async (next = c) => {
+    const packs = next.packs.map(p => ({ credits: Math.round(Number(p.credits) || 0), price: Math.round(Number(p.price) || 0) })).filter(p => p.credits > 0 && p.price > 0);
+    if (!packs.length) return toast.error('Add at least one pack with credits and a price');
+    const value = { charge: next.charge !== false, auto_credit: next.auto_credit !== false, free_quick: Math.max(0, Math.min(100, Math.round(Number(next.free_quick) || 0))), packs };
+    setBusy(true);
+    const { error } = await supabase.from('app_settings').upsert({ key: 'calc_credits', value, updated_at: new Date().toISOString() });
+    setBusy(false);
+    if (error) return toast.error(error.message);
+    setC(value); toast.success('Calculator credits saved');
+  };
+  const Switch = ({ on, onChange, label, hint }) => (
+    <label className="flex items-start gap-3 cursor-pointer">
+      <button type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)}
+        className={`mt-0.5 w-10 h-6 rounded-full relative transition-colors flex-shrink-0 ${on ? 'bg-green-500' : 'bg-gray-300'}`}>
+        <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${on ? 'left-[18px]' : 'left-0.5'}`} />
+      </button>
+      <span className="text-sm"><b className="text-gray-800">{label}</b><span className="block text-xs text-gray-500">{hint}</span></span>
+    </label>
+  );
+  return (
+    <div className="space-y-3 pt-4 border-t border-gray-200">
+      <div><h3 className="font-bold text-primary-800">🧮 Tax Calculator credits</h3>
+        <p className="text-xs text-gray-500">Clients buy packs from the Tax Calculator page. Each calculation uses 1 credit (the same figures again within 24 hours are free).
+          Plans ticked <b>Unlimited Tax Calculator</b> above need no credits. Add or remove credits for one client on the client page. The public calculator on the website stays free.</p></div>
+      <div className="card p-4 space-y-4">
+        <div className="grid md:grid-cols-2 gap-4">
+          <Switch on={c.auto_credit !== false} onChange={v => save({ ...c, auto_credit: v })} label="Add credits automatically when paid"
+            hint={c.auto_credit !== false ? 'On — credits are added as soon as the pack invoice is marked paid (PayHere or approved bank slip).' : 'Off — a paid pack waits for you to press Approve on the client page.'} />
+          <Switch on={c.charge !== false} onChange={v => save({ ...c, charge: v })} label="Charge for calculations"
+            hint={c.charge !== false ? 'On — clients need credits (or a plan) after their free checks.' : 'Off — both calculators are free for every client.'} />
+        </div>
+        <label className="text-xs font-semibold text-gray-500 block">Free Quick Tax Checks per client
+          <input className="input mt-1 w-24 text-right" inputMode="numeric" value={c.free_quick} onChange={e => setC({ ...c, free_quick: e.target.value.replace(/\D/g, '').slice(0, 3) })} />
+          <span className="ml-2 font-normal text-gray-400">then 1 credit each · the detailed Tax Calculator always needs credits</span>
+        </label>
+        <div>
+          <div className="text-xs font-semibold text-gray-500 mb-1">Packs</div>
+          <div className="space-y-2">
+            {c.packs.map((p, i) => (
+              <div key={i} className="flex items-center gap-2 flex-wrap">
+                <input className="input w-24 text-right" inputMode="numeric" value={p.credits} onChange={e => setPack(i, { credits: e.target.value.replace(/\D/g, '').slice(0, 5) })} />
+                <span className="text-sm text-gray-500">calculations for Rs.</span>
+                <input className="input w-28 text-right" inputMode="numeric" value={p.price} onChange={e => setPack(i, { price: e.target.value.replace(/\D/g, '').slice(0, 7) })} />
+                <span className="text-xs text-gray-400">{Number(p.credits) > 0 ? `= Rs. ${Math.round(Number(p.price) / Number(p.credits)).toLocaleString('en-LK')} each` : ''}</span>
+                {c.packs.length > 1 && <button onClick={() => setC({ ...c, packs: c.packs.filter((_, j) => j !== i) })} className="text-red-500 text-xs hover:underline inline-flex items-center gap-1"><Trash2 size={11} /> Remove</button>}
+              </div>
+            ))}
+          </div>
+          {c.packs.length < 4 && <button onClick={() => setC({ ...c, packs: [...c.packs, { credits: '', price: '' }] })} className="mt-2 btn-secondary text-xs py-1"><Plus size={13} /> Add pack</button>}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setC({ ...DEFAULT_CALC_SETTINGS })} className="btn-secondary text-sm"><RotateCcw size={14} /> Suggested</button>
+          <button onClick={() => save()} disabled={busy} className="btn-primary text-sm ml-auto"><Save size={14} /> Save credits</button>
+        </div>
+      </div>
     </div>
   );
 }

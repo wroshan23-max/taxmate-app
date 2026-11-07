@@ -17,7 +17,8 @@ import { PORTAL_FEATURES } from './Settings';
 import { invoiceMessage } from '../../lib/share';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
-import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCircle, RotateCcw } from 'lucide-react';
+import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCircle, RotateCcw, Eye } from 'lucide-react';
+import CalcCreditsAdmin from '../../components/CalcCreditsAdmin';
 import DocumentVault from '../../components/DocumentVault';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
@@ -27,6 +28,12 @@ import SubscriptionAdmin from '../../components/SubscriptionAdmin';
 import AddonsAdmin from '../../components/AddonsAdmin';
 import PayrollModule from '../../components/PayrollModule';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
+
+// V53: open the client portal as this client sees it — read only, in a new tab (the database checks it is an admin)
+function viewAsClient(clientId) {
+  window.open(`/client?view_as=${clientId}`, '_blank');
+  supabase.rpc('admin_log_view_as', { p_client: clientId }).then(() => {}, () => {});
+}
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -136,9 +143,16 @@ export default function ClientDetail() {
         </div>
         <div className="ml-auto">
           {!editing ? (
-            <button onClick={() => setEditing(true)} className="btn-secondary">
-              <Edit2 size={15} /> Edit
-            </button>
+            <div className="flex gap-2 flex-wrap justify-end">
+              <button type="button" disabled={!client.profile_id} onClick={() => viewAsClient(client.id)}
+                title={client.profile_id ? 'Open the client portal exactly as this client sees it (read only, new tab)' : 'This client has no portal login yet'}
+                className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed">
+                <Eye size={15} /> View as client
+              </button>
+              <button onClick={() => setEditing(true)} className="btn-secondary">
+                <Edit2 size={15} /> Edit
+              </button>
+            </div>
           ) : (
             <div className="flex gap-2">
               <button onClick={() => setEditing(false)} className="btn-secondary"><X size={15} /> Cancel</button>
@@ -254,6 +268,7 @@ export default function ClientDetail() {
       )}
       {tab === 'overview' && <SubscriptionAdmin client={client} userId={user?.id} />}
       {tab === 'overview' && <AddonsAdmin client={client} userId={user?.id} onChange={() => setPayrollKey(k => k + 1)} />}
+      {tab === 'overview' && <CalcCreditsAdmin client={client} />}
       {tab === 'overview' && <IrdDetailsAdmin client={client} onClientChange={(p) => { setClient(c => ({ ...c, ...p })); setForm(fm => ({ ...fm, ...p })); }} />}
       {tab === 'overview' && <PortalAccess client={client} onChange={loadAll} />}
       {tab === 'overview' && client.profile_id && (
