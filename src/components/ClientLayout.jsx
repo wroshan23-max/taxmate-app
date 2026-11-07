@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
-  Zap, CalendarCheck, Globe, Crown, Hash, Users,
+  Zap, CalendarCheck, Globe, Crown, Hash, Users, Eye,
 } from 'lucide-react';
 import { websiteUrl } from '../lib/firm';
 import NotificationBell from './NotificationBell';
@@ -38,7 +38,7 @@ const nav = [
 ];
 
 export default function ClientLayout() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, viewAs } = useAuth();
   const navigate = useNavigate();
   // Features switched on by TaxMate (Tax Calculator on/off, Monthly Income sheet enabled)
   const [features, setFeatures] = useState({ quick_tax: true, tax_calculator: true, tax_calendar: true, ird_codes: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, services: true, summary_letters: true, plans: true, tax_reviews: true, income_sheets: 0, loaded: false });
@@ -64,7 +64,7 @@ export default function ClientLayout() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/login');
+    if (!viewAs) navigate('/login');
   };
 
   const Sidebar = () => (
@@ -113,8 +113,7 @@ export default function ClientLayout() {
           onClick={handleSignOut}
           className="flex items-center gap-2 text-primary-300 hover:text-white text-xs px-3 py-1.5 rounded-lg hover:bg-primary-700 w-full transition-colors"
         >
-          <LogOut size={14} />
-          Sign Out
+          {viewAs ? <><Eye size={14} /> Exit preview</> : <><LogOut size={14} /> Sign Out</>}
         </button>
         <a href={websiteUrl()} target="_blank" rel="noreferrer"
           className="flex items-center gap-2 text-primary-300 hover:text-white text-xs px-3 py-1.5 rounded-lg hover:bg-primary-700 w-full transition-colors">
@@ -142,6 +141,16 @@ export default function ClientLayout() {
       </MobileDrawer>
 
       <div className="flex-1 flex flex-col overflow-hidden">
+        {viewAs && (
+          <div className="bg-amber-400 text-amber-950 px-4 py-2 text-xs sm:text-sm flex items-center gap-2 flex-shrink-0 shadow-sm" role="status">
+            <Eye size={16} className="flex-shrink-0" />
+            <span className="flex-1 min-w-0">
+              <b>Preview</b> — you are seeing the portal as <b>{profile?.full_name}</b>{profile?.client_no ? ` (${profile.client_no})` : ''}.
+              <span className="hidden sm:inline"> Read only: nothing can be changed or sent here.</span>
+            </span>
+            <button onClick={handleSignOut} className="flex-shrink-0 font-semibold bg-amber-950 text-amber-50 hover:bg-amber-900 rounded-lg px-3 py-1">Exit preview</button>
+          </div>
+        )}
         <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
           <button onClick={() => setOpen(true)} className="md:hidden text-gray-500 hover:text-gray-700 relative">
             <Menu size={20} />

@@ -3,6 +3,7 @@ import { Globe2, Landmark, CalendarRange, ChevronDown, Info, PartyPopper, ArrowR
 import { computePersonal, TAX_YEARS } from '../lib/iitCalc';
 import TopUpCalc from './TopUpCalc';
 import TaxSavingTips from './TaxSavingTips';
+import { useCalcGate, CreditPill, CalcGateCard, BuyPacks } from './CalcCredits';
 
 const YEARS = ['2025/26', '2026/27'];
 const rs = (v) => Math.round(v || 0).toLocaleString('en-LK');
@@ -35,6 +36,9 @@ export default function SimpleTaxCalculator({ mode = 'public' }) {
   const k = period === 'monthly' ? 12 : 1;
   const x = useMemo(() => ({ salary: toNum(local) * k, foreignFx: toNum(foreign) * k }), [local, foreign, k]);
   const r = useMemo(() => computePersonal(year, x), [year, x]);
+  // V53: in the client portal — 5 free checks, then 1 credit each (the public page stays free)
+  const figures = useMemo(() => ({ year, period, x }), [year, period, x]);
+  const gate = useCalcGate('quick', figures, mode === 'client');
   const income = r.totalAss;
   const hasIncome = income > 0;
   const per = (v) => (period === 'monthly' ? v / 12 : v);
@@ -71,6 +75,7 @@ export default function SimpleTaxCalculator({ mode = 'public' }) {
               className={`px-3 py-2 rounded-xl text-sm font-bold transition-all ${year === y ? 'bg-gold-500 text-primary-900 shadow' : 'text-gray-500 hover:text-gray-800'}`}>Y/A {y}</button>
           ))}
         </div>
+        {mode === 'client' && <div className="ml-auto"><CreditPill gate={gate} tool="quick" /></div>}
       </div>
 
       <div className="grid lg:grid-cols-[1fr_1.05fr] gap-5 items-start">
@@ -119,6 +124,7 @@ export default function SimpleTaxCalculator({ mode = 'public' }) {
 
         {/* Result */}
         <div className="space-y-4 lg:sticky lg:top-4">
+          {!gate.unlocked ? <CalcGateCard gate={gate} tool="quick" ready={hasIncome} /> : (<>
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-700 via-primary-800 to-indigo-900 text-white p-6 shadow-xl">
             <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-gold-500/20 blur-2xl" />
             <div className="relative">
@@ -163,10 +169,12 @@ export default function SimpleTaxCalculator({ mode = 'public' }) {
               </div>
             </div>
           )}
+          </>)}
         </div>
       </div>
 
-      {hasIncome && <TaxSavingTips year={year} x={x} mode={mode} />}
+      {hasIncome && gate.unlocked && <TaxSavingTips year={year} x={x} mode={mode} />}
+      {mode === 'client' && gate.st && !gate.unlimited && gate.st.free_left === 0 && <div className="card p-4 sm:p-5"><BuyPacks st={gate.st} reload={gate.reload} /></div>}
     </div>
   );
 }
