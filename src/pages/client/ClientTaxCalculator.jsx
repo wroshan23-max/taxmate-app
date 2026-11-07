@@ -8,6 +8,7 @@ import { computePersonal, apitTable1, TAX_YEARS } from '../../lib/iitCalc';
 import TaxSavingTips from '../../components/TaxSavingTips';
 import { FIRM } from '../../lib/iitStatement';
 import { waNumber } from '../../lib/share';
+import { useCalcGate, CreditPill, CalcGateCard, BuyPacks } from '../../components/CalcCredits';
 
 const YEARS = ['2025/26', '2026/27'];
 const CURRENCIES = ['LKR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'AED', 'SAR', 'QAR', 'KWD', 'JPY', 'SGD', 'NZD', 'INR'];
@@ -91,6 +92,9 @@ export default function ClientTaxCalculator() {
     whtInterestAuto: period === 'annual' && f.whtInterestAuto,
   }), [f, mult, showLocal, showForeign, fxLKR, period]);
   const r = useMemo(() => computePersonal(year, px), [year, px]);
+  // V53: each calculation uses a credit (unlimited on plans that include it)
+  const figures = useMemo(() => ({ year, period, px }), [year, period, px]);
+  const gate = useCalcGate('advanced', figures, features.tax_calculator !== false);
 
   const d = (n) => n / mult;    // show in the chosen period
   const hasIncome = r.totalAss > 0;
@@ -120,6 +124,7 @@ export default function ClientTaxCalculator() {
             <h1 className="text-xl sm:text-2xl font-bold">Income Tax Calculator</h1>
             <p className="text-sm text-primary-200">ආදායම් බදු ගණකය · Estimate your Sri Lankan income tax in seconds</p>
           </div>
+          <CreditPill gate={gate} tool="advanced" dark />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
           <div className="flex bg-white/10 rounded-xl p-1">
@@ -230,6 +235,7 @@ export default function ClientTaxCalculator() {
 
         {/* Result */}
         <div id="tax-result" className="lg:sticky lg:top-6 space-y-3 scroll-mt-4">
+          {!gate.unlocked ? <CalcGateCard gate={gate} tool="advanced" ready={hasIncome && !needRate} readyHint={needRate ? 'Enter the exchange rate first.' : undefined} /> : (<>
           <div className="card overflow-hidden">
             <div className="bg-gradient-to-br from-gold-500 to-amber-500 p-5 text-primary-900">
               <div className="text-xs font-bold uppercase tracking-wider opacity-80">Your income tax {per}</div>
@@ -315,17 +321,28 @@ export default function ClientTaxCalculator() {
             target="_blank" rel="noreferrer" className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-3">
             <MessageCircle size={17} /> Ask TaxMate to file it for you
           </a>
+          </>)}
         </div>
       </div>
 
-      {hasIncome && <TaxSavingTips year={year} x={px} mode="client" />}
+      {hasIncome && gate.unlocked && <TaxSavingTips year={year} x={px} mode="client" />}
+
+      {gate.st && !gate.unlimited && <div className="card p-4 sm:p-5"><BuyPacks st={gate.st} reload={gate.reload} /></div>}
 
       {/* Phone: live total pinned at the bottom while typing */}
       {hasIncome && (
-        <button onClick={() => document.getElementById('tax-result')?.scrollIntoView({ behavior: 'smooth' })}
+        <button onClick={async () => {
+          if (!gate.unlocked && gate.canPay && !needRate) await gate.calculate();
+          document.getElementById('tax-result')?.scrollIntoView({ behavior: 'smooth' });
+        }}
           className="lg:hidden fixed bottom-4 left-4 right-4 z-30 rounded-2xl bg-primary-800 text-white shadow-xl px-4 py-3 flex items-center gap-3">
-          <span className="text-xs text-primary-200 flex-1 text-left">Your tax {per}</span>
-          <span className="font-black tabular-nums text-gold-500">{rs(d(r.tax))}</span>
+          {gate.unlocked ? <>
+            <span className="text-xs text-primary-200 flex-1 text-left">Your tax {per}</span>
+            <span className="font-black tabular-nums text-gold-500">{rs(d(r.tax))}</span>
+          </> : <>
+            <span className="text-sm font-semibold flex-1 text-left">{gate.canPay ? (gate.changed ? 'Recalculate' : 'Calculate my tax') : 'Buy credits to calculate'}</span>
+            <span className="text-xs text-primary-200">{gate.st?.plan ? '' : gate.canPay ? '1 credit' : ''}</span>
+          </>}
           <ChevronDown size={16} className="text-primary-200" />
         </button>
       )}

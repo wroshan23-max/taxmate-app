@@ -81,6 +81,7 @@ export default function ClientPlan() {
               </div>
               <ul className="p-5 space-y-2 text-sm flex-1">
                 {(p.features ?? []).map((x, i) => <li key={i} className="flex gap-2"><Check size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" /><span>{x}</span></li>)}
+                {p.includes_calc && <li className="flex gap-2"><Check size={16} className="text-emerald-600 flex-shrink-0 mt-0.5" /><span>🧮 Unlimited Tax Calculator — no credits needed</span></li>}
               </ul>
               <div className="p-5 pt-0">
                 {mine ? <div className="text-center text-sm font-semibold text-emerald-700 py-2">✓ Your current plan</div>
