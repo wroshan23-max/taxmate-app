@@ -35,8 +35,11 @@ const ClientDocuments = lazyPage(() => import('./pages/client/ClientDocuments'))
 const ClientQuickTax = lazyPage(() => import('./pages/client/ClientQuickTax'));
 const PublicCalculator = lazyPage(() => import('./pages/PublicCalculator'));
 const PublicIrdCodes = lazyPage(() => import('./pages/PublicIrdCodes'));
+const PublicActivityCodes = lazyPage(() => import('./pages/PublicActivityCodes'));
 const IrdCodes = lazyPage(() => import('./pages/admin/IrdCodes'));
+const ActivityCodes = lazyPage(() => import('./pages/admin/ActivityCodes'));
 const ClientIrdCodes = lazyPage(() => import('./pages/client/ClientIrdCodes'));
+const ClientActivityCodes = lazyPage(() => import('./pages/client/ClientActivityCodes'));
 const VerifyLetter = lazyPage(() => import('./pages/VerifyLetter'));
 const AdminPayments = lazyPage(() => import('./pages/admin/Payments'));
 const AdminSubscriptions = lazyPage(() => import('./pages/admin/Subscriptions'));
@@ -161,6 +164,7 @@ export default function App() {
       <Route path="/join/:code" element={<Register />} />
       <Route path="/calculator" element={<PublicCalculator />} />
       <Route path="/ird-codes" element={<PublicIrdCodes />} />
+      <Route path="/activity-codes" element={<PublicActivityCodes />} />
       <Route path="/verify/:ref" element={<VerifyLetter />} />
       <Route path="/tax-calculator" element={<PublicCalculator />} />
 
@@ -176,6 +180,7 @@ export default function App() {
         <Route path="assets" element={<AssetStatements />} />
         <Route path="calendar" element={<TaxCalendar role="admin" />} />
         <Route path="ird-codes" element={<IrdCodes />} />
+        <Route path="activity-codes" element={<ActivityCodes />} />
         <Route path="invoices" element={<Invoices />} />
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
@@ -198,6 +203,7 @@ export default function App() {
         <Route path="tax-calculator" element={<ClientTaxCalculator />} />
         <Route path="quick-tax" element={<ClientQuickTax />} />
         <Route path="ird-codes" element={<ClientIrdCodes />} />
+        <Route path="activity-codes" element={<ClientActivityCodes />} />
         <Route path="services" element={<ClientServices />} />
         <Route path="plan" element={<ClientPlan />} />
         <Route path="payroll" element={<ClientPayroll />} />
