@@ -93,7 +93,7 @@ export const SOURCE_LABEL = {
 };
 export const sourceLabel = (s) => SOURCE_LABEL[s] ?? ['🏷️', s];
 export const PAGE_LABEL = {
-  '/': 'Home', '/login': 'Login page', '/ird-codes': 'IRD payment codes (public)', '/calculator': 'Tax calculator (public)',
+  '/': 'Home', '/login': 'Login page', '/ird-codes': 'IRD payment codes (public)', '/activity-codes': 'RAMIS activity codes (public)', '/calculator': 'Tax calculator (public)',
   '/tax-calculator': 'Tax calculator (public)', '/share/:token': 'Shared document link', '/invite/:token': 'Portal invite link',
   '/register/:token': 'Personal registration link', '/reset/:token': 'Password reset', '/verify/:token': 'Letter verification',
   '/client': 'Client dashboard',
