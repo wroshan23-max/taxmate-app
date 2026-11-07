@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { supabase, VIEW_AS, exitViewAs } from '../lib/supabase';
 import { mfaStatus } from '../lib/mfa';
 
 const AuthContext = createContext({});
@@ -48,15 +48,37 @@ export function AuthProvider({ children }) {
       .select('*')
       .eq('id', userId)
       .single();
-    setProfile(data);
+    let p = data;
+    if (VIEW_AS && data && data.role !== 'admin') {
+      // only admins can preview — anyone else just gets their own portal
+      try { sessionStorage.removeItem('tm_view_as'); } catch { /* ignore */ }
+      window.location.replace(window.location.pathname);
+      return;
+    }
+    if (p?.role === 'admin' && VIEW_AS) {
+      // V53 preview: the admin sees the portal as this client (read only; the database checks it is a real admin)
+      const { data: c } = await supabase.from('clients').select('id, profile_id, full_name, email, client_no').eq('id', VIEW_AS).maybeSingle();
+      p = c?.profile_id
+        ? { id: c.profile_id, role: 'client', full_name: c.full_name, email: c.email, client_id: c.id, client_no: c.client_no, viewAs: true, adminName: p.full_name }
+        : { ...p, viewAsError: c ? 'This client has no portal login yet.' : 'Client not found.' };
+    } else if (p?.role === 'client') {
+      const { data: c } = await supabase.from('clients').select('id').eq('profile_id', userId).maybeSingle();
+      p = { ...p, client_id: c?.id ?? null };
+    }
+    setProfile(p);
     setLoading(false);
   };
 
   const signIn = (email, password) =>
     supabase.auth.signInWithPassword({ email, password });
 
-  const signOut = () => supabase.auth.signOut();
+  // in a preview tab, "Sign out" only leaves the preview (the admin stays signed in)
+  const signOut = () => (VIEW_AS ? Promise.resolve(exitViewAs()) : supabase.auth.signOut());
 
+  const viewAs = !!profile?.viewAs;
+  // the client pages look a client up by user.id — in a preview that is the client's login id
+  const shownUser = useMemo(() => (viewAs && user ? { ...user, id: profile.id, email: profile.email ?? user.email } : user),
+    [viewAs, user, profile?.id, profile?.email]); // eslint-disable-line react-hooks/exhaustive-deps
   const isAdmin = profile?.role === 'admin';
   const isClient = profile?.role === 'client';
   // Second step still needed (authenticator code or PIN) — decided by the database
@@ -65,7 +87,7 @@ export function AuthProvider({ children }) {
   const has2fa = mfa.factors.length > 0 || hasPin;
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, isClient, signIn, signOut, mfa, refreshMfa, needsCode, has2fa, hasPin }}>
+    <AuthContext.Provider value={{ user: shownUser, realUser: user, viewAs, profile, loading, isAdmin, isClient, signIn, signOut, mfa, refreshMfa, needsCode, has2fa, hasPin }}>
       {children}
     </AuthContext.Provider>
   );
