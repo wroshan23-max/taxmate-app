@@ -2,6 +2,7 @@ import { Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazyPage, whenIdle } from './lib/lazyPage';
 import { trackVisit } from './lib/visits';
+import { VIEW_AS, exitViewAs } from './lib/supabase';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import { MfaChallengeScreen, MfaSetupScreen } from './components/TwoFactor';
@@ -66,23 +67,39 @@ function LoadingScreen() {
   );
 }
 
+// V53: a preview tab that cannot show the client (no portal login / not found)
+function ViewAsProblem({ msg }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+      <div className="card p-6 max-w-sm text-center space-y-3">
+        <div className="text-3xl">👁</div>
+        <div className="font-bold text-primary-800">Can't open the preview</div>
+        <p className="text-sm text-gray-500">{msg}</p>
+        <button onClick={exitViewAs} className="btn-primary w-full">Back to admin</button>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedAdmin({ children }) {
-  const { user, isAdmin, loading, needsCode, has2fa, mfa } = useAuth();
+  const { user, isAdmin, loading, needsCode, has2fa, mfa, profile } = useAuth();
   const loc = useLocation();
   if (loading || (user && !mfa.loaded)) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
   if (needsCode) return <MfaChallengeScreen />;
+  if (VIEW_AS && profile?.viewAsError) return <ViewAsProblem msg={profile.viewAsError} />;
   if (!isAdmin) return <Navigate to="/client" replace />;
   if (!has2fa) return <MfaSetupScreen />;          // admins must use two-step login
   return children;
 }
 
 function ProtectedClient({ children }) {
-  const { user, isClient, loading, needsCode, mfa } = useAuth();
+  const { user, isClient, loading, needsCode, mfa, profile } = useAuth();
   const loc = useLocation();
   if (loading || (user && !mfa.loaded)) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
   if (needsCode) return <MfaChallengeScreen />;
+  if (VIEW_AS && profile?.viewAsError) return <ViewAsProblem msg={profile.viewAsError} />;
   if (!isClient) return <Navigate to="/admin" replace />;
   return children;
 }
