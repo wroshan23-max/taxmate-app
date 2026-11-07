@@ -22,6 +22,7 @@ function CodeRow({ c, path, label }) {
       </button>
       <div className="min-w-0 flex-1">
         <div className="text-sm text-gray-800 leading-snug">{nice(c.desc)}</div>
+        {c.code === '000000' && <div className="text-[11px] text-amber-700 mt-0.5">⚠ RAMIS placeholder — it means no activity code is set yet. Don't choose it; pick the code for the real business.</div>}
         {path && <div className="text-[11px] text-gray-400 mt-0.5 truncate">{path}</div>}
       </div>
     </div>
@@ -65,7 +66,7 @@ export default function ActivityCodeFinder({ mode = 'admin' }) {
     return [...m.entries()];
   }, [all, div]);
 
-  if (!data) return <div className="card p-10 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /><div className="text-xs text-gray-400 mt-2">Loading 1,871 codes…</div></div>;
+  if (!data) return <div className="card p-10 text-center"><Loader2 className="animate-spin mx-auto text-gray-400" /><div className="text-xs text-gray-400 mt-2">Loading the IRD codes…</div></div>;
 
   const wa = `https://wa.me/${waNumber(FIRM.whatsapp)}?text=${encodeURIComponent('Hi TaxMate, which RAMIS activity code should I use for my business?')}`;
 
@@ -134,8 +135,9 @@ export default function ActivityCodeFinder({ mode = 'admin' }) {
       </div>
 
       <div className="text-[11px] text-gray-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span>Source: Inland Revenue Department — “Economic Activity Codes” (RAMIS). IRD can update the list; if RAMIS shows a different wording, follow RAMIS.</span>
-        <a href={data.SOURCE.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary-700 hover:underline">Official PDF <ExternalLink size={11} /></a>
+        <span>Source: Inland Revenue Department — “Economic Activity Codes” (RAMIS) and “Business Activity Code” list (2018). IRD can update the lists; if RAMIS shows a different wording, follow RAMIS.</span>
+        <a href={data.SOURCE.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary-700 hover:underline">RAMIS list PDF <ExternalLink size={11} /></a>
+        <a href={data.SOURCE.url2018} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary-700 hover:underline">2018 list PDF <ExternalLink size={11} /></a>
         {mode !== 'admin' && <a href={wa} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold text-green-700 hover:underline"><MessageCircle size={12} /> Not sure? Ask TaxMate</a>}
       </div>
     </div>
