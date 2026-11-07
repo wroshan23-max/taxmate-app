@@ -26,7 +26,7 @@ export default function PublicActivityCodes() {
         <div className="max-w-6xl mx-auto px-4 pt-6 pb-24">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider bg-white/15 rounded-full px-3 py-1">🇱🇰 Free · No sign-up</div>
           <h1 className="text-3xl sm:text-4xl font-black mt-3 leading-tight">RAMIS activity codes — find yours in seconds</h1>
-          <p className="text-primary-200 mt-2 max-w-2xl">All 1,871 official IRD economic activity codes for RAMIS — search your business (tuition, taxi, shop, software…) and copy the 6-digit code.</p>
+          <p className="text-primary-200 mt-2 max-w-2xl">All 1,872 official IRD economic activity codes for RAMIS — search your business (tuition, taxi, shop, software…) and copy the 6-digit code.</p>
           <p className="text-primary-300 text-sm mt-1">ඔබේ ව්‍යාපාරය search කරලා RAMIS එකට අවශ්‍ය activity code එක ක්ෂණිකව බලාගන්න.</p>
         </div>
       </header>
@@ -55,7 +55,7 @@ export default function PublicActivityCodes() {
         </section>
 
         <p className="text-[11px] text-gray-400 text-center max-w-3xl mx-auto">
-          Codes from the Inland Revenue Department list “Economic Activity Codes” (RAMIS). IRD can update the list — if RAMIS shows a different wording, follow RAMIS. This is a guide, not tax advice. © {FIRM.name}
+          Codes from the Inland Revenue Department lists “Economic Activity Codes” (RAMIS) and “Business Activity Code” (2018). IRD can update the list — if RAMIS shows a different wording, follow RAMIS. This is a guide, not tax advice. © {FIRM.name}
         </p>
       </main>
     </div>
