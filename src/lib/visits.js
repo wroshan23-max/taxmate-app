@@ -3,7 +3,7 @@
 //  Anonymous: a random id in this browser; no name, phone, IP or cookie. Admins are not counted (server side).
 //  Fire-and-forget: never blocks or breaks a page.
 // ═══════════════════════════════════════════════════════════
-import { supabase } from './supabase';
+import { supabase, VIEW_AS } from './supabase';
 
 const rid = () => {
   try { return crypto.randomUUID().replace(/-/g, ''); } catch { return (Math.random().toString(36) + Math.random().toString(36)).replace(/[^a-z0-9]/g, '').slice(0, 24); }
@@ -71,7 +71,7 @@ export function cleanPath(p) {
 let last = '';
 export function trackVisit(pathname, event = 'view') {
   try {
-    if (BOT.test(navigator.userAgent || '')) return;
+    if (VIEW_AS || BOT.test(navigator.userAgent || '')) return;   // admin previews are not visits
     const path = cleanPath(pathname);
     if (path.startsWith('/admin')) return;               // TaxMate's own pages
     if (event === 'view' && path === last) return;       // same page re-rendered
