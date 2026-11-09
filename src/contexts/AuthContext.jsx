@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { supabase, VIEW_AS, exitViewAs } from '../lib/supabase';
+import { supabase, VIEW_AS, FAMILY_AS, exitViewAs } from '../lib/supabase';
 import { mfaStatus } from '../lib/mfa';
 
 const AuthContext = createContext({});
@@ -61,9 +61,23 @@ export function AuthProvider({ children }) {
       p = c?.profile_id
         ? { id: c.profile_id, role: 'client', full_name: c.full_name, email: c.email, client_id: c.id, client_no: c.client_no, viewAs: true, adminName: p.full_name }
         : { ...p, viewAsError: c ? 'This client has no portal login yet.' : 'Client not found.' };
+    } else if (p?.role === 'client' && FAMILY_AS) {
+      // V55: the main applicant is managing a family member in this tab (the database checks the link)
+      const [{ data: m }, { data: fam }] = await Promise.all([
+        supabase.from('clients').select('id, full_name, email, client_no').eq('id', FAMILY_AS).maybeSingle(),
+        supabase.rpc('my_family'),
+      ]);
+      const link = fam?.members?.find(x => x.id === m?.id);
+      if (!m || !link) {   // not (or no longer) this person's family member → back to own account
+        try { sessionStorage.removeItem('tm_family'); } catch { /* ignore */ }
+        window.location.replace('/client');
+        return;
+      }
+      p = { ...p, own_client_id: fam.me?.id ?? null, client_id: m.id, full_name: m.full_name, email: m.email, client_no: m.client_no,
+            family: { memberId: m.id, relation: link.relation, headName: fam.me?.full_name || p.full_name } };
     } else if (p?.role === 'client') {
-      const { data: c } = await supabase.from('clients').select('id').eq('profile_id', userId).maybeSingle();
-      p = { ...p, client_id: c?.id ?? null };
+      const { data: c } = await supabase.from('clients').select('id, client_no').eq('profile_id', userId).maybeSingle();
+      p = { ...p, client_id: c?.id ?? null, own_client_id: c?.id ?? null, client_no: c?.client_no ?? p.client_no };
     }
     setProfile(p);
     setLoading(false);
@@ -73,7 +87,11 @@ export function AuthProvider({ children }) {
     supabase.auth.signInWithPassword({ email, password });
 
   // in a preview tab, "Sign out" only leaves the preview (the admin stays signed in)
-  const signOut = () => (VIEW_AS ? Promise.resolve(exitViewAs()) : supabase.auth.signOut());
+  const signOut = () => {
+    if (VIEW_AS) return Promise.resolve(exitViewAs());
+    try { sessionStorage.removeItem('tm_family'); } catch { /* ignore */ }
+    return supabase.auth.signOut();
+  };
 
   const viewAs = !!profile?.viewAs;
   // the client pages look a client up by user.id — in a preview that is the client's login id
