@@ -17,6 +17,7 @@ import { InvoiceSettings } from './Invoices';
 import MessageMenu from '../../components/MessageMenu';
 import ChangePassword from '../../components/ChangePassword';
 import StorageSettings from '../../components/StorageSettings';
+import { PushSettingsCard } from '../../components/PushNotifications';
 
 const TABS = [
   ['firm', Building2, 'Firm Profile'],
@@ -609,6 +610,7 @@ function MyAccountTab() {
       <div className="space-y-5">
         <PinCard required />
         <TwoFactorCard required />
+        <PushSettingsCard />
       </div>
     </div>
   );
@@ -665,6 +667,7 @@ function PortalTab() {
   const isOn = (k) => cfg[k] !== false;
   return (
     <div className="space-y-4">
+      <PushSettingsCard />
       <div className="card divide-y divide-gray-100">
         <div className="px-5 py-3 text-sm text-gray-500">Switch features on or off for <b>all clients</b>. To change one client, open their page → Overview → <b>Portal features</b>.</div>
         {PORTAL_FEATURES.map(([k, emo, title, desc]) => (

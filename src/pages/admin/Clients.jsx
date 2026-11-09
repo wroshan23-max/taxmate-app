@@ -11,6 +11,7 @@ import { hasContact, contactLabel } from '../../lib/contacts';
 import { activePlansByClient, planStyle } from '../../lib/plans';
 import { PlanAvatar, PlanBadge } from '../../components/PlanBadge';
 
+const PLATFORM = { android: 'Android', ios: 'iPhone / iPad', windows: 'Windows', mac: 'Mac', linux: 'Linux', other: 'other device' };
 const EMPTY = { full_name: '', tin: '', nic: '', email: '', mobile: '', address: '', employer: '', resident_status: 'resident', contact_name: '', contact_relation: '', contact_mobile: '', contact_email: '', contact_preferred: false };
 
 export default function Clients() {
@@ -29,6 +30,25 @@ export default function Clients() {
   const [plans, setPlans] = useState({});   // { client_id: active subscription }
   const [onlySubs, setOnlySubs] = useState(false);
   useEffect(() => { activePlansByClient().then(setPlans).catch(() => {}); }, []);
+  // V59: who installed the app (📱) and who gets phone notifications (🔔)
+  const [apps, setApps] = useState({});   // { client_id: { platforms: [], last, push } }
+  const [appFilter, setAppFilter] = useState('');   // '' | 'yes' | 'no'
+  useEffect(() => {
+    Promise.all([
+      supabase.from('app_installs').select('client_id, platform, last_open, installed_at, created_at').not('client_id', 'is', null).eq('is_admin', false),
+      supabase.from('push_subscriptions').select('client_id').eq('is_admin', false),
+    ]).then(([{ data: ins }, { data: subs }]) => {
+      const m = {};
+      for (const r of ins ?? []) {
+        const a = (m[r.client_id] ??= { platforms: [], last: null, push: false });
+        if (!a.platforms.includes(r.platform)) a.platforms.push(r.platform);
+        const t = r.last_open || r.installed_at || r.created_at;
+        if (t && (!a.last || t > a.last)) a.last = t;
+      }
+      for (const r of subs ?? []) if (r.client_id) (m[r.client_id] ??= { platforms: [], last: null, push: false }).push = true;
+      setApps(m);
+    }).catch(() => {});
+  }, []);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
@@ -52,6 +72,7 @@ export default function Clients() {
   const archivedCount = clients.filter(c => c.archived_at).length;
   const active = clients.filter(c => !c.archived_at);
   const subCount = active.filter(c => plans[c.id]).length;
+  const appCount = active.filter(c => apps[c.id]?.platforms.length).length;
   const nameOf = Object.fromEntries(clients.map(c => [c.id, c.full_name]));
   const restore = async (c) => {
     const { error } = await supabase.from('clients').update({ archived_at: null }).eq('id', c.id);
@@ -63,6 +84,7 @@ export default function Clients() {
     (showArchived ? !!c.archived_at : !c.archived_at) &&
     (!onlyNew || isNew(c)) &&
     (!onlySubs || !!plans[c.id]) &&
+    (!appFilter || (appFilter === 'yes') === !!apps[c.id]?.platforms.length) &&
     [c.client_no, c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
   );
 
@@ -89,6 +111,9 @@ export default function Clients() {
           <p className="text-sm text-gray-500">{active.length} clients
             {archivedCount > 0 && <button onClick={() => setShowArchived(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${showArchived ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600'}`}><Archive size={11} className="inline -mt-0.5" /> {archivedCount} archived{showArchived ? ' ✕' : ''}</button>}
             {subCount > 0 && <button onClick={() => setOnlySubs(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${onlySubs ? 'bg-gradient-to-r from-amber-400 to-orange-500 text-white' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>👑 {subCount} subscriber{subCount > 1 ? 's' : ''}{onlySubs ? ' ✕' : ''}</button>}
+            <button onClick={() => setAppFilter(f => (f === '' ? 'yes' : f === 'yes' ? 'no' : ''))} title="Click: with the app → without the app → all"
+              className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${appFilter === 'yes' ? 'bg-emerald-600 text-white' : appFilter === 'no' ? 'bg-gray-700 text-white' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>
+              {appFilter === 'no' ? `📵 ${active.length - appCount} without the app ✕` : `📱 ${appCount} with the app${appFilter === 'yes' ? ' ✕' : ''}`}</button>
             {newCount > 0 && <button onClick={() => setOnlyNew(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${onlyNew ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-800'}`}>{newCount} new registration{newCount > 1 ? 's' : ''}{onlyNew ? ' ✕' : ''}</button>}
           </p>
         </div>
@@ -145,6 +170,9 @@ export default function Clients() {
                           <div className="font-semibold text-gray-800 flex items-center gap-1.5 flex-wrap">{c.full_name}
                             {c.client_no && <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary-50 text-primary-700 border border-primary-100">{c.client_no}</span>}
                             <PlanBadge plan={plans[c.id]} compact />
+                            {apps[c.id]?.platforms.length > 0 && <span title={`Installed the TaxMate app on ${apps[c.id].platforms.map(p => PLATFORM[p] ?? p).join(', ')}${apps[c.id].last ? ` · last used ${fmtDate(apps[c.id].last)}` : ''}${apps[c.id].push ? ' · notifications on' : ''}`}
+                              className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">📱 App{apps[c.id].push ? ' · 🔔' : ''}</span>}
+                            {!apps[c.id]?.platforms.length && apps[c.id]?.push && <span title="Phone notifications on (in the browser, app not installed)" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">🔔</span>}
                             {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · {c.registration?.via && c.registration.via !== 'personal link' ? `via ${c.registration.via}` : 'self-registered'}</span>}</div>
                           <div className="text-xs text-gray-400">{c.email ?? '—'}</div>
                           {c.referred_by && <div className="text-[11px] text-purple-700 flex items-center gap-1 mt-0.5"><Gift size={11} /> Referred by {nameOf[c.referred_by] ?? 'a client'}</div>}

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, UserCheck, Activity as ActivityIcon, Wifi, RefreshCw, ShieldCheck, Search, UserPlus, Loader2 } from 'lucide-react';
+import { Users, UserCheck, Activity as ActivityIcon, Wifi, Smartphone, RefreshCw, ShieldCheck, Search, UserPlus, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { areaLabel, EVENT_LABEL, ago } from '../../lib/activity';
 import VisitorStats from '../../components/VisitorStats';
+import AppInstallStats, { useAppInstalls } from '../../components/AppInstallStats';
 
 const PERIODS = [[7, '7 days'], [30, '30 days'], [90, '90 days']];
 
@@ -60,10 +61,11 @@ function DailyChart({ daily }) {
 }
 
 export default function Activity() {
-  const [view, setView] = useState(() => (new URLSearchParams(window.location.search).get('view') === 'visitors' ? 'visitors' : 'users'));
+  const [view, setView] = useState(() => { const v = new URLSearchParams(window.location.search).get('view'); return v === 'visitors' || v === 'apps' ? v : 'users'; });
+  const apps = useAppInstalls();
   const tabs = (
     <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
-      {[['users', '👤 Portal users'], ['visitors', '🌐 Website visitors']].map(([k, l]) => (
+      {[['users', '👤 Portal users'], ['visitors', '🌐 Website visitors'], ['apps', `📱 App installs${apps.s ? ` (${apps.s.total ?? 0})` : ''}`]].map(([k, l]) => (
         <button key={k} onClick={() => setView(k)} className={`px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ${view === k ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{l}</button>
       ))}
     </div>
@@ -92,6 +94,13 @@ export default function Activity() {
     return u;
   }, [s, q, sort]);
 
+  if (view === 'apps') return (
+    <div className="space-y-5">
+      <h1 className="text-2xl font-bold text-primary-800">📊 Activity &amp; Users</h1>
+      {tabs}
+      <AppInstallStats data={apps} />
+    </div>
+  );
   if (view === 'visitors') return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-primary-800">📊 Activity &amp; Users</h1>
@@ -124,12 +133,13 @@ export default function Activity() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Kpi icon={Users} label="Registered clients" value={s.clients_total} sub={`+${s.clients_new} in ${days} days · ${s.self_registered} self-registered`} tone="bg-primary-600" />
         <Kpi icon={UserPlus} label="On the portal" value={s.clients_portal} sub={`${s.clients_total ? Math.round((s.clients_portal / s.clients_total) * 100) : 0}% of clients have a login`} tone="bg-indigo-500" />
         <Kpi icon={UserCheck} label={`Active (${days} days)`} value={s.active_period} sub={`${pctActive}% of portal users · ${s.active_7} this week`} tone="bg-emerald-600" />
         <Kpi icon={ActivityIcon} label="Active today" value={s.active_today} sub="clients who opened the portal" tone="bg-amber-500" />
         <Kpi icon={Wifi} label="Online now" value={onlineClients.length} sub={s.online.length > onlineClients.length ? `+ ${s.online.length - onlineClients.length} staff` : 'last 3 minutes'} tone="bg-pink-500" />
+        <button onClick={() => setView('apps')} className="text-left"><Kpi icon={Smartphone} label="App installs" value={apps.s?.total ?? '—'} sub={apps.s ? `${apps.s.clients ?? 0} clients · ${apps.s.push_clients ?? 0} with notifications` : 'phones & computers'} tone="bg-teal-600" /></button>
       </div>
 
       <div className="grid lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-4 items-start">
