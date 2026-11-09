@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import TopUpCalc from './TopUpCalc';
 import toast from 'react-hot-toast';
 import {
@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { computeReturn, RETURN_YEARS, RETURN_MONTHLY_KEYS, annualToReturnInput, calcKind } from '../lib/iitCalc';
 import { openStatement } from '../lib/iitStatement';
 import { sheetToReturnInput } from '../lib/incomeSheet';
+import { paidTotals } from '../lib/taxPayments';
 
 const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
 const pct = (r) => `${Math.round(r * 100)}%`;
@@ -92,6 +93,32 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
     return o;
   });
   const [saving, setSaving] = useState(false);
+  // V57: APIT / instalments recorded as paid for this client & Y/A → Tax already paid (903 / 911)
+  const [paidRec, setPaidRec] = useState(null);
+  useEffect(() => {
+    let live = true;
+    if (!clientId) { setPaidRec(null); return; }
+    paidTotals(clientId, year).then(t => {
+      if (!live) return;
+      setPaidRec(t);
+      // fill empty fields straight away (a figure already typed in is never overwritten automatically)
+      const fill = {};
+      setF(p => {
+        if (t.apit > 0 && !toNum(p.apitPrimary)) fill.apitPrimary = String(t.apit);
+        if (t.instalments > 0 && !toNum(p.instalments)) fill.instalments = String(t.instalments);
+        return Object.keys(fill).length ? { ...p, ...fill } : p;
+      });
+      if (t.apit > 0 || t.instalments > 0) setOpen(o => ({ ...o, cr: true }));
+    }).catch(() => live && setPaidRec(null));
+    return () => { live = false; };
+  }, [clientId, year]);
+  const usePaidRec = () => {
+    if (!paidRec) return;
+    setF(p => ({ ...p, apitPrimary: paidRec.apit ? String(paidRec.apit) : '', instalments: paidRec.instalments ? String(paidRec.instalments) : '' }));
+    setOpen(o => ({ ...o, cr: true }));
+    toast.success('Tax already paid filled from the recorded payments');
+  };
+  const recDiffers = paidRec && (paidRec.apit !== Math.round(toNum(f.apitPrimary)) || paidRec.instalments !== Math.round(toNum(f.instalments)));
 
   const input = useMemo(() => ({ ...Object.fromEntries(Object.entries(f).map(([k, v]) => [k, toNum(v)])), period }), [f, period]);
   const r = useMemo(() => computeReturn(year, input), [year, input]);
@@ -232,6 +259,13 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
                   <span className={`text-sm font-bold tabular-nums ${tot ? 'text-primary-700' : 'text-gray-300'}`}>{tot ? rs(tot) : '—'}</span>
                   {isOpen ? <ChevronDown size={17} className="text-gray-400" /> : <ChevronRight size={17} className="text-gray-400" />}
                 </button>
+                {isOpen && s.key === 'cr' && paidRec && (paidRec.apitCount > 0 || paidRec.instCount > 0) && (
+                  <div className={`mx-4 mt-1 mb-2 rounded-lg px-3 py-2 text-xs flex items-center gap-2 flex-wrap ${recDiffers ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-teal-50 text-teal-900 border border-teal-200'}`}>
+                    <span className="flex-1 min-w-[200px]">📒 Recorded as paid for Y/A {year}: APIT <b>{rs(paidRec.apit)}</b> ({paidRec.apitCount} month{paidRec.apitCount === 1 ? '' : 's'}) · instalments <b>{rs(paidRec.instalments)}</b> ({paidRec.instCount} quarter{paidRec.instCount === 1 ? '' : 's'})
+                      {recDiffers ? ' — different from the figures below.' : ' — filled below.'}</span>
+                    {recDiffers && <button onClick={usePaidRec} className="font-semibold rounded-md bg-white border border-amber-300 px-2 py-1 hover:bg-amber-100">Use recorded amounts</button>}
+                  </div>
+                )}
                 {isOpen && (
                   <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 gap-3 border-t border-gray-100">
                     {s.fields.map(([k, lbl, o = {}]) => {
