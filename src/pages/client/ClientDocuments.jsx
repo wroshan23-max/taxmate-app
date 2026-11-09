@@ -17,15 +17,15 @@ const CHECKLIST = [
 
 export default function ClientDocuments() {
   const features = useOutletContext() ?? {};
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [clientId, setClientId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tips, setTips] = useState(false);
 
   useEffect(() => {
-    supabase.from('clients').select('id').eq('profile_id', user.id).maybeSingle()
+    supabase.from('clients').select('id').eq('id', profile?.client_id).maybeSingle()
       .then(({ data }) => { setClientId(data?.id ?? null); setLoading(false); });
-  }, [user.id]);
+  }, [profile?.client_id]);
 
   if (features.loaded && features.documents === false) return (
     <div className="card p-8 text-center space-y-3"><FolderLock size={36} className="mx-auto text-gray-300" /><p className="text-gray-600">Document upload is not available right now. Please WhatsApp your documents to TaxMate.</p><Link to="/client" className="btn-secondary text-sm inline-flex">Back to dashboard</Link></div>

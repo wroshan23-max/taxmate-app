@@ -16,7 +16,7 @@ const statusBadge = (s) => {
 
 
 export default function ClientTaxReturns() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const features = useOutletContext() ?? {};
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,7 @@ export default function ClientTaxReturns() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).single();
+      const { data: cl } = await supabase.from('clients').select('id').eq('id', profile?.client_id).single();
       if (!cl) { setLoading(false); return; }
       setClientId(cl.id);
       const { data } = await supabase
@@ -36,7 +36,7 @@ export default function ClientTaxReturns() {
       setLoading(false);
     };
     load();
-  }, [user.id]);
+  }, [profile?.client_id]);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
 

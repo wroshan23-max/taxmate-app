@@ -16,7 +16,7 @@ const FIELD_LABELS = {
 };
 
 export default function ClientProfile() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [client, setClient] = useState(null);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,7 @@ export default function ClientProfile() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: cl } = await supabase.from('clients').select('*').eq('profile_id', user.id).single();
+      const { data: cl } = await supabase.from('clients').select('*').eq('id', profile?.client_id).single();
       if (!cl) { setLoading(false); return; }
       setClient(cl);
       setClientId(cl.id);
@@ -51,7 +51,7 @@ export default function ClientProfile() {
       setLoading(false);
     };
     load();
-  }, [user.id]);
+  }, [profile?.client_id]);
 
   const submitRequest = async (e) => {
     e.preventDefault();

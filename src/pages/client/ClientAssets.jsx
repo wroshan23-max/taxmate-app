@@ -12,7 +12,7 @@ import {
 const time = (d) => d.toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit' });
 
 export default function ClientAssets() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [params, setParams] = useSearchParams();
   const [client, setClient] = useState(null);
   const [list, setList] = useState([]);
@@ -37,7 +37,7 @@ export default function ClientAssets() {
 
   const load = useCallback(async (keepYear) => {
     const [{ data: c }, { data: s, error }] = await Promise.all([
-      supabase.from('clients').select('id, full_name, tin, nic, address, mobile, email').eq('profile_id', user.id).maybeSingle(),
+      supabase.from('clients').select('id, full_name, tin, nic, address, mobile, email').eq('id', profile?.client_id).maybeSingle(),
       supabase.from('asset_statements').select('*').order('year', { ascending: false }),
     ]);
     if (error) toast.error(error.message);
@@ -45,7 +45,7 @@ export default function ClientAssets() {
     setClient(c); setList(rows); setLoading(false);
     const want = keepYear || params.get('year');
     pick(rows.find(r => r.year === want) ?? rows.find(r => r.status === 'open') ?? rows[0] ?? null);
-  }, [user.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [profile?.client_id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(); }, [load]);
 
   // Warn before closing the tab with unsaved changes

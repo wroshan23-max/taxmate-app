@@ -11,7 +11,7 @@ const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); retur
 
 export default function ClientServices() {
   const features = useOutletContext() ?? {};
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [clientId, setClientId] = useState(null);
   const [rows, setRows] = useState([]);
   const [pick, setPick] = useState(null);
@@ -24,9 +24,9 @@ export default function ClientServices() {
     setRows(data ?? []);
   };
   useEffect(() => {
-    if (!user?.id) return;
-    supabase.from('clients').select('id').eq('profile_id', user.id).maybeSingle().then(({ data }) => { setClientId(data?.id ?? null); load(data?.id); });
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!profile?.client_id) return;
+    supabase.from('clients').select('id').eq('id', profile?.client_id).maybeSingle().then(({ data }) => { setClientId(data?.id ?? null); load(data?.id); });
+  }, [profile?.client_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (features.loaded && features.services === false) return (
     <div className="card p-8 text-center space-y-3"><CalendarCheck size={36} className="mx-auto text-gray-300" /><p className="text-gray-600">Online booking is not available right now. Please WhatsApp TaxMate.</p><Link to="/client" className="btn-secondary text-sm inline-flex">Back to dashboard</Link></div>

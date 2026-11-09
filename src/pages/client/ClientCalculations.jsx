@@ -9,7 +9,7 @@ import { buildStatementHtml, openStatement } from '../../lib/iitStatement';
 const AMT_LABEL = { payable: 'tax payable', refund: 'refund', nil: 'nil tax', instalment: 'per quarter' };
 
 export default function ClientCalculations() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [calcs, setCalcs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
@@ -17,7 +17,7 @@ export default function ClientCalculations() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: cl } = await supabase.from('clients').select('id, full_name, tin, nic, address, employer, resident_status').eq('profile_id', user.id).single();
+      const { data: cl } = await supabase.from('clients').select('id, full_name, tin, nic, address, employer, resident_status').eq('id', profile?.client_id).single();
       if (!cl) { setLoading(false); return; }
       setClient(cl);
       const { data } = await supabase
@@ -31,7 +31,7 @@ export default function ClientCalculations() {
       setLoading(false);
     };
     load();
-  }, [user.id]);
+  }, [profile?.client_id]);
 
   const patch = (id, p) => setCalcs(cs => cs.map(c => (c.id === id ? { ...c, ...p } : c)));
   const pending = calcs.filter(c => c.status !== 'final' && !c.client_status).length;

@@ -37,7 +37,7 @@ export default function ClientDashboard() {
       const { data: clientRow } = await supabase
         .from('clients')
         .select('id, client_no')
-        .eq('profile_id', user.id)
+        .eq('id', profile?.client_id)
         .single();
 
       if (!clientRow) { setLoading(false); return; }
@@ -56,7 +56,7 @@ export default function ClientDashboard() {
       setLoading(false);
     };
     load();
-  }, [user.id]);
+  }, [profile?.client_id]);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
 

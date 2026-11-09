@@ -13,7 +13,7 @@ import { isSent, isOverdue, openInvoice } from '../../lib/invoice';
 const STATUS_CLS = { unpaid: 'bg-blue-100 text-blue-700', overdue: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700' };
 
 export default function ClientInvoices() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [banks, setBanks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +27,7 @@ export default function ClientInvoices() {
   const [returnState, setReturnState] = useState(null);   // pending | paid | failed | cancelled
 
   const load = useCallback(async () => {
-    const { data: cl } = await supabase.from('clients').select('id').eq('profile_id', user.id).single();
+    const { data: cl } = await supabase.from('clients').select('id').eq('id', profile?.client_id).single();
     if (!cl) { setLoading(false); return; }
     setClientId(cl.id);
     const [{ data }, { data: bk }, { data: pays }] = await Promise.all([
@@ -43,7 +43,7 @@ export default function ClientInvoices() {
     setPayments(pays ?? []);
     setLoading(false);
     return pays ?? [];
-  }, [user.id]);
+  }, [profile?.client_id]);
   useEffect(() => { load(); }, [load]);
 
   // Back from PayHere: wait for the confirmation (PayHere notifies our server a few seconds later)

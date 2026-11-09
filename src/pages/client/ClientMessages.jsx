@@ -9,7 +9,7 @@ import { timeLabel } from '../../lib/messages';
 
 export default function ClientMessages() {
   const features = useOutletContext() ?? {};
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [clientId, setClientId] = useState(null);
   const [news, setNews] = useState(null);     // announcements with isNew
   const [showAll, setShowAll] = useState(false);
@@ -22,10 +22,10 @@ export default function ClientMessages() {
   };
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!profile?.client_id) return;
     (async () => {
       const [{ data: c }, { data: a }, { data: r }] = await Promise.all([
-        supabase.from('clients').select('id').eq('profile_id', user.id).maybeSingle(),
+        supabase.from('clients').select('id').eq('id', profile?.client_id).maybeSingle(),
         supabase.from('messages').select('*').is('client_id', null).order('created_at', { ascending: false }).limit(50),
         supabase.from('message_reads').select('message_id'),
       ]);
@@ -33,7 +33,7 @@ export default function ClientMessages() {
       setClientId(c?.id ?? null);
       setNews((a ?? []).map(m => ({ ...m, isNew: !seen.has(m.id) })));
     })();
-  }, [user?.id]);
+  }, [profile?.client_id]);
 
   if (features.loaded && features.messages === false) return (
     <div className="card p-8 text-center space-y-3"><MessageCircle size={36} className="mx-auto text-gray-300" /><p className="text-gray-600">Messages are not available right now. Please WhatsApp TaxMate.</p><Link to="/client" className="btn-secondary text-sm inline-flex">Back to dashboard</Link></div>

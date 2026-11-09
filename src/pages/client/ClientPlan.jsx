@@ -6,6 +6,7 @@ import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { myPlans, requestPlan, cancelPlanRequest, planStyle, rsPlan, myAddons, requestAddon, cancelAddonRequest, addonEmoji } from '../../lib/plans';
 import { FIRM } from '../../lib/iitStatement';
 import { waNumber } from '../../lib/share';
+import { useAuth } from '../../contexts/AuthContext';
 
 // IIT filing is covered only after the plan is 3 months old
 const IIT_NOTE = 'If your plan is less than 3 months old when your Annual Income Tax Return (IIT) is filed, the relevant IIT filing charges apply.';
@@ -14,6 +15,7 @@ const plus3m = (d) => { const x = new Date(d); x.setMonth(x.getMonth() + 3); ret
 
 export default function ClientPlan() {
   const features = useOutletContext() ?? {};
+  const { profile } = useAuth();
   const [d, setD] = useState(null);
   const [invs, setInvs] = useState([]);
   const [pick, setPick] = useState(null);
@@ -24,7 +26,7 @@ export default function ClientPlan() {
 
   const load = async () => {
     try { setD(await myPlans()); } catch (e) { toast.error(e.message); setD({ plans: [], current: null, request: null }); }
-    const { data } = await supabase.from('invoices').select('id, invoice_no, period, total_amount, status, due_date').not('subscription_id', 'is', null).order('created_at', { ascending: false }).limit(12);
+    const { data } = await supabase.from('invoices').select('id, invoice_no, period, total_amount, status, due_date').eq('client_id', profile?.client_id).not('subscription_id', 'is', null).order('created_at', { ascending: false }).limit(12);
     setInvs(data ?? []);
     myAddons().then(setAd).catch(() => setAd({ addons: [], mine: [], payroll: {} }));
   };
