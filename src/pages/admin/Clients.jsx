@@ -10,6 +10,8 @@ import RegistrationLinks from '../../components/RegistrationLinks';
 import { hasContact, contactLabel } from '../../lib/contacts';
 import { activePlansByClient, planStyle } from '../../lib/plans';
 import { PlanAvatar, PlanBadge } from '../../components/PlanBadge';
+import { FlagButtons, LabelChips, ManageLabels } from '../../components/ClientFlags';
+import { loadLabels, loadFlags, colorOf } from '../../lib/clientFlags';
 
 const PLATFORM = { android: 'Android', ios: 'iPhone / iPad', windows: 'Windows', mac: 'Mac', linux: 'Linux', other: 'other device' };
 const EMPTY = { full_name: '', tin: '', nic: '', email: '', mobile: '', address: '', employer: '', resident_status: 'resident', contact_name: '', contact_relation: '', contact_mobile: '', contact_email: '', contact_preferred: false };
@@ -30,6 +32,14 @@ export default function Clients() {
   const [plans, setPlans] = useState({});   // { client_id: active subscription }
   const [onlySubs, setOnlySubs] = useState(false);
   useEffect(() => { activePlansByClient().then(setPlans).catch(() => {}); }, []);
+  // V60: 📌 pinned clients on top + coloured labels
+  const [labels, setLabelsList] = useState([]);
+  const [flags, setFlags] = useState({});   // { client_id: { pinned_at, pin_note, label_ids } }
+  const [flagFilter, setFlagFilter] = useState('');   // '' | 'pinned' | label id
+  const [manage, setManage] = useState(false);
+  const reloadLabels = () => loadLabels().then(setLabelsList).catch(() => {});
+  useEffect(() => { reloadLabels(); loadFlags().then(setFlags).catch(() => {}); }, []);
+  const putFlag = (f) => f && setFlags(m => ({ ...m, [f.client_id]: f }));
   // V59: who installed the app (📱) and who gets phone notifications (🔔)
   const [apps, setApps] = useState({});   // { client_id: { platforms: [], last, push } }
   const [appFilter, setAppFilter] = useState('');   // '' | 'yes' | 'no'
@@ -80,13 +90,20 @@ export default function Clients() {
     toast.success(`${c.full_name} restored`);
     loadClients();
   };
+  const pinnedCount = active.filter(c => flags[c.id]?.pinned_at).length;
+  const labelCounts = {};
+  for (const c of active) for (const id of flags[c.id]?.label_ids ?? []) labelCounts[id] = (labelCounts[id] ?? 0) + 1;
   const filtered = clients.filter(c =>
+    (!flagFilter || (flagFilter === 'pinned' ? !!flags[c.id]?.pinned_at : (flags[c.id]?.label_ids ?? []).includes(flagFilter))) &&
     (showArchived ? !!c.archived_at : !c.archived_at) &&
     (!onlyNew || isNew(c)) &&
     (!onlySubs || !!plans[c.id]) &&
     (!appFilter || (appFilter === 'yes') === !!apps[c.id]?.platforms.length) &&
     [c.client_no, c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
-  );
+  ).sort((a, b) => {   // 📌 pinned first (latest pin on top), then A–Z as loaded
+    const pa = flags[a.id]?.pinned_at ?? '', pb = flags[b.id]?.pinned_at ?? '';
+    return pa === pb ? 0 : !pa ? 1 : !pb ? -1 : pb.localeCompare(pa);
+  });
 
   const openAdd = () => { setForm(EMPTY); setModal(true); };
   const closeModal = () => { setModal(false); setForm(EMPTY); };
@@ -136,6 +153,18 @@ export default function Clients() {
         </div>
       </div>
 
+      {/* V60: pinned + label filters */}
+      <div className="flex items-center gap-1.5 flex-wrap -mt-2">
+        <button onClick={() => setFlagFilter(f => (f === 'pinned' ? '' : 'pinned'))}
+          className={`text-xs font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1 ${flagFilter === 'pinned' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-amber-800 border-amber-200 hover:bg-amber-50'}`}>📌 Pinned {pinnedCount}{flagFilter === 'pinned' ? ' ✕' : ''}</button>
+        {labels.map(l => (
+          <button key={l.id} onClick={() => setFlagFilter(f => (f === l.id ? '' : l.id))}
+            className={`text-xs font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 ${flagFilter === l.id ? `${colorOf(l.color).chip} ring-2 ring-offset-1 ring-gray-400` : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>
+            <span className={`w-2.5 h-2.5 rounded-full ${colorOf(l.color).dot}`} />{l.name} <span className="text-gray-400">{labelCounts[l.id] ?? 0}</span>{flagFilter === l.id ? ' ✕' : ''}</button>
+        ))}
+        <button onClick={() => setManage(true)} className="text-xs font-semibold px-2.5 py-1 rounded-full text-primary-700 hover:bg-primary-50">🏷️ {labels.length ? 'Edit labels' : 'Create labels'}</button>
+      </div>
+
       {/* Table */}
       <div className="card overflow-hidden">
         {loading ? (
@@ -161,7 +190,7 @@ export default function Clients() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered.map(c => (
-                  <tr key={c.id} className={`group cursor-pointer hover:bg-primary-50/50 transition-colors ${plans[c.id] ? planStyle(plans[c.id].plan_key).row : ''}`}
+                  <tr key={c.id} className={`group cursor-pointer hover:bg-primary-50/50 transition-colors ${flags[c.id]?.pinned_at ? 'bg-amber-50/60 border-l-4 border-l-amber-400' : plans[c.id] ? planStyle(plans[c.id].plan_key).row : ''}`}
                     onClick={(e) => openRow(e, c.id)} onAuxClick={(e) => e.button === 1 && openRow(e, c.id)}>
                     <td className="table-td">
                       <div className="flex items-center gap-3">
@@ -174,6 +203,8 @@ export default function Clients() {
                               className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">📱 App{apps[c.id].push ? ' · 🔔' : ''}</span>}
                             {!apps[c.id]?.platforms.length && apps[c.id]?.push && <span title="Phone notifications on (in the browser, app not installed)" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">🔔</span>}
                             {isNew(c) && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">NEW · {c.registration?.via && c.registration.via !== 'personal link' ? `via ${c.registration.via}` : 'self-registered'}</span>}</div>
+                          {flags[c.id]?.pinned_at && flags[c.id]?.pin_note && <div className="text-xs font-medium text-amber-800 flex items-center gap-1">📌 {flags[c.id].pin_note}</div>}
+                          <LabelChips ids={flags[c.id]?.label_ids} labels={labels} className="my-0.5" />
                           <div className="text-xs text-gray-400">{c.email ?? '—'}</div>
                           {c.referred_by && <div className="text-[11px] text-purple-700 flex items-center gap-1 mt-0.5"><Gift size={11} /> Referred by {nameOf[c.referred_by] ?? 'a client'}</div>}
                           {hasContact(c) && (
@@ -201,9 +232,10 @@ export default function Clients() {
                         : <Link to={`/admin/clients/${c.id}`} className="text-xs text-primary-600 hover:underline">Invite</Link>}
                     </td>
                     <td className="table-td">
+                      <FlagButtons clientId={c.id} name={c.full_name} flag={flags[c.id]} labels={labels} onChange={putFlag} onManage={() => setManage(true)} />
                       <Link
                         to={`/admin/clients/${c.id}`}
-                        className="text-primary-600 hover:text-primary-800 text-xs font-semibold hover:underline"
+                        className="ml-1 text-primary-600 hover:text-primary-800 text-xs font-semibold hover:underline"
                       >
                         View <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
                       </Link>
@@ -220,6 +252,7 @@ export default function Clients() {
         )}
       </div>
 
+      {manage && <ManageLabels labels={labels} counts={labelCounts} onClose={() => setManage(false)} onChange={async () => { await reloadLabels(); setFlags(await loadFlags().catch(() => flags)); }} />}
       {removing && <DeleteClientDialog client={removing} onClose={() => setRemoving(null)} onDone={() => { setRemoving(null); loadClients(); }} />}
       {regOpen && <RegistrationLinks onClose={() => { setRegOpen(false); loadClients(); }} />}
 

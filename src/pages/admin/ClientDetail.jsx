@@ -31,6 +31,8 @@ import SubscriptionAdmin from '../../components/SubscriptionAdmin';
 import AddonsAdmin from '../../components/AddonsAdmin';
 import PayrollModule from '../../components/PayrollModule';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
+import { FlagButtons, LabelChips, ManageLabels } from '../../components/ClientFlags';
+import { loadLabels, loadFlags } from '../../lib/clientFlags';
 
 // V53: open the client portal as this client sees it — read only, in a new tab (the database checks it is an admin)
 function viewAsClient(clientId) {
@@ -48,6 +50,12 @@ export default function ClientDetail() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  // V60: pin + labels
+  const [flag, setFlag] = useState(null);
+  const [labels, setLabelsList] = useState([]);
+  const [manageLabels, setManageLabels] = useState(false);
+  const reloadLabels = () => loadLabels().then(setLabelsList).catch(() => {});
+  useEffect(() => { reloadLabels(); loadFlags(id).then(m => setFlag(m[id] ?? null)).catch(() => {}); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   // V56: everything the client entered → one Excel file
   const [exporting, setExporting] = useState(false);
   const doExport = async () => {
@@ -137,6 +145,7 @@ export default function ClientDetail() {
 
   return (
     <div className="space-y-5">
+      {manageLabels && <ManageLabels labels={labels} onClose={() => setManageLabels(false)} onChange={async () => { await reloadLabels(); loadFlags(id).then(m => setFlag(m[id] ?? null)).catch(() => {}); }} />}
       {/* Header */}
       <div className="flex items-center gap-4 flex-wrap">
         <Link to="/admin/clients" className="text-gray-400 hover:text-gray-600">
@@ -148,7 +157,14 @@ export default function ClientDetail() {
             {client.client_no && <button type="button" title="Client registration number — click to copy"
               onClick={() => { navigator.clipboard?.writeText(client.client_no).then(() => toast.success(`${client.client_no} copied`)).catch(() => {}); }}
               className="font-mono text-xs font-bold px-2 py-1 rounded-lg bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100">{client.client_no}</button>}
-            {plan && <PlanBadge plan={plan} className="text-xs px-2.5 py-1" />}</h1>
+            {plan && <PlanBadge plan={plan} className="text-xs px-2.5 py-1" />}
+            <FlagButtons clientId={client.id} name={client.full_name} flag={flag} labels={labels} onChange={(f) => f && setFlag(f)} onManage={() => setManageLabels(true)} size={16} /></h1>
+          {(flag?.pinned_at || flag?.label_ids?.length > 0) && (
+            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+              {flag?.pinned_at && <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-1.5 py-0.5">📌 Pinned{flag.pin_note ? ` — ${flag.pin_note}` : ''}</span>}
+              <LabelChips ids={flag?.label_ids} labels={labels} />
+            </div>
+          )}
           <div className="text-sm text-gray-500">TIN: {client.tin ?? '—'} · {client.email ?? '—'}</div>
           {hasContact(client) && (
             <div className="text-xs text-primary-700 mt-0.5 flex items-center gap-1"><UserRound size={12} /> Contact: {contactLabel(client)}{client.contact_mobile && ` · ${client.contact_mobile}`}{client.contact_preferred && ' ★ coordinates'}</div>
