@@ -55,7 +55,8 @@ export default function AllocateTaxPayment({ kind, amount, basis, clients, quart
       const rows = targets.map(t => ({
         client_id: clientId, year: ya, kind, period: t.period, basis: basis ?? {}, amount: value, due_date: t.due,
         status: paid ? 'paid' : 'due', paid_amount: paid ? value : null, paid_on: paid ? paidOn || null : null, reference: paid ? ref.trim() || null : null,
-        created_by: userId ?? null,
+        paid_by_role: paid ? 'admin' : null, checked_at: paid ? new Date().toISOString() : null, checked_by: null,
+        receipt_path: null, receipt_name: null, note: null, created_by: userId ?? null,
       }));
       await savePayments(rows);
       const c = clients.find(x => x.id === clientId);

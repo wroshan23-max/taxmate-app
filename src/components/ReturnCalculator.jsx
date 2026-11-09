@@ -262,7 +262,8 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
                 {isOpen && s.key === 'cr' && paidRec && (paidRec.apitCount > 0 || paidRec.instCount > 0) && (
                   <div className={`mx-4 mt-1 mb-2 rounded-lg px-3 py-2 text-xs flex items-center gap-2 flex-wrap ${recDiffers ? 'bg-amber-50 text-amber-900 border border-amber-200' : 'bg-teal-50 text-teal-900 border border-teal-200'}`}>
                     <span className="flex-1 min-w-[200px]">📒 Recorded as paid for Y/A {year}: APIT <b>{rs(paidRec.apit)}</b> ({paidRec.apitCount} month{paidRec.apitCount === 1 ? '' : 's'}) · instalments <b>{rs(paidRec.instalments)}</b> ({paidRec.instCount} quarter{paidRec.instCount === 1 ? '' : 's'})
-                      {recDiffers ? ' — different from the figures below.' : ' — filled below.'}</span>
+                      {recDiffers ? ' — different from the figures below.' : ' — filled below.'}
+                      {paidRec.unchecked > 0 && <b className="text-amber-800"> {paidRec.unchecked} marked paid by the client — check the receipt{paidRec.unchecked > 1 ? 's' : ''} on the client's Returns tab.</b>}</span>
                     {recDiffers && <button onClick={usePaidRec} className="font-semibold rounded-md bg-white border border-amber-300 px-2 py-1 hover:bg-amber-100">Use recorded amounts</button>}
                   </div>
                 )}
