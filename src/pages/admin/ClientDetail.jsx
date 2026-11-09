@@ -17,7 +17,8 @@ import { PORTAL_FEATURES } from './Settings';
 import { invoiceMessage } from '../../lib/share';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
-import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCircle, RotateCcw, Eye } from 'lucide-react';
+import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCircle, RotateCcw, Eye, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { exportClientExcel } from '../../lib/clientExport';
 import CalcCreditsAdmin from '../../components/CalcCreditsAdmin';
 import FamilyAdmin from '../../components/FamilyAdmin';
 import DocumentVault from '../../components/DocumentVault';
@@ -38,7 +39,7 @@ function viewAsClient(clientId) {
 
 export default function ClientDetail() {
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [calculations, setCalculations] = useState([]);
@@ -46,6 +47,16 @@ export default function ClientDetail() {
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  // V56: everything the client entered → one Excel file
+  const [exporting, setExporting] = useState(false);
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const r = await exportClientExcel(id, profile?.full_name);
+      toast.success(`Excel downloaded — details${r.income ? ` · ${r.income} income sheet${r.income > 1 ? 's' : ''}` : ''}${r.assets ? ` · ${r.assets} assets & liabilities` : ''}${r.staff || r.months ? ' · payroll' : ''}`);
+    } catch (e) { toast.error(e.message); }
+    setExporting(false);
+  };
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview');
@@ -149,6 +160,10 @@ export default function ClientDetail() {
                 title={client.profile_id ? 'Open the client portal exactly as this client sees it (read only, new tab)' : 'This client has no portal login yet'}
                 className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed">
                 <Eye size={15} /> View as client
+              </button>
+              <button type="button" disabled={exporting} onClick={doExport} title="Download everything this client entered: details, monthly income, assets & liabilities, payroll"
+                className="btn-secondary">
+                {exporting ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />} Export to Excel
               </button>
               <button onClick={() => setEditing(true)} className="btn-secondary">
                 <Edit2 size={15} /> Edit
