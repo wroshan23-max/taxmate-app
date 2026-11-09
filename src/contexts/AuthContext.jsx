@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { supabase, VIEW_AS, FAMILY_AS, exitViewAs } from '../lib/supabase';
+import { unlinkPush } from '../lib/push';
 import { mfaStatus } from '../lib/mfa';
 
 const AuthContext = createContext({});
@@ -90,7 +91,7 @@ export function AuthProvider({ children }) {
   const signOut = () => {
     if (VIEW_AS) return Promise.resolve(exitViewAs());
     try { sessionStorage.removeItem('tm_family'); } catch { /* ignore */ }
-    return supabase.auth.signOut();
+    return unlinkPush().finally(() => supabase.auth.signOut());
   };
 
   const viewAs = !!profile?.viewAs;
