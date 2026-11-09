@@ -338,8 +338,12 @@ Deno.serve(async (req) => {
     const { data: caller } = await svc.auth.getUser(jwt);
     if (!caller?.user) return reply({ error: 'Please sign in again.' });
     const uid = caller.user.id;
+    // V55: a main applicant managing a family member sends act_as = member's client id;
+    // the database (my_client_id) accepts it only for that member's main applicant
+    const actAs = UUID_RE.test(String(body?.act_as ?? '')) ? String(body.act_as).toLowerCase() : null;
     const asCaller = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: `Bearer ${jwt}` } }, auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${jwt}`, ...(actAs ? { 'x-family-member': actAs } : {}) } },
+      auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: stepOk } = await asCaller.rpc('my_second_step_ok');
     if (stepOk !== true) return reply({ error: 'Please sign in again with your PIN or 6-digit code.' });
