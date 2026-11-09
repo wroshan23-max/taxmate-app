@@ -19,6 +19,7 @@ import ContactPersonFields, { contactPatch } from '../../components/ContactPerso
 import { hasContact, contactLabel, recipientsOf } from '../../lib/contacts';
 import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCircle, RotateCcw, Eye } from 'lucide-react';
 import CalcCreditsAdmin from '../../components/CalcCreditsAdmin';
+import FamilyAdmin from '../../components/FamilyAdmin';
 import DocumentVault from '../../components/DocumentVault';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
@@ -266,6 +267,7 @@ export default function ClientDetail() {
           </div>
         </div>
       )}
+      {tab === 'overview' && <FamilyAdmin client={client} userId={user?.id} />}
       {tab === 'overview' && <SubscriptionAdmin client={client} userId={user?.id} />}
       {tab === 'overview' && <AddonsAdmin client={client} userId={user?.id} onChange={() => setPayrollKey(k => k + 1)} />}
       {tab === 'overview' && <CalcCreditsAdmin client={client} />}
