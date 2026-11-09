@@ -31,6 +31,44 @@ export function exitViewAs() {
   setTimeout(() => { window.location.href = id ? `/admin/clients/${id}` : '/admin'; }, 150);
 }
 
+// ═══ V55: Family accounts — the main applicant acts for a family member ═══
+// The member being managed is kept per browser tab (sessionStorage 'tm_family'), or picked with
+// /client/...?member=<client id> (links in notifications). Database reads and changes then carry
+// the header x-family-member; the database allows it only for that member's main applicant.
+function detectFamily() {
+  try {
+    if (typeof window === 'undefined' || VIEW_AS) return null;
+    const q = new URLSearchParams(window.location.search).get('member');
+    if (q && window.location.pathname.startsWith('/client')) {
+      if (q === 'self') sessionStorage.removeItem('tm_family');
+      else if (UUID_RE.test(q)) sessionStorage.setItem('tm_family', q.toLowerCase());
+      const u = new URL(window.location.href); u.searchParams.delete('member');
+      window.history.replaceState(null, '', u.pathname + u.search + u.hash);
+    }
+    const s = sessionStorage.getItem('tm_family');
+    return s && UUID_RE.test(s) ? s : null;
+  } catch { return null; }
+}
+export const FAMILY_AS = detectFamily();
+
+/** Switch this tab to a family member (client id) or back to the main applicant (null), then reload. */
+export function switchFamily(memberId, path = '/client') {
+  try {
+    if (memberId && UUID_RE.test(memberId)) sessionStorage.setItem('tm_family', memberId.toLowerCase());
+    else sessionStorage.removeItem('tm_family');
+  } catch { /* ignore */ }
+  window.location.href = path;
+}
+
+async function familyFetch(input, init = {}) {
+  const req = typeof input === 'string' || input instanceof URL ? null : input;
+  const url = new URL(req ? req.url : String(input));
+  if (!url.pathname.startsWith('/rest/v1/')) return fetch(input, init);
+  const headers = new Headers(init.headers || req?.headers || undefined);
+  headers.set('x-family-member', FAMILY_AS);
+  return fetch(req ?? url.toString(), { ...init, headers });
+}
+
 // Read functions a preview may call (all STABLE in the database — it checks again)
 const READ_RPC = new Set([
   'my_portal_features', 'my_plans', 'my_addons', 'my_payroll_access', 'my_unread_messages', 'my_unread_notifications',
@@ -82,7 +120,8 @@ async function previewFetch(input, init = {}) {
   return read ? fetch(input, init) : blocked();
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, VIEW_AS ? { global: { fetch: previewFetch } } : undefined);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey,
+  VIEW_AS ? { global: { fetch: previewFetch } } : FAMILY_AS ? { global: { fetch: familyFetch } } : undefined);
 
 // Live updates (realtime) are not used in a preview — a quiet stand-in channel
 if (VIEW_AS) {

@@ -6,7 +6,7 @@
 //    <client_id>/<2025-26 | general>/<random>-<safe-name>
 //  Photos are shrunk in the browser before upload either way.
 // ═══════════════════════════════════════════════════════════
-import { supabase } from './supabase';
+import { supabase, FAMILY_AS } from './supabase';
 
 export const BUCKET = 'client-docs';
 export const MAX_BYTES = 10 * 1024 * 1024;          // Supabase storage
@@ -94,7 +94,8 @@ export const yearFolder = (year) => (year ? year.replace('/', '-') : 'general');
 
 // Call the OneDrive Edge Function; failures come back as { error }
 async function drive(action, payload = {}) {
-  const { data, error } = await supabase.functions.invoke('onedrive', { body: { action, ...payload } });
+  // V55: when the main applicant manages a family member, the function acts for that member
+  const { data, error } = await supabase.functions.invoke('onedrive', { body: { action, ...payload, ...(FAMILY_AS ? { act_as: FAMILY_AS } : {}) } });
   if (error) throw new Error(error.message || 'Could not reach the file service.');
   if (data?.error) throw new Error(data.error);
   return data;
