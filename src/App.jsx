@@ -2,6 +2,8 @@ import { Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazyPage, whenIdle } from './lib/lazyPage';
 import { trackVisit } from './lib/visits';
+import { isStandalone, logAppOpen } from './lib/pwa';
+import { syncPush } from './lib/push';
 import { VIEW_AS, exitViewAs } from './lib/supabase';
 import { useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
@@ -145,12 +147,25 @@ function VisitTracker() {
   return null;
 }
 
+// V59: count phones that use the installed app; keep this device's notifications linked to whoever is signed in
+function AppOpenTracker() {
+  const { user, needsCode } = useAuth();
+  const uid = needsCode ? null : user?.id ?? null;
+  useEffect(() => {
+    if (VIEW_AS) return;
+    if (isStandalone()) logAppOpen('open');
+    if (uid) syncPush();
+  }, [uid]);
+  return null;
+}
+
 export default function App() {
   useSettings();   // re-render pages when firm / invoice settings load or change
   return (
     <Suspense fallback={<LoadingScreen />}>
     <Preload />
     <VisitTracker />
+    <AppOpenTracker />
     <Routes>
       <Route path="/" element={<RootRedirect />} />
       <Route path="/login" element={<Login />} />
