@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import DueDatesWidget from '../../components/DueDatesWidget';
 import StorageMeter from '../../components/StorageMeter';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
+import { periodLabel } from '../../lib/taxPayments';
 import {
   Users, FileText, Receipt, Calculator, Clock, AlertCircle, ArrowRight, MessageSquareWarning,
   CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark, Sparkles, FolderLock, MessageCircle, Fingerprint, CreditCard, CalendarCheck, FileBadge2, Crown, TrendingDown,
@@ -31,7 +32,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird, pays, srs, lets, subReq, revReq, adReq, calcPaid] = await Promise.all([
+      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird, pays, srs, lets, subReq, revReq, adReq, calcPaid, taxChk, taxLate] = await Promise.all([
         supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').is('archived_at', null).order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
@@ -50,10 +51,12 @@ export default function Dashboard() {
         supabase.from('tax_reviews').select('id, client_id, year, created_at, clients(full_name)').eq('status', 'requested').order('created_at', { ascending: false }),
         supabase.from('service_addons').select('id, client_id, addon_name, price, created_at, clients(full_name)').eq('status', 'requested').order('created_at', { ascending: false }),
         supabase.from('calc_orders').select('id, client_id, credits, price, paid_at, clients(full_name)').eq('status', 'paid').order('paid_at', { ascending: false }),
+        supabase.from('tax_payments').select('id, client_id, year, kind, period, paid_amount, amount, updated_at, clients(full_name)').eq('status', 'paid').eq('paid_by_role', 'client').is('checked_at', null).order('updated_at', { ascending: false }),
+        supabase.from('tax_payments').select('id, client_id, amount, due_date, reminded_at, clients(full_name)').eq('status', 'due').gt('amount', 0).lt('due_date', new Date().toISOString().slice(0, 10)).order('due_date').limit(500),
       ]);
       setD({
         clients: cl.data ?? [], returns: rt.data ?? [], invoices: inv.data ?? [], calcs: calc.data ?? [],
-        requests: req.data ?? [], pays: pays.data ?? [], srs: srs.data ?? [], lets: lets.data ?? [], subReq: subReq.data ?? [], revReq: revReq.data ?? [], adReq: adReq.data ?? [], calcPaid: calcPaid.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
+        requests: req.data ?? [], pays: pays.data ?? [], srs: srs.data ?? [], lets: lets.data ?? [], subReq: subReq.data ?? [], revReq: revReq.data ?? [], adReq: adReq.data ?? [], calcPaid: calcPaid.data ?? [], taxChk: taxChk.data ?? [], taxLate: taxLate.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
       });
     })();
   }, []);
@@ -76,7 +79,13 @@ export default function Dashboard() {
     // new client uploads, one line per client
     const docGroups = Object.values(d.docs.reduce((m, x) => { (m[x.client_id] ??= { client_id: x.client_id, name: x.clients?.full_name ?? 'Client', items: [] }).items.push(x); return m; }, {}));
     const msgGroups = Object.values(d.msgs.reduce((m, x) => { (m[x.client_id] ??= { client_id: x.client_id, name: x.clients?.full_name ?? 'Client', items: [] }).items.push(x); return m; }, {}));
+    // overdue APIT / instalments, one line per client (skipped when reminded in the last 7 days)
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+    const lateGroups = Object.values(d.taxLate.reduce((m, x) => { (m[x.client_id] ??= { client_id: x.client_id, name: x.clients?.full_name ?? 'Client', items: [] }).items.push(x); return m; }, {}))
+      .filter(g => !g.items.some(x => x.reminded_at && x.reminded_at > weekAgo));
     const attention = [
+      ...d.taxChk.map(x => ({ key: `tc${x.id}`, icon: CreditCard, tone: 'green', text: `${x.clients?.full_name ?? 'Client'} paid ${periodLabel(x)} (Y/A ${x.year}) — ${fmtRs(x.paid_amount ?? x.amount)}. Check the receipt`, to: `/admin/clients/${x.client_id}?tab=returns`, when: x.updated_at })),
+      ...lateGroups.map(g => ({ key: `tl${g.client_id}`, icon: AlertTriangle, tone: 'red', text: `${g.name} — ${g.items.length} tax payment${g.items.length > 1 ? 's' : ''} overdue (${fmtRs(g.items.reduce((a, x) => a + Number(x.amount || 0), 0))}). Send a reminder`, to: `/admin/clients/${g.client_id}?tab=returns`, when: g.items[0].due_date })),
       ...msgGroups.map(g => ({ key: `msg${g.client_id}`, icon: MessageCircle, tone: 'blue', text: `${g.name} sent you ${g.items.length} message${g.items.length > 1 ? 's' : ''}`, note: g.items[0].body, to: `/admin/messages?client=${g.client_id}`, when: g.items[0].created_at })),
       ...d.pays.map(x => ({ key: `pay${x.id}`, icon: CreditCard, tone: 'green', text: `${x.clients?.full_name ?? 'Client'} sent a bank slip — ${x.invoices?.invoice_no ?? ''} · ${fmtRs(x.amount)}. Check & confirm`, to: '/admin/payments', when: x.created_at })),
       ...d.srs.map(x => ({ key: `sr${x.id}`, icon: CalendarCheck, tone: 'blue', text: `${x.clients?.full_name ?? 'Client'} requested: ${x.service}${x.preferred_date ? ` (prefers ${fmtDate(x.preferred_date)})` : ''}`, to: '/admin/service-requests', when: x.created_at })),
