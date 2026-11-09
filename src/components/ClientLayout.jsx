@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import PageLoader from './PageLoader';
-import { supabase } from '../lib/supabase';
+import { supabase, FAMILY_AS, switchFamily } from '../lib/supabase';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { logActivity } from '../lib/activity';
 import { useUnreadMessages } from '../lib/messages';
@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
-  Zap, CalendarCheck, Globe, Crown, Hash, Users, Eye, ListTree,
+  Zap, CalendarCheck, Globe, Crown, Hash, Users, Eye, ListTree, UsersRound,
 } from 'lucide-react';
 import { websiteUrl } from '../lib/firm';
 import NotificationBell from './NotificationBell';
@@ -18,6 +18,7 @@ import { myActivePlan, myPayrollAccess, planStyle } from '../lib/plans';
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/client/family', icon: UsersRound, label: 'My Family', feature: 'family' },
   { to: '/client/calculations', icon: Calculator, label: 'My Calculations' },
   { to: '/client/quick-tax', icon: Zap, label: 'Quick Tax Check', feature: 'quick_tax' },
   { to: '/client/tax-calculator', icon: Percent, label: 'Tax Calculator', feature: 'tax_calculator' },
@@ -25,7 +26,7 @@ const nav = [
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
   { to: '/client/ird-codes', icon: Hash, label: 'IRD Payment Codes', feature: 'ird_codes' },
   { to: '/client/activity-codes', icon: ListTree, label: 'Activity Codes', feature: 'ird_codes' },
-  { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals' },
+  { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals', own: true },
   { to: '/client/services', icon: CalendarCheck, label: 'Book a Service', feature: 'services' },
   { to: '/client/plan', icon: Crown, label: 'My Plan', feature: 'plans' },
   { to: '/client/payroll', icon: Users, label: 'Payroll', feature: 'payroll' },
@@ -35,7 +36,7 @@ const nav = [
   { to: '/client/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/client/updates', icon: Megaphone, label: 'Tax Updates' },
   { to: '/client/profile', icon: User, label: 'My Profile' },
-  { to: '/client/security', icon: ShieldCheck, label: 'Security' },
+  { to: '/client/security', icon: ShieldCheck, label: 'Security', own: true },
 ];
 
 export default function ClientLayout() {
@@ -52,10 +53,19 @@ export default function ClientLayout() {
   // Payroll menu: plan includes it or the add-on is active
   const [payrollOn, setPayrollOn] = useState(false);
   useEffect(() => { if (profile?.id) myPayrollAccess().then(a => setPayrollOn(!!a?.on)).catch(() => {}); }, [profile?.id]);
-  const feats = { ...features, payroll: payrollOn };
+  // V55: family — main applicant can switch to a member (this tab only)
+  const [fam, setFam] = useState(null);
+  useEffect(() => { if (profile?.id && !viewAs) supabase.rpc('my_family').then(({ data }) => setFam(data ?? null)); }, [profile?.id, viewAs]);
+  const members = fam?.members ?? [];
+  const feats = { ...features, payroll: payrollOn, family: members.length > 0 };
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const unread = useUnreadMessages('client', features.messages !== false);
+  // V55: links like /client/invoices?member=<id> (main applicant's notifications) open that member
+  useEffect(() => {
+    const m = new URLSearchParams(loc.search).get('member');
+    if (m && !viewAs) switchFamily(m === 'self' ? null : m, loc.pathname);
+  }, [loc.search, loc.pathname, viewAs]);
   // usage stats for TaxMate (page opened + "online now" heartbeat)
   useEffect(() => { logActivity('view', loc.pathname); }, [loc.pathname]);
   useEffect(() => {
@@ -78,7 +88,7 @@ export default function ClientLayout() {
       </div>
 
       <nav className="flex-1 min-h-0 py-3 space-y-0.5 overflow-y-auto overscroll-contain px-2">
-        {nav.filter(n => !n.feature || feats[n.feature]).map(({ to, icon: Icon, label, end, badge }) => (
+        {nav.filter(n => (!n.feature || feats[n.feature]) && !(n.own && FAMILY_AS)).map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -152,6 +162,16 @@ export default function ClientLayout() {
             <button onClick={handleSignOut} className="flex-shrink-0 font-semibold bg-amber-950 text-amber-50 hover:bg-amber-900 rounded-lg px-3 py-1">Exit preview</button>
           </div>
         )}
+        {FAMILY_AS && profile?.family && (
+          <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-2 text-xs sm:text-sm flex items-center gap-2 flex-shrink-0 shadow-sm" role="status">
+            <UsersRound size={16} className="flex-shrink-0" />
+            <span className="flex-1 min-w-0">
+              You are managing <b>{profile.full_name}</b>{profile.family.relation ? ` (${profile.family.relation})` : ''}{profile.client_no ? ` · ${profile.client_no}` : ''}.
+              <span className="hidden sm:inline"> Everything here is for {profile.full_name.split(' ')[0]}.</span>
+            </span>
+            <button onClick={() => switchFamily(null, '/client/family')} className="flex-shrink-0 font-semibold bg-white text-emerald-800 hover:bg-emerald-50 rounded-lg px-3 py-1">Back to my account</button>
+          </div>
+        )}
         <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 flex-shrink-0">
           <button onClick={() => setOpen(true)} className="md:hidden text-gray-500 hover:text-gray-700 relative">
             <Menu size={20} />
@@ -160,6 +180,13 @@ export default function ClientLayout() {
             Tax<span className="text-gold-500">Mate</span>
           </div>
           <div className="flex-1" />
+          {members.length > 0 && (
+            <select value={FAMILY_AS ?? ''} onChange={e => switchFamily(e.target.value || null, '/client')} title="Switch family member"
+              className="text-xs sm:text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 max-w-[11rem] sm:max-w-[14rem]" aria-label="Family member">
+              <option value="">👤 {fam?.me?.full_name?.split(' ')[0] ?? 'Me'} (me)</option>
+              {members.map(m => <option key={m.id} value={m.id}>👪 {m.full_name}{m.relation ? ` · ${m.relation}` : ''}</option>)}
+            </select>
+          )}
           <NotificationBell />
           {features.messages !== false && (
             <NavLink to="/client/messages" title="Messages" className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100">
