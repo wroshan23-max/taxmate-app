@@ -73,10 +73,10 @@ async function familyFetch(input, init = {}) {
 const READ_RPC = new Set([
   'my_portal_features', 'my_plans', 'my_addons', 'my_payroll_access', 'my_unread_messages', 'my_unread_notifications',
   'my_payment_options', 'my_ird_details', 'my_email_prefs', 'my_referrals', 'my_summary_letter', 'my_tax_review',
-  'my_calc_credits', 'my_login_security', 'my_second_step_ok', 'storage_usage', '_payroll_on',
+  'my_calc_credits', 'my_login_security', 'my_second_step_ok', 'storage_usage', '_payroll_on', 'push_public_key',
 ]);
 // Background writes that would only mark things as seen / count visits — skipped quietly
-const SILENT_RPC = new Set(['log_visit', 'log_activity', 'mark_my_messages_read', 'mark_my_notifications_read']);
+const SILENT_RPC = new Set(['log_visit', 'log_activity', 'mark_my_messages_read', 'mark_my_notifications_read', 'log_app_open', 'save_push_subscription', 'remove_my_push_subscription']);
 const FN_READ = { onedrive: ['status', 'download'], payhere: ['status'] };
 
 const blocked = () => new Response(JSON.stringify({ message: PREVIEW_MSG, code: 'VIEW_AS', error: PREVIEW_MSG }),
