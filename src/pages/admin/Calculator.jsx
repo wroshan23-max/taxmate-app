@@ -9,6 +9,7 @@ import { Calculator as CalcIcon, FileSpreadsheet, FolderOpen, CalendarClock, Wal
 import { PR, graduatedTax, calcKind } from '../../lib/iitCalc';
 import SavedCalculations from '../../components/SavedCalculations';
 import ReturnCalculator from '../../components/ReturnCalculator';
+import AllocateTaxPayment from '../../components/AllocateTaxPayment';
 
 const v = (s) => parseFloat(s) || 0;
 
@@ -27,6 +28,7 @@ export default function Calculator() {
   const [clients, setClients] = useState([]);
   const [tab, setTab] = useState('return');
   const [loaded, setLoaded] = useState(null);   // { calc, nonce } — a saved calc opened for editing
+  const [preset, setPreset] = useState(null);   // V57: client preselected for APIT / instalment allocation
 
   useEffect(() => {
     supabase.from('clients').select('id, full_name, tin, nic, address, employer, resident_status').is('archived_at', null).order('full_name').then(({ data }) => setClients(data ?? []));
@@ -44,9 +46,11 @@ export default function Calculator() {
   useEffect(() => {
     const c = location.state?.loadCalc;
     const fresh = location.state?.newReturn;     // e.g. from a client's income sheet → unsaved return
+    const go = location.state?.tab;              // V57: from a client's tax payments → APIT / quarterly with the client chosen
     if (c) openSaved(c);
     else if (fresh) { setTab('return'); setLoaded({ calc: fresh, nonce: Date.now() }); }
-    if (c || fresh) navigate(location.pathname, { replace: true, state: null });
+    else if (go === 'apit' || go === 'quarterly') { setTab(go); setPreset({ clientId: location.state.clientId ?? null, ya: location.state.ya ?? null }); }
+    if (c || fresh || go) navigate(location.pathname, { replace: true, state: null });
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -71,8 +75,8 @@ export default function Calculator() {
 
       {tab === 'return' && <ReturnCalculator key={`ret-${loaded?.nonce ?? 0}`} clients={clients} user={user} initial={loaded?.calc ?? null} onNew={startNew} persistDraft={persistDraft} />}
       {tab === 'saved' && <SavedCalculations onOpen={openSaved} />}
-      {tab === 'apit' && <MonthlyAPIT />}
-      {tab === 'quarterly' && <QuarterlyIIT />}
+      {tab === 'apit' && <MonthlyAPIT clients={clients} user={user} preset={preset} />}
+      {tab === 'quarterly' && <QuarterlyIIT clients={clients} user={user} preset={preset} />}
     </div>
   );
 }
@@ -91,7 +95,7 @@ async function persistDraft({ rec, editingId, editingStatus, asNew, userId }) {
 }
 
 // ─── APIT Monthly Calculator (Table 01) ──────────────────
-function MonthlyAPIT() {
+function MonthlyAPIT({ clients, user, preset }) {
   const [salary, setSalary] = useState('');
   const [perks, setPerks]   = useState('');
 
@@ -175,12 +179,15 @@ function MonthlyAPIT() {
           </div>
         </div>
       </div>
+      <AllocateTaxPayment kind="apit" amount={result?.monthlyAPIT ?? 0} clients={clients} userId={user?.id}
+        presetClient={preset?.clientId} ya={preset?.ya}
+        basis={{ calculator: 'monthly_apit', table: '01', salary: v(salary), perks: v(perks), annual_equivalent: result?.annualEq ?? 0, annual_tax: result?.annualTax ?? 0 }} />
     </div>
   );
 }
 
 // ─── Quarterly IIT Instalment Calculator ─────────────────
-function QuarterlyIIT() {
+function QuarterlyIIT({ clients, user, preset }) {
   // Current Y/A (1 April – 31 March) and its instalment due dates
   const now = new Date();
   const ys = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
@@ -323,6 +330,11 @@ function QuarterlyIIT() {
           ⚠️ Method 1 applies when the client had taxable income in the previous Y/A. Method 2 estimates from current quarter income — suitable for new clients or significantly changed income. Interest & penalties for non-payment cannot be waived.
         </div>
       </div>
+      <AllocateTaxPayment kind="instalment" amount={method === 'm1' ? m1Inst : m2Inst} quarter={qNo} clients={clients} userId={user?.id}
+        presetClient={preset?.clientId} ya={preset?.ya ?? ya}
+        basis={method === 'm1'
+          ? { calculator: 'quarterly', method: 'A-C/B', quarter: `Q${qNo}`, A: v(prevTax), C: v(paid), B, prev_year: prevYa }
+          : { calculator: 'quarterly', method: 'income', quarter: `Q${qNo}`, months: QUARTER_MONTHS, income: m2, credits: v(m2Credits), annual_tax_estimate: m2TaxAnn, B }} />
     </div>
   );
 }

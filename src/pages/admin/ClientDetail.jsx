@@ -21,6 +21,7 @@ import { UserRound, Sparkles, CheckCircle2, FolderLock, ShieldCheck, MessageCirc
 import { exportClientExcel } from '../../lib/clientExport';
 import CalcCreditsAdmin from '../../components/CalcCreditsAdmin';
 import FamilyAdmin from '../../components/FamilyAdmin';
+import TaxPaymentsAdmin from '../../components/TaxPaymentsAdmin';
 import DocumentVault from '../../components/DocumentVault';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
@@ -403,6 +404,7 @@ export default function ClientDetail() {
         </div>
       )}
 
+      {tab === 'returns' && <TaxPaymentsAdmin client={client} />}
       {tab === 'returns' && <RamisDraftAdmin client={client} calculations={calculations} />}
       {tab === 'returns' && <TaxReviewsAdmin client={client} calculations={calculations} userId={user?.id} />}
       {tab === 'returns' && <SummaryLettersAdmin client={client} calculations={calculations} returns={returns} userId={user?.id} />}
