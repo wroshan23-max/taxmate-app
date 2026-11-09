@@ -39,6 +39,7 @@ const PublicActivityCodes = lazyPage(() => import('./pages/PublicActivityCodes')
 const IrdCodes = lazyPage(() => import('./pages/admin/IrdCodes'));
 const ActivityCodes = lazyPage(() => import('./pages/admin/ActivityCodes'));
 const ClientIrdCodes = lazyPage(() => import('./pages/client/ClientIrdCodes'));
+const ClientFamily = lazyPage(() => import('./pages/client/ClientFamily'));
 const ClientActivityCodes = lazyPage(() => import('./pages/client/ClientActivityCodes'));
 const VerifyLetter = lazyPage(() => import('./pages/VerifyLetter'));
 const AdminPayments = lazyPage(() => import('./pages/admin/Payments'));
@@ -197,6 +198,7 @@ export default function App() {
         <ProtectedClient><ClientLayout /></ProtectedClient>
       }>
         <Route index element={<ClientDashboard />} />
+        <Route path="family" element={<ClientFamily />} />
         <Route path="calculations" element={<ClientCalculations />} />
         <Route path="tax-returns" element={<ClientTaxReturns />} />
         <Route path="assets" element={<ClientAssets />} />
