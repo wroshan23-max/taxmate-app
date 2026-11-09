@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, X, Crown, Receipt, BadgeCheck, AlertTriangle, FileText, CalendarCheck, Calculator, ClipboardList, Info, PartyPopper } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { timeLabel } from '../lib/messages';
+import { PushSwitch } from './PushNotifications';
 
 const KIND = {
   plan:    { icon: Crown, cls: 'bg-amber-100 text-amber-700' },
@@ -93,6 +94,7 @@ export default function NotificationBell({ onCount }) {
               );
             })}
           </div>
+          <PushSwitch className="px-4 py-2 border-t border-gray-100 bg-gray-50" />
         </div>
       )}
     </div>
