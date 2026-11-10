@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   UploadCloud, Camera, FolderOpen, FileText, FileSpreadsheet, FileImage, File as FileIcon, Download, Eye, Trash2,
-  Loader2, X, CheckCircle2, AlertCircle, Lock, Search, Sparkles, MessageCircle,
+  Loader2, X, CheckCircle2, AlertCircle, Lock, Search, Sparkles, MessageCircle, Link2, Check,
 } from 'lucide-react';
 import { FIRM, waNumber } from '../lib/firm';
 import { supabase } from '../lib/supabase';
@@ -11,6 +11,7 @@ import {
   fmtBytes, isImage, isPdf, extOf,
 } from '../lib/documents';
 import { logActivity } from '../lib/activity';
+import { ShareDocsDialog, DocShareLinks } from './DocShares';
 
 const fileIcon = (mime = '', name = '') => {
   if (isImage(mime)) return FileImage;
@@ -58,6 +59,11 @@ export default function DocumentVault({ clientId, role, userId, onChange, client
   const [preview, setPreview] = useState(null); // {row,url}
   const [confirm, setConfirm] = useState(null); // rows to delete
   const fileRef = useRef(), camRef = useRef();
+  // V61: pick files → password share link (admin)
+  const [picking, setPicking] = useState(null);   // Set of doc ids, or null
+  const [shareDocs, setShareDocs] = useState(null);
+  const [shareKey, setShareKey] = useState(0);
+  const togglePick = (id) => setPicking(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const busy = queue.some(f => f.state === 'compress' || f.state === 'upload');
 
   const load = useCallback(async () => {
@@ -225,6 +231,10 @@ export default function DocumentVault({ clientId, role, userId, onChange, client
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input className="input text-sm pl-8 py-1.5 w-full sm:w-44" placeholder="Search files" value={q} onChange={e => setQ(e.target.value)} />
         </div>
+        {role === 'admin' && client && rows.length > 0 && !picking && (
+          <button onClick={() => setPicking(new Set())} title="Tick files and send them with a link + password"
+            className="text-xs font-semibold text-primary-700 bg-primary-50 hover:bg-primary-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1"><Lock size={13} /> Share with password</button>
+        )}
         {role === 'admin' && year !== 'all' && shown.length > 0 && (
           <button onClick={() => setConfirm({ rows: shown, label: year === 'general' ? 'all general files' : `all files for Y/A ${year}` })}
             className="text-xs font-semibold text-red-600 hover:bg-red-50 px-2.5 py-1.5 rounded-lg flex items-center gap-1"><Trash2 size={13} /> Delete year</button>
@@ -253,8 +263,9 @@ export default function DocumentVault({ clientId, role, userId, onChange, client
                   const Icon = fileIcon(r.mime, r.path);
                   const isNew = role === 'admin' && r.uploaded_role === 'client' && !r.seen_at;
                   return (
-                    <div key={r.id} onClick={() => open(r)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && open(r)}
-                      className="group card p-3 flex items-center gap-3 cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-primary-200 transition-all">
+                    <div key={r.id} onClick={() => (picking ? togglePick(r.id) : open(r))} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && (picking ? togglePick(r.id) : open(r))}
+                      className={`group card p-3 flex items-center gap-3 cursor-pointer hover:shadow-md hover:-translate-y-0.5 hover:border-primary-200 transition-all ${picking?.has(r.id) ? 'ring-2 ring-primary-500 bg-primary-50/50' : ''}`}>
+                      {picking && <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${picking.has(r.id) ? 'bg-primary-600 border-primary-600 text-white' : 'border-gray-300 bg-white'}`}>{picking.has(r.id) && <Check size={13} />}</span>}
                       <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${iconTone(r.mime)} text-white flex items-center justify-center flex-shrink-0 shadow-sm`}><Icon size={20} /></div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-gray-800 flex items-center gap-1.5 min-w-0">
@@ -277,6 +288,22 @@ export default function DocumentVault({ clientId, role, userId, onChange, client
           ))}
         </div>
       )}
+      {picking && (
+        <div className="sticky bottom-3 z-30 rounded-2xl bg-primary-800 text-white shadow-2xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <Lock size={16} className="text-gold-400" />
+          <span className="text-sm font-semibold">{picking.size ? `${picking.size} file${picking.size > 1 ? 's' : ''} selected` : 'Tick the files to share'}</span>
+          <button onClick={() => setPicking(new Set([...picking, ...shown.map(r => r.id)]))} className="text-xs text-primary-200 hover:text-white underline">select all shown ({shown.length})</button>
+          {picking.size > 0 && <button onClick={() => setPicking(new Set())} className="text-xs text-primary-200 hover:text-white underline">clear</button>}
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => setPicking(null)} className="text-sm px-3 py-1.5 rounded-lg hover:bg-white/10">Cancel</button>
+            <button disabled={!picking.size || picking.size > 50} onClick={() => setShareDocs(rows.filter(r => picking.has(r.id)))}
+              className="text-sm font-bold px-3 py-1.5 rounded-lg bg-gold-500 text-primary-900 disabled:opacity-50 flex items-center gap-1.5"><Link2 size={14} /> Create link</button>
+          </div>
+        </div>
+      )}
+      {shareDocs && <ShareDocsDialog client={client} docs={shareDocs} onClose={() => setShareDocs(null)} onCreated={() => { setPicking(null); setShareKey(k => k + 1); }} />}
+      {role === 'admin' && client?.id && <DocShareLinks client={client} docs={rows} refreshKey={shareKey} />}
+
       {rows.length > 0 && <p className="text-[11px] text-gray-400 text-right">{rows.length} file{rows.length > 1 ? 's' : ''} · {fmtBytes(total)}{rows.some(r => r.storage === 'onedrive') && role === 'admin' ? ' · stored in OneDrive' : ''}</p>}
 
       {/* Preview */}
