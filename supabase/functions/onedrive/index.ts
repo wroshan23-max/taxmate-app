@@ -9,6 +9,7 @@
 //
 //  Admin:   status, auth_url, exchange, disconnect, purge_client, backup_now
 //  pg_cron (header x-cron-key): backup_cron — nightly backup of the app's data to OneDrive (V52)
+//  No login (V61): share_open, share_download — a password-protected share link (/d/<token>)
 //  Signed-in admin or client (own files only):
 //           start_upload → (browser PUTs the file to OneDrive) → finish_upload,
 //           download, delete
@@ -318,6 +319,21 @@ Deno.serve(async (req) => {
     return { ok: true, id: row.id };
   }
 
+  // Short-lived download link for a OneDrive file (personal OneDrive may leave it out → read the /content redirect)
+  async function driveDownload(itemId: string): Promise<{ url?: string; name?: string; error?: string }> {
+    const r = await graph(`/me/drive/items/${encodeURIComponent(itemId)}`);
+    const d = await r.json();
+    if (r.status === 404) return { error: 'This file was removed from OneDrive.' };
+    if (!r.ok) return { error: `OneDrive: ${d.error?.message ?? r.status}` };
+    let url = d['@microsoft.graph.downloadUrl'];
+    if (!url) {
+      const c = await graph(`/me/drive/items/${encodeURIComponent(itemId)}/content`, { redirect: 'manual' });
+      url = c.headers.get('location') ?? undefined;
+    }
+    if (!url) return { error: 'OneDrive did not give a download link — please try again.' };
+    return { url, name: d.name };
+  }
+
   try {
     const body = await req.json();
     const action = String(body?.action ?? '');
@@ -331,6 +347,32 @@ Deno.serve(async (req) => {
       const { data: st } = await svc.from('app_settings').select('value').eq('key', 'backup').maybeSingle();
       if (st?.value?.enabled === false) return reply({ skipped: 'Backups are switched off.' });
       return reply(await startBackup('auto', null));
+    }
+
+    // ── V61: password-protected share link — no login; the database checks link + password (5 tries, then 15 min lock) ──
+    if (action === 'share_open' || action === 'share_download') {
+      const token = String(body?.token ?? ''), password = String(body?.password ?? '').slice(0, 100);
+      const docId = action === 'share_download' ? String(body?.doc_id ?? '') : null;
+      if (!UUID_RE.test(token) || !password || (docId !== null && !UUID_RE.test(docId))) return reply({ error: 'Wrong link or password.' });
+      const { data: chk, error: cErr } = await svc.rpc('_doc_share_check', { p_token: token, p_password: password, p_doc: docId });
+      if (cErr) return reply({ error: 'Please try again in a moment.' });
+      if (!chk?.ok) return reply({ error: chk?.error ?? 'Wrong link or password.', locked: !!chk?.locked, expired: !!chk?.expired, tries_left: chk?.tries_left });
+      type F = { id: string; title: string; size: number; mime: string; year: string | null; category: string; storage: string; path: string; drive_item_id: string | null };
+      const files = (chk.files ?? []) as F[];
+      if (action === 'share_open') {
+        return reply({ ok: true, title: chk.title, client: chk.client, expires_at: chk.expires_at,
+          files: files.map((f) => ({ id: f.id, title: f.title, size: f.size, mime: f.mime, year: f.year, category: f.category })) });
+      }
+      const f = files[0];
+      if (f.storage === 'onedrive' && f.drive_item_id) {
+        if (!(await isConnected())) return reply({ error: 'The file store is not available right now. Please contact TaxMate.' });
+        return reply(await driveDownload(f.drive_item_id));
+      }
+      const ext = (f.path.match(/\.([a-z0-9]{1,5})$/i)?.[1] ?? '').toLowerCase();
+      const dlName = clean(f.title, 100) + (ext && !f.title.toLowerCase().endsWith(`.${ext}`) ? `.${ext}` : '');
+      const { data: su, error: sErr } = await svc.storage.from('client-docs').createSignedUrl(f.path, 300, { download: dlName });
+      if (sErr || !su?.signedUrl) return reply({ error: 'This file is no longer available.' });
+      return reply({ url: su.signedUrl, name: dlName });
     }
 
     // ── Who is calling? ──
@@ -468,19 +510,7 @@ Deno.serve(async (req) => {
       const { data: doc } = await asCaller.from('client_documents').select('id, storage, drive_item_id, title').eq('id', String(body.doc_id ?? '')).maybeSingle();
       if (!doc) return reply({ error: 'File not found.' });
       if (doc.storage !== 'onedrive') return reply({ error: 'This file is not in OneDrive.' });
-      // Personal OneDrive leaves the download link out when $select is used → ask for the whole item,
-      // and if it is still missing, read the redirect of /content (also a short-lived link).
-      const r = await graph(`/me/drive/items/${encodeURIComponent(doc.drive_item_id)}`);
-      const d = await r.json();
-      if (r.status === 404) return reply({ error: 'This file was removed from OneDrive.' });
-      if (!r.ok) return reply({ error: `OneDrive: ${d.error?.message ?? r.status}` });
-      let url = d['@microsoft.graph.downloadUrl'];
-      if (!url) {
-        const c = await graph(`/me/drive/items/${encodeURIComponent(doc.drive_item_id)}/content`, { redirect: 'manual' });
-        url = c.headers.get('location') ?? undefined;
-      }
-      if (!url) return reply({ error: 'OneDrive did not give a download link — please try again.' });
-      return reply({ url, name: d.name });
+      return reply(await driveDownload(doc.drive_item_id));
     }
 
     // ════ Delete (goes to the OneDrive recycle bin) ════
