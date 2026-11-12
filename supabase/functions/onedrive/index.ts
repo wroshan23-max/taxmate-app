@@ -45,6 +45,7 @@ const OK_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp',
 // OneDrive does not allow  " * : < > ? / \ |  and names ending in a dot or space
 const clean = (s: string, max = 80) => String(s || '').replace(/[\u0000-\u001f"*:<>?/\\|#%]+/g, '-').replace(/\s+/g, ' ').trim().replace(/[. ]+$/, '').slice(0, max) || 'Untitled';
 const encPath = (p: string) => p.split('/').map(encodeURIComponent).join('/');
+const SERVER_UPLOAD_MAX = 8 * 1024 * 1024;   // V63.1: upload_bytes fallback limit
 const yearFolder = (y: string | null) => (y ? `Y-A ${y.replace('/', '-')}` : 'General');
 
 async function hmac(text: string) {
@@ -472,6 +473,8 @@ Deno.serve(async (req) => {
       const folder = `${await clientFolder(clientId)}/${yearFolder(year)}/${CAT_FOLDER[category]}`;
       await ensureFolder(folder);
       const fileName = clean(String(body.file_name ?? 'file'), 120);
+      // uploads that never finished (browser closed / failed) are dropped after 2 days
+      await svc.from('drive_uploads').delete().lt('created_at', new Date(Date.now() - 2 * 86400000).toISOString());
       const s = await graph(`/me/drive/root:/${encPath(`${folder}/${fileName}`)}:/createUploadSession`, {
         method: 'POST', body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'rename' } }),
       });
@@ -487,22 +490,43 @@ Deno.serve(async (req) => {
     }
 
     // ════ Upload: finish (check the file landed in the right folder, then register it) ════
-    if (action === 'finish_upload') {
-      const { data: up } = await svc.from('drive_uploads').select('*').eq('id', String(body.upload_id ?? '')).maybeSingle();
-      if (!up || up.user_id !== uid) return reply({ error: 'Upload not found — please try again.' });
-      const itemId = String(body.item_id ?? '');
+    // Register an uploaded OneDrive item as the client's document (after the browser or the server sent the bytes)
+    const registerUpload = async (up: Record<string, any>, itemId: string) => {
       const r = await graph(`/me/drive/items/${encodeURIComponent(itemId)}?$select=id,name,size,file,parentReference`);
       const it = await r.json();
       const parentPath = decodeURIComponent(String(it?.parentReference?.path ?? '')).replace(/^\/drive\/root:\/?/, '');
-      if (!r.ok || !it.file || parentPath !== up.folder_path) return reply({ error: 'The uploaded file could not be checked — please try again.' });
+      if (!r.ok || !it.file || parentPath !== up.folder_path) return { error: 'The uploaded file could not be checked — please try again.' };
       const { data: row, error } = await svc.from('client_documents').insert({
         client_id: up.client_id, year: up.year, category: up.category, title: up.title, note: up.note,
         path: `${up.client_id}/onedrive/${it.id}`, size: it.size ?? up.size, mime: it.file?.mimeType ?? up.mime,
         uploaded_by: uid, uploaded_role: up.role, storage: 'onedrive', drive_item_id: it.id,
       }).select().single();
       await svc.from('drive_uploads').delete().eq('id', up.id);
-      if (error) return reply({ error: error.message });
-      return reply({ row });
+      if (error) return { error: error.message };
+      return { row };
+    };
+    if (action === 'finish_upload') {
+      const { data: up } = await svc.from('drive_uploads').select('*').eq('id', String(body.upload_id ?? '')).maybeSingle();
+      if (!up || up.user_id !== uid) return reply({ error: 'Upload not found — please try again.' });
+      return reply(await registerUpload(up, String(body.item_id ?? '')));
+    }
+
+    // ════ Upload through the server (V63.1) — used when OneDrive refuses the browser's direct upload (e.g. 401) ════
+    // The bytes come as base64 for an upload started with start_upload (same checks); max 8 MB.
+    if (action === 'upload_bytes') {
+      const { data: up } = await svc.from('drive_uploads').select('*').eq('id', String(body.upload_id ?? '')).maybeSingle();
+      if (!up || up.user_id !== uid) return reply({ error: 'Upload not found — please try again.' });
+      const b64 = String(body.data ?? '');
+      if (!b64 || b64.length > Math.ceil(SERVER_UPLOAD_MAX / 3) * 4) return reply({ error: 'This file is too big to send this way (max 8 MB).' });
+      let bytes: Uint8Array;
+      try { const bin = atob(b64); bytes = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i); }
+      catch { return reply({ error: 'The file could not be read — please try again.' }); }
+      if (bytes.byteLength !== Number(up.size)) return reply({ error: 'The file did not arrive complete — please try again.' });
+      const r = await graph(`/me/drive/root:/${encPath(`${up.folder_path}/${up.file_name}`)}:/content?@microsoft.graph.conflictBehavior=rename`,
+        { method: 'PUT', headers: { 'Content-Type': up.mime || 'application/octet-stream' }, body: bytes });
+      const it = await r.json().catch(() => ({}));
+      if (!r.ok || !it.id) return reply({ error: `OneDrive did not accept the file (${it.error?.message ?? r.status}).` });
+      return reply(await registerUpload(up, it.id));
     }
 
     // ════ Download link (short-lived) — the database decides who may see the file ════
