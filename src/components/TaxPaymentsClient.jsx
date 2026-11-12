@@ -5,6 +5,7 @@ import { Wallet, Paperclip } from 'lucide-react';
 import { fmtRs, fmtDate, VIEW_AS, PREVIEW_MSG } from '../lib/supabase';
 import { loadPayments, periodLabel, irdCodesOf, isOverdue, undoMyPaid, receiptUrl } from '../lib/taxPayments';
 import { MarkTaxPaidForm } from './TaxPaymentsDue';
+import { VoucherInfo } from './TaxVoucher';
 
 export default function TaxPaymentsClient({ clientId }) {
   const [rows, setRows] = useState([]);
@@ -50,6 +51,7 @@ export default function TaxPaymentsClient({ clientId }) {
                           {mine && !r.checked_at && <button onClick={() => undo(r)} className="text-[11px] text-gray-400 hover:text-amber-700">undo</button>}
                         </span>
                       </div>
+                      {r.status !== 'paid' && <VoucherInfo row={r} />}
                       {r.status !== 'paid' && r.note && <div className="text-[11px] text-red-700">TaxMate: {r.note}</div>}
                       {openId === r.id && <MarkTaxPaidForm row={r} onCancel={() => setOpenId(null)} onDone={() => { setOpenId(null); load(); }} />}
                     </div>

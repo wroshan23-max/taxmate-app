@@ -5,13 +5,14 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Wallet, CalendarClock, Check, X, Trash2, Loader2, Undo2, Paperclip, BellRing, ThumbsDown } from 'lucide-react';
 import MessageMenu from './MessageMenu';
+import { VoucherEditor, VoucherInfo } from './TaxVoucher';
 import { recipientsOf, greetName } from '../lib/contacts';
 import { fmtRs, fmtDate } from '../lib/supabase';
-import { yaOf, yaList, yaMonths, instalmentDue, loadPayments, updatePayment, deletePayment, QUARTER_MONTHS, periodLabel, isOverdue, receiptUrl, checkPayment, remindPayments, reminderText } from '../lib/taxPayments';
+import { yaOf, yaList, yaMonths, instalmentDue, loadPayments, updatePayment, deletePayment, QUARTER_MONTHS, periodLabel, isOverdue, receiptUrl, checkPayment, remindPayments, reminderText, paymentShareText } from '../lib/taxPayments';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function PayRow({ label, sub, row, due, onChange }) {
+function PayRow({ label, sub, row, due, onChange, client }) {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const run = async (fn, ok) => { setBusy(true); try { await fn(); if (ok) toast.success(ok); setForm(null); onChange(); } catch (e) { toast.error(e.message); } setBusy(false); };
@@ -41,8 +42,13 @@ function PayRow({ label, sub, row, due, onChange }) {
             : <span className={overdue ? 'text-red-600' : 'text-amber-700'}>{overdue ? 'Overdue' : 'Not paid'}
                 {row.reminded_at && <span className="block text-[10px] text-gray-400">reminded {fmtDate(row.reminded_at)}{row.reminder_count > 1 ? ` (${row.reminder_count}×)` : ''}</span>}
                 {row.note && <span className="block text-[10px] text-red-600">receipt not accepted: {row.note}</span>}</span>}
+          <div className="mt-0.5">{row.status === 'due' ? <VoucherEditor row={row} onSaved={onChange} compact /> : <VoucherInfo row={row} />}</div>
         </td>
         <td className="text-right whitespace-nowrap">
+          {row.status === 'due' && client && Number(row.amount) > 0 && (
+            <MessageMenu label="Share" className="mr-1 align-middle" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
+              subject={`${label} — tax payment`} getText={async () => paymentShareText(greetName(client), row)} />
+          )}
           {row.receipt_path && <button title="View receipt" onClick={openReceipt} className="text-gray-400 hover:text-primary-700 p-1"><Paperclip size={13} /></button>}
           {busy ? <Loader2 size={14} className="animate-spin inline text-gray-400" /> : byClient && !row.checked_at
             ? <>
@@ -164,7 +170,7 @@ export default function TaxPaymentsAdmin({ client }) {
           <div className="flex items-center gap-2 mb-1"><CalendarClock size={15} className="text-primary-600" /><span className="font-semibold text-sm text-gray-800">Quarterly instalments</span>
             <button onClick={() => open('quarterly')} className="ml-auto text-xs font-semibold text-primary-700 hover:underline">+ Calculate &amp; allocate</button></div>
           <table className="w-full text-sm"><tbody>
-            {['Q1', 'Q2', 'Q3', 'Q4'].map(q => <PayRow key={q} label={q} sub={QUARTER_MONTHS[q]} row={inst[q]} due={instalmentDue(ya, q)} onChange={load} />)}
+            {['Q1', 'Q2', 'Q3', 'Q4'].map(q => <PayRow key={q} label={q} sub={QUARTER_MONTHS[q]} row={inst[q]} due={instalmentDue(ya, q)} onChange={load} client={client} />)}
           </tbody></table>
         </div>
 
@@ -173,7 +179,7 @@ export default function TaxPaymentsAdmin({ client }) {
             <button onClick={() => open('apit')} className="ml-auto text-xs font-semibold text-primary-700 hover:underline">+ Calculate &amp; allocate</button></div>
           {apitRows.length === 0 ? <p className="text-xs text-gray-400">No APIT worked out for Y/A {ya}.</p> : (
             <table className="w-full text-sm"><tbody>
-              {yaMonths(ya).filter(m => apit[m.period]).map(m => <PayRow key={m.period} label={m.label} sub="" row={apit[m.period]} due={m.due} onChange={load} />)}
+              {yaMonths(ya).filter(m => apit[m.period]).map(m => <PayRow key={m.period} label={m.label} sub="" row={apit[m.period]} due={m.due} onChange={load} client={client} />)}
             </tbody></table>
           )}
         </div>
