@@ -123,7 +123,15 @@ export async function remindPayments(clientId, ids) {
   return data ?? 0;
 }
 /** WhatsApp / email text for a reminder */
-export function reminderText(name, rows) {
+
+/** How to pay (IRD Notice to Taxpayers 2026/27: IIT / CIT / PIT → OTPP or any Bank of Ceylon branch) */
+function payLine(rows) {
+  const vouch = rows.some(r => r.voucher_no) ? ' with the voucher number' : '';
+  if (rows.every(r => r.kind === 'instalment')) return `Pay${vouch} online through IRD OTPP or at any Bank of Ceylon branch. Not using a pre-printed paying-in slip? Write the DIN on the slip (eservices.ird.gov.lk → Payment → Paying-in Slip, or call 011 213 4780).`;
+  return rows.some(r => r.voucher_no) ? 'Pay with the voucher number online (IRD OTPP) or at Bank of Ceylon / People\'s Bank.'
+    : 'Pay online through IRD OTPP, or at Bank of Ceylon / People\'s Bank with a paying-in slip (write your TIN on the slip).';
+}
+export function reminderText(name, rows, links = {}) {
   const today = new Date().toISOString().slice(0, 10);
   const total = rows.reduce((a, r) => a + Number(r.amount || 0), 0);
   const lines = [`Dear ${name || 'Sir/Madam'},`, '', `This is a friendly reminder from ${FIRM.name}. The following tax payment${rows.length > 1 ? 's are' : ' is'} due:`, ''];
@@ -133,12 +141,11 @@ export function reminderText(name, rows) {
     lines.push(`   ${isOverdue(r, today) ? '⚠️ Overdue — was due' : 'Pay on or before'} ${fmtDate(r.due_date)}`);
     if (c) lines.push(`   Tax Type ${c.typeCode} · Period ${c.periodCode} · Category ${c.category}`);
     if (r.voucher_no) lines.push(`   🧾 Payment voucher No: *${r.voucher_no}*`);
+    if (links[r.id]) lines.push(`   📄 Notice: ${links[r.id]}`);
   });
   if (rows.length > 1) lines.push('', `Total: ${fmtRs(total)}`);
   if (rows.some(r => r.voucher_doc_id)) lines.push('', `📄 The payment voucher${rows.filter(r => r.voucher_doc_id).length > 1 ? 's are' : ' is'} in your TaxMate portal → My Documents: ${window.location.origin}/client/documents`);
-  lines.push('', rows.some(r => r.voucher_no)
-    ? 'Pay with the voucher number online (IRD OTPP) or at Bank of Ceylon / People\'s Bank.'
-    : 'Pay online through IRD OTPP, or at Bank of Ceylon / People\'s Bank with a paying-in slip (write your TIN on the slip).',
+  lines.push('', payLine(rows), 'Interest and penalty apply for late payment — IRD interest cannot be waived or reduced.',
     '', `After paying, open your TaxMate portal → Dashboard → "I've paid" and upload the receipt: ${window.location.origin}/client`,
     '', 'ගෙවීමෙන් පසු TaxMate portal එකේ Dashboard එකෙන් "I\'ve paid" ඔබා රිසිට්පත upload කරන්න.',
     '', 'Thank you,', FIRM.name, ...(FIRM.whatsapp ? [`WhatsApp ${FIRM.whatsapp}`] : []));
@@ -147,7 +154,7 @@ export function reminderText(name, rows) {
 
 // ─── V62 — IRD payment voucher on a payment ───
 /** Message for ONE payment (WhatsApp / email / copy) */
-export function paymentShareText(name, r) {
+export function paymentShareText(name, r, noticeLink = '') {
   const today = new Date().toISOString().slice(0, 10);
   const c = irdCodesOf(r);
   const lines = [`Dear ${name || 'Sir/Madam'},`, '', `Your ${periodLabel(r)} (Y/A ${r.year}) tax payment:`, '',
@@ -155,9 +162,9 @@ export function paymentShareText(name, r) {
     `📅 ${isOverdue(r, today) ? '⚠️ Overdue — was due' : 'Pay on or before'} ${fmtDate(r.due_date)}`];
   if (r.voucher_no) lines.push(`🧾 Payment voucher No: *${r.voucher_no}*`);
   if (c) lines.push(`#️⃣ Tax Type ${c.typeCode} · Period ${c.periodCode} · Category ${c.category}`);
+  if (noticeLink) lines.push('', `📄 Payment notice (print / save as PDF): ${noticeLink}`);
   if (r.voucher_doc_id) lines.push('', `📄 Voucher PDF: TaxMate portal → My Documents ${window.location.origin}/client/documents`);
-  lines.push('', r.voucher_no ? 'Pay with the voucher number online (IRD OTPP) or at Bank of Ceylon / People\'s Bank.'
-                              : 'Pay online through IRD OTPP, or at Bank of Ceylon / People\'s Bank with a paying-in slip (write your TIN on the slip).',
+  lines.push('', payLine([r]), 'Interest and penalty apply for late payment — IRD interest cannot be waived or reduced.',
     '', `After paying, tap "I've paid" on your TaxMate dashboard and upload the receipt: ${window.location.origin}/client`,
     'ගෙවීමෙන් පසු Dashboard එකේ "I\'ve paid" ඔබා රිසිට්පත upload කරන්න.',
     '', 'Thank you,', FIRM.name, ...(FIRM.whatsapp ? [`WhatsApp ${FIRM.whatsapp}`] : []));
@@ -181,7 +188,7 @@ export async function voucherUrl(docId) {
 /** Admin page: every unpaid payment with the client's contact details */
 export async function loadDuePayments() {
   const { data, error } = await supabase.from('tax_payments')
-    .select('*, clients(id, full_name, client_no, tin, mobile, email, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred, archived_at)')
+    .select('*, clients(id, full_name, client_no, tin, nic, mobile, email, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred, archived_at)')
     .or('status.eq.due,and(status.eq.paid,paid_by_role.eq.client,checked_at.is.null)')
     .order('due_date', { ascending: true }).limit(2000);
   if (error) throw new Error(error.message);

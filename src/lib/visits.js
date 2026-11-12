@@ -63,7 +63,7 @@ const device = () => {
 // Private links carry a token: keep only the kind of page
 export function cleanPath(p) {
   const path = String(p || '/').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
-  const m = path.match(/^\/(share|invite|reset|register|verify|d)\//);
+  const m = path.match(/^\/(share|invite|reset|register|verify|d|notice)\//);
   if (m) return `/${m[1]}/:token`;
   return path.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id').replace(/[^A-Za-z0-9/_:-]/g, '').slice(0, 80) || '/';
 }
@@ -94,7 +94,7 @@ export const SOURCE_LABEL = {
 export const sourceLabel = (s) => SOURCE_LABEL[s] ?? ['🏷️', s];
 export const PAGE_LABEL = {
   '/': 'Home', '/login': 'Login page', '/ird-codes': 'IRD payment codes (public)', '/activity-codes': 'RAMIS activity codes (public)', '/calculator': 'Tax calculator (public)',
-  '/tax-calculator': 'Tax calculator (public)', '/share/:token': 'Shared document link', '/d/:token': 'Password-protected files link', '/invite/:token': 'Portal invite link',
+  '/tax-calculator': 'Tax calculator (public)', '/share/:token': 'Shared document link', '/d/:token': 'Password-protected files link', '/notice/:token': 'Tax payment notice link', '/invite/:token': 'Portal invite link',
   '/register/:token': 'Personal registration link', '/reset/:token': 'Password reset', '/verify/:token': 'Letter verification',
   '/client': 'Client dashboard',
 };
