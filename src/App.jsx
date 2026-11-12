@@ -26,6 +26,7 @@ const Clients = lazyPage(() => import('./pages/admin/Clients'));
 const ClientDetail = lazyPage(() => import('./pages/admin/ClientDetail'));
 const Calculator = lazyPage(() => import('./pages/admin/Calculator'));
 const TaxReturns = lazyPage(() => import('./pages/admin/TaxReturns'));
+const TaxPaymentsDuePage = lazyPage(() => import('./pages/admin/TaxPaymentsDuePage'));
 const Invoices = lazyPage(() => import('./pages/admin/Invoices'));
 const UpdateRequests = lazyPage(() => import('./pages/admin/UpdateRequests'));
 const TaxUpdates = lazyPage(() => import('./pages/admin/TaxUpdates'));
@@ -196,6 +197,7 @@ export default function App() {
         <Route path="clients/:id" element={<ClientDetail />} />
         <Route path="calculator" element={<Calculator />} />
         <Route path="tax-returns" element={<TaxReturns />} />
+        <Route path="tax-payments" element={<TaxPaymentsDuePage />} />
         <Route path="assets" element={<AssetStatements />} />
         <Route path="calendar" element={<TaxCalendar role="admin" />} />
         <Route path="ird-codes" element={<IrdCodes />} />
