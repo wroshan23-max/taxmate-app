@@ -1,7 +1,7 @@
 // V57 — Monthly APIT & quarterly IIT instalments allocated to a client (table tax_payments).
 // Paid amounts fill "Tax already paid" in the IIT Return (APIT → 903, instalments → 911).
 import { supabase, fmtRs, fmtDate } from './supabase';
-import { compressImage, fmtBytes } from './documents';
+import { compressImage, fmtBytes, signedUrl } from './documents';
 import { lookup, CATEGORY_S } from './irdCodes';
 import { FIRM } from './firm';
 
@@ -132,11 +132,58 @@ export function reminderText(name, rows) {
     lines.push(`${i + 1}. ${periodLabel(r)} — ${fmtRs(r.amount)}`);
     lines.push(`   ${isOverdue(r, today) ? '⚠️ Overdue — was due' : 'Pay on or before'} ${fmtDate(r.due_date)}`);
     if (c) lines.push(`   Tax Type ${c.typeCode} · Period ${c.periodCode} · Category ${c.category}`);
+    if (r.voucher_no) lines.push(`   🧾 Payment voucher No: *${r.voucher_no}*`);
   });
   if (rows.length > 1) lines.push('', `Total: ${fmtRs(total)}`);
-  lines.push('', 'Pay online through IRD OTPP, or at Bank of Ceylon / People\'s Bank with a paying-in slip (write your TIN on the slip).',
+  if (rows.some(r => r.voucher_doc_id)) lines.push('', `📄 The payment voucher${rows.filter(r => r.voucher_doc_id).length > 1 ? 's are' : ' is'} in your TaxMate portal → My Documents: ${window.location.origin}/client/documents`);
+  lines.push('', rows.some(r => r.voucher_no)
+    ? 'Pay with the voucher number online (IRD OTPP) or at Bank of Ceylon / People\'s Bank.'
+    : 'Pay online through IRD OTPP, or at Bank of Ceylon / People\'s Bank with a paying-in slip (write your TIN on the slip).',
     '', `After paying, open your TaxMate portal → Dashboard → "I've paid" and upload the receipt: ${window.location.origin}/client`,
     '', 'ගෙවීමෙන් පසු TaxMate portal එකේ Dashboard එකෙන් "I\'ve paid" ඔබා රිසිට්පත upload කරන්න.',
     '', 'Thank you,', FIRM.name, ...(FIRM.whatsapp ? [`WhatsApp ${FIRM.whatsapp}`] : []));
   return lines.join('\n');
+}
+
+// ─── V62 — IRD payment voucher on a payment ───
+/** Message for ONE payment (WhatsApp / email / copy) */
+export function paymentShareText(name, r) {
+  const today = new Date().toISOString().slice(0, 10);
+  const c = irdCodesOf(r);
+  const lines = [`Dear ${name || 'Sir/Madam'},`, '', `Your ${periodLabel(r)} (Y/A ${r.year}) tax payment:`, '',
+    `💰 Amount: *${fmtRs(r.amount)}*`,
+    `📅 ${isOverdue(r, today) ? '⚠️ Overdue — was due' : 'Pay on or before'} ${fmtDate(r.due_date)}`];
+  if (r.voucher_no) lines.push(`🧾 Payment voucher No: *${r.voucher_no}*`);
+  if (c) lines.push(`#️⃣ Tax Type ${c.typeCode} · Period ${c.periodCode} · Category ${c.category}`);
+  if (r.voucher_doc_id) lines.push('', `📄 Voucher PDF: TaxMate portal → My Documents ${window.location.origin}/client/documents`);
+  lines.push('', r.voucher_no ? 'Pay with the voucher number online (IRD OTPP) or at Bank of Ceylon / People\'s Bank.'
+                              : 'Pay online through IRD OTPP, or at Bank of Ceylon / People\'s Bank with a paying-in slip (write your TIN on the slip).',
+    '', `After paying, tap "I've paid" on your TaxMate dashboard and upload the receipt: ${window.location.origin}/client`,
+    'ගෙවීමෙන් පසු Dashboard එකේ "I\'ve paid" ඔබා රිසිට්පත upload කරන්න.',
+    '', 'Thank you,', FIRM.name, ...(FIRM.whatsapp ? [`WhatsApp ${FIRM.whatsapp}`] : []));
+  return lines.join('\n');
+}
+export const VOUCHER_RE = /^[A-Za-z0-9][A-Za-z0-9 /._-]{0,39}$/;
+/** Admin: save / clear the voucher number and PDF (document id) */
+export async function setVoucher(id, { voucher_no, voucher_doc_id }) {
+  const no = (voucher_no ?? '').trim().replace(/\s+/g, ' ');
+  if (no && !VOUCHER_RE.test(no)) throw new Error('Voucher number: letters, numbers, spaces and - / . only (max 40).');
+  const patch = { voucher_no: no || null };
+  if (voucher_doc_id !== undefined) patch.voucher_doc_id = voucher_doc_id;
+  await updatePayment(id, patch);
+}
+/** Open the voucher PDF (admin or the client — the database checks access) */
+export async function voucherUrl(docId) {
+  const { data: doc, error } = await supabase.from('client_documents').select('id, path, storage, title, mime').eq('id', docId).maybeSingle();
+  if (error || !doc) throw new Error('The voucher file was not found.');
+  return signedUrl(doc);
+}
+/** Admin page: every unpaid payment with the client's contact details */
+export async function loadDuePayments() {
+  const { data, error } = await supabase.from('tax_payments')
+    .select('*, clients(id, full_name, client_no, tin, mobile, email, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred, archived_at)')
+    .or('status.eq.due,and(status.eq.paid,paid_by_role.eq.client,checked_at.is.null)')
+    .order('due_date', { ascending: true }).limit(2000);
+  if (error) throw new Error(error.message);
+  return (data ?? []).filter(r => !r.clients?.archived_at);
 }
