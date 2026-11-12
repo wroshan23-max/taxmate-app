@@ -15,6 +15,7 @@ import ClientLayout from './components/ClientLayout';
 // Pages load on demand (smaller first download on phones). lazyPage() also lets us preload.
 const SharedDocument = lazyPage(() => import('./pages/SharedDocument'));
 const SharedFiles = lazyPage(() => import('./pages/SharedFiles'));
+const SharedTaxNotice = lazyPage(() => import('./pages/SharedTaxNotice'));
 const Register = lazyPage(() => import('./pages/Register'));
 const AdminMessages = lazyPage(() => import('./pages/admin/Messages'));
 const Activity = lazyPage(() => import('./pages/admin/Activity'));
@@ -175,6 +176,8 @@ export default function App() {
       <Route path="/share/:token" element={<SharedDocument />} />
       {/* Public (V61): client documents behind a link + password */}
       <Route path="/d/:token" element={<SharedFiles />} />
+      {/* Public (V63): APIT / instalment payment notice */}
+      <Route path="/notice/:token" element={<SharedTaxNotice />} />
       {/* Public: create password from an invite / reset link */}
       <Route path="/invite/:token" element={<InvitePage />} />
       <Route path="/reset/:token" element={<ResetPasswordPage />} />
