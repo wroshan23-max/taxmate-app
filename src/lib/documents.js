@@ -106,6 +106,14 @@ export const driveExchange = (code, state, redirect_uri) => drive('exchange', { 
 export const driveDisconnect = () => drive('disconnect');
 export const driveBackupNow = () => drive('backup_now');   // V52: nightly backup, also on demand
 
+const SERVER_UPLOAD_MAX = 8 * 1024 * 1024;   // V63.1: server fallback limit (same as the onedrive function)
+const toBase64 = (blob) => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result).split(',')[1] || '');
+  r.onerror = () => reject(new Error('The file could not be read.'));
+  r.readAsDataURL(blob);
+});
+
 /** Upload one file + register it. Returns the inserted row. */
 export async function uploadDocument({ clientId, file, year, category, title, note, role, userId, onStage }) {
   if (!allowed(file)) throw new Error(`${file.name}: this file type is not allowed (PDF, photo, Excel, Word or CSV only).`);
@@ -127,6 +135,15 @@ export async function uploadDocument({ clientId, file, year, category, title, no
       if (!r.ok || !item?.id) throw new Error(item?.error?.message || `OneDrive answered ${r.status}`);
     } catch (e) {
       fetch(start.upload_url, { method: 'DELETE' }).catch(() => {});
+      // V63.1: OneDrive sometimes refuses the direct upload (401) — send the file through the TaxMate server instead
+      if (f.size <= SERVER_UPLOAD_MAX) {
+        try {
+          const { row } = await drive('upload_bytes', { upload_id: start.upload_id, data: await toBase64(f) });
+          return { ...row, saved: file.size - f.size };
+        } catch (e2) {
+          throw new Error(`${file.name}: upload to OneDrive failed (${e.message}; ${e2.message}). Please try again.`);
+        }
+      }
       throw new Error(`${file.name}: upload to OneDrive failed (${e.message}). Please check your internet and try again.`);
     }
     const { row } = await drive('finish_upload', { upload_id: start.upload_id, item_id: item.id });
