@@ -151,7 +151,9 @@ export function buildTaxNoticeHtml(payment, client = {}, { withToolbar = true, i
     ['Tax Type Code', codes ? `${esc(codes.typeCode)} &mdash; ${inst ? 'Individual Income Tax (IIT)' : 'APIT'}` : '—'],
     ['Payment Period Code', codes ? esc(codes.periodCode) : '—'],
     ['Payment Category', codes ? `${esc(codes.category)} (Self assessment)` : 'S'],
-    ...(p.voucher_no ? [['Payment Voucher No.', esc(p.voucher_no)]] : []),
+    // V63.1: always listed — the number TaxMate generates in IRD and enters on the payment (V62)
+    ['Payment Voucher No.', p.voucher_no ? `<span style="font-family:monospace;font-size:14px;letter-spacing:.5px;color:#922B21">${esc(p.voucher_no)}</span>`
+      : paid ? '—' : '<i style="color:#999;font-weight:400">Not issued yet &mdash; TaxMate will send it after generating it in IRD</i>'],
     ['Amount', rs(p.amount)],
   ];
 
