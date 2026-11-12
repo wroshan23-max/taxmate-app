@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { Landmark, Search, BellRing, Loader2, RefreshCw, AlertTriangle, CalendarClock, Receipt, Paperclip, ThumbsDown } from 'lucide-react';
 import MessageMenu from '../../components/MessageMenu';
 import { VoucherEditor } from '../../components/TaxVoucher';
+import { NoticeButton } from '../../components/TaxNotice';
+import { ensureNoticeToken, noticeUrl } from '../../lib/taxNotice';
 import { recipientsOf, greetName } from '../../lib/contacts';
 import { fmtRs, fmtDate } from '../../lib/supabase';
 import { loadDuePayments, periodLabel, irdCodesOf, isOverdue, reminderText, paymentShareText, remindPayments, receiptUrl, checkPayment } from '../../lib/taxPayments';
@@ -106,7 +108,7 @@ export default function TaxPaymentsDuePage() {
                     <div className="ml-auto flex items-center gap-2">
                       <span className="text-sm font-black text-primary-800 tabular-nums">{fmtRs(sum(unpaid))}</span>
                       <MessageMenu label={`Remind${unpaid.length > 1 ? ` (${unpaid.length})` : ''}`} phone={c.mobile} email={c.email} recipients={recipientsOf(c)} subject="Tax payment reminder — TaxMate"
-                        getText={async () => { const t = reminderText(greetName(c), unpaid); remindPayments(c.id, unpaid.map(r => r.id)).then(() => setTimeout(load, 400)).catch(() => {}); return t; }} />
+                        getText={async () => { const links = {}; for (const r of unpaid) links[r.id] = noticeUrl(await ensureNoticeToken(r)); const t = reminderText(greetName(c), unpaid, links); remindPayments(c.id, unpaid.map(r => r.id)).then(() => setTimeout(load, 400)).catch(() => {}); return t; }} />
                     </div>
                   )}
                 </div>
@@ -151,7 +153,11 @@ function Row({ r, c, today, onChange }) {
         <div className="font-black text-primary-800 tabular-nums">{fmtRs(r.amount)}</div>
         <div className="mt-1 flex items-center gap-1 justify-end">
           {r.status === 'due'
-            ? <MessageMenu label="Share" phone={c.mobile} email={c.email} recipients={recipientsOf(c)} subject={`${periodLabel(r)} — tax payment`} getText={async () => paymentShareText(greetName(c), r)} />
+            ? <>
+                <NoticeButton row={r} client={c} />
+                <MessageMenu label="Share" phone={c.mobile} email={c.email} recipients={recipientsOf(c)} subject={`${periodLabel(r)} — tax payment`}
+                  getText={async () => paymentShareText(greetName(c), r, noticeUrl(await ensureNoticeToken(r)))} />
+              </>
             : <>
                 {r.receipt_path && <button onClick={openReceipt} className="btn-secondary text-xs py-1 px-2"><Paperclip size={12} /> Receipt</button>}
                 <button onClick={() => check(true)} disabled={busy} className="btn-primary text-xs py-1 px-2">✓ Checked</button>
