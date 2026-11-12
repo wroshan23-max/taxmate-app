@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 import { Wallet, CalendarClock, Check, X, Trash2, Loader2, Undo2, Paperclip, BellRing, ThumbsDown } from 'lucide-react';
 import MessageMenu from './MessageMenu';
 import { VoucherEditor, VoucherInfo } from './TaxVoucher';
+import { NoticeButton } from './TaxNotice';
+import { ensureNoticeToken, noticeUrl } from '../lib/taxNotice';
 import { recipientsOf, greetName } from '../lib/contacts';
 import { fmtRs, fmtDate } from '../lib/supabase';
 import { yaOf, yaList, yaMonths, instalmentDue, loadPayments, updatePayment, deletePayment, QUARTER_MONTHS, periodLabel, isOverdue, receiptUrl, checkPayment, remindPayments, reminderText, paymentShareText } from '../lib/taxPayments';
@@ -47,8 +49,9 @@ function PayRow({ label, sub, row, due, onChange, client }) {
         <td className="text-right whitespace-nowrap">
           {row.status === 'due' && client && Number(row.amount) > 0 && (
             <MessageMenu label="Share" className="mr-1 align-middle" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
-              subject={`${label} — tax payment`} getText={async () => paymentShareText(greetName(client), row)} />
+              subject={`${label} — tax payment`} getText={async () => paymentShareText(greetName(client), row, noticeUrl(await ensureNoticeToken(row)))} />
           )}
+          {client && Number(row.amount) > 0 && <NoticeButton row={row} client={client} className="mr-1 align-middle" label="" />}
           {row.receipt_path && <button title="View receipt" onClick={openReceipt} className="text-gray-400 hover:text-primary-700 p-1"><Paperclip size={13} /></button>}
           {busy ? <Loader2 size={14} className="animate-spin inline text-gray-400" /> : byClient && !row.checked_at
             ? <>
@@ -111,7 +114,9 @@ export default function TaxPaymentsAdmin({ client }) {
     try { const n = await remindPayments(client.id, picked.map(r => r.id)); toast.success(`Reminder sent in the portal (${n})`); setRemind(null); load(); } catch (e) { toast.error(e.message); }
   };
   const reminderMsg = async () => {
-    const text = reminderText(greetName(client), picked);
+    const links = {};
+    for (const r of picked) { try { links[r.id] = noticeUrl(await ensureNoticeToken(r)); } catch { /* message still goes */ } }
+    const text = reminderText(greetName(client), picked, links);
     try { await remindPayments(client.id, picked.map(r => r.id)); } catch { /* the message still goes */ }
     setTimeout(() => { setRemind(null); load(); }, 400);
     return text;

@@ -6,6 +6,7 @@ import { Landmark, Upload, Loader2, X, ChevronRight, AlertTriangle } from 'lucid
 import { supabase, fmtRs, fmtDate, VIEW_AS, PREVIEW_MSG } from '../lib/supabase';
 import { periodLabel, irdCodesOf, isOverdue, markMyPaid } from '../lib/taxPayments';
 import { VoucherInfo } from './TaxVoucher';
+import { ClientNoticeButton } from './TaxNotice';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -78,7 +79,7 @@ export default function TaxPaymentsDue({ clientId }) {
                   <div className="font-semibold text-gray-800 text-sm">{periodLabel(r)} <span className="text-gray-400 font-normal">· Y/A {r.year}</span></div>
                   <div className={`text-xs ${od ? 'text-red-600 font-semibold' : 'text-amber-700'}`}>{od ? <><AlertTriangle size={11} className="inline -mt-0.5" /> Overdue — was due</> : 'Pay on or before'} {fmtDate(r.due_date)}</div>
                   {c && <div className="text-[11px] text-gray-500 mt-0.5">IRD codes: Tax Type <b className="font-mono text-gray-700">{c.typeCode}</b> · Period <b className="font-mono text-gray-700">{c.periodCode}</b> · Category <b className="font-mono text-gray-700">{c.category}</b></div>}
-                  <VoucherInfo row={r} className="mt-1" />
+                  <div className="flex items-center gap-2 flex-wrap mt-1"><VoucherInfo row={r} /><ClientNoticeButton row={r} /></div>
                   {r.note && <div className="text-[11px] text-red-700 mt-0.5">TaxMate: {r.note}</div>}
                 </div>
                 <div className="text-right">
