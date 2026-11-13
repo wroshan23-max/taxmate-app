@@ -6,7 +6,7 @@ const en = {
   'nav.credit': 'Credit notes', 'nav.debit': 'Debit notes', 'nav.customers': 'Customers', 'nav.items': 'Products & services', 'nav.payments': 'Payments',
   'nav.vat': 'VAT / RAMIS', 'nav.ramis': 'RAMIS dashboard', 'nav.schedules': 'VAT schedules', 'nav.purchases': 'Purchaser VAT inbox',
   'nav.history': 'Submission history', 'nav.failed': 'Failed submissions', 'nav.reports': 'Reports', 'nav.settings': 'Settings',
-  'nav.subscription': 'Subscription', 'nav.audit': 'Audit trail',
+  'nav.subscription': 'Subscription', 'nav.audit': 'Audit trail', 'nav.guide': 'User guide',
   'doc.tax': 'Tax Invoice', 'doc.nontax': 'Non-Tax Invoice', 'doc.credit': 'Credit Note', 'doc.debit': 'Debit Note',
   'act.new_tax': 'New Tax Invoice', 'act.new_nontax': 'New Non-Tax Invoice', 'act.new_credit': 'New Credit Note', 'act.new_debit': 'New Debit Note',
   'act.issue': 'Issue', 'act.save_draft': 'Save draft', 'act.share': 'Share', 'act.remind': 'Remind', 'act.pay': 'Record payment',
@@ -18,11 +18,11 @@ const en = {
 };
 const si = {
   'app.title': 'VAT ඉන්වොයිස් සහ බිල්පත්', 'nav.dashboard': 'උපකරණ පුවරුව', 'nav.invoices': 'ඉන්වොයිස්', 'nav.customers': 'ගනුදෙනුකරුවන්',
-  'nav.payments': 'ගෙවීම්', 'nav.reports': 'වාර්තා', 'nav.settings': 'සැකසුම්', 'doc.tax': 'බදු ඉන්වොයිසිය', 'doc.credit': 'ණය සටහන', 'doc.debit': 'හර සටහන',
+  'nav.payments': 'ගෙවීම්', 'nav.reports': 'වාර්තා', 'nav.settings': 'සැකසුම්', 'nav.guide': 'භාවිත මාර්ගෝපදේශය', 'doc.tax': 'බදු ඉන්වොයිසිය', 'doc.credit': 'ණය සටහන', 'doc.debit': 'හර සටහන',
 };
 const ta = {
   'app.title': 'VAT விலைப்பட்டியல்', 'nav.dashboard': 'முகப்பு', 'nav.invoices': 'விலைப்பட்டியல்கள்', 'nav.customers': 'வாடிக்கையாளர்கள்',
-  'nav.payments': 'கொடுப்பனவுகள்', 'nav.reports': 'அறிக்கைகள்', 'nav.settings': 'அமைப்புகள்', 'doc.tax': 'வரி விலைப்பட்டியல்',
+  'nav.payments': 'கொடுப்பனவுகள்', 'nav.reports': 'அறிக்கைகள்', 'nav.settings': 'அமைப்புகள்', 'nav.guide': 'பயனர் வழிகாட்டி', 'doc.tax': 'வரி விலைப்பட்டியல்',
 };
 const DICT = { en, si, ta };
 let locale = 'en';
