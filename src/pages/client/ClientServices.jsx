@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { CalendarCheck, Loader2, X, Send, Sparkles, CalendarClock } from 'lucide-react';
+import { CalendarCheck, Loader2, X, Send, Sparkles, CalendarClock, Check, ArrowRight, Info } from 'lucide-react';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { SERVICE_CARDS, cardFor, TIMES, CONTACTS, SR_STATUS } from '../../lib/services';
 import { logActivity } from '../../lib/activity';
+import { vatContext, requestAddon as requestVatAddon } from '../../lib/vat/api';
+import { rs } from '../../lib/vat/format';
+
+// V64.1 — VAT Invoice & RAMIS add-on can be asked for here too
+const VAT_LIVE = ['trial', 'active', 'past_due', 'paused', 'suspended'];
+const VAT_POINTS = ['Tax Invoices in the IRD format (YYMMM_QQQQ_XXXXX numbers)', 'Credit / Debit Notes, payments & customer statements',
+  'Share by WhatsApp / email link · PDF', 'VAT reports · RAMIS Web API ready'];
 
 const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
 
@@ -17,6 +24,10 @@ export default function ClientServices() {
   const [pick, setPick] = useState(null);
   const [f, setF] = useState({ details: '', date: tomorrow(), time: 'any', contact: 'whatsapp' });
   const [busy, setBusy] = useState(false);
+  const [vat, setVat] = useState(null);           // VAT Invoice add-on: status, price, pending request
+  const [cycle, setCycle] = useState('monthly');
+  const navigate = useNavigate();
+  const loadVat = (cid) => { if (cid) vatContext(cid).then(setVat).catch(() => setVat(null)); };
 
   const load = async (cid = clientId) => {
     if (!cid) return;
@@ -25,20 +36,30 @@ export default function ClientServices() {
   };
   useEffect(() => {
     if (!profile?.client_id) return;
-    supabase.from('clients').select('id').eq('id', profile?.client_id).maybeSingle().then(({ data }) => { setClientId(data?.id ?? null); load(data?.id); });
+    supabase.from('clients').select('id').eq('id', profile?.client_id).maybeSingle().then(({ data }) => { setClientId(data?.id ?? null); load(data?.id); loadVat(data?.id); });
   }, [profile?.client_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (features.loaded && features.services === false) return (
     <div className="card p-8 text-center space-y-3"><CalendarCheck size={36} className="mx-auto text-gray-300" /><p className="text-gray-600">Online booking is not available right now. Please WhatsApp TaxMate.</p><Link to="/client" className="btn-secondary text-sm inline-flex">Back to dashboard</Link></div>
   );
 
-  const choose = (s) => { setPick(s); setF({ details: '', date: tomorrow(), time: 'any', contact: 'whatsapp' }); setTimeout(() => document.getElementById('book-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
+  const vatCat = vat?.catalog && vat.catalog.active !== false ? vat.catalog : null;   // offered to clients
+  const vatOn = VAT_LIVE.includes(vat?.status);
+  const vatPriced = vatCat && (Number(vatCat.price) > 0 || Number(vatCat.annual_price) > 0);
+  const choose = (s) => {
+    if (s.addon === 'vat_invoice' && vatOn) { navigate('/client/vat'); return; }
+    setCycle(vatCat && !(Number(vatCat.price) > 0) && Number(vatCat.annual_price) > 0 ? 'annual' : 'monthly'); setPick(s); setF({ details: '', date: tomorrow(), time: 'any', contact: 'whatsapp' }); setTimeout(() => document.getElementById('book-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50); };
   const submit = async () => {
     setBusy(true);
-    const { error } = await supabase.rpc('request_service', { p_service: pick.name, p_details: f.details, p_date: f.date || null, p_time: f.time, p_contact: f.contact });
+    const isVat = pick.addon === 'vat_invoice';
+    const details = isVat && vatPriced ? `Plan: ${cycle === 'annual' ? 'Annual' : 'Monthly'}${f.details.trim() ? ` · ${f.details.trim()}` : ''}` : f.details;
+    const { error } = await supabase.rpc('request_service', { p_service: pick.name, p_details: details.slice(0, 1000), p_date: f.date || null, p_time: f.time, p_contact: f.contact });
+    if (error) { setBusy(false); return toast.error(error.message.replace(/^.*?ERROR:\s*/, '')); }
+    // also put it in Add-ons so TaxMate can switch it on with one click (only when it is offered)
+    if (isVat && vatCat) await requestVatAddon(cycle, f.details.trim() || null).catch(() => {});
     setBusy(false);
-    if (error) return toast.error(error.message.replace(/^.*?ERROR:\s*/, ''));
-    toast.success('Request sent! TaxMate will contact you soon.');
+    toast.success(isVat ? 'Request sent! TaxMate will contact you and switch on VAT Invoice.' : 'Request sent! TaxMate will contact you soon.');
+    if (isVat) loadVat(clientId);
     logActivity('submit', '/client/services', pick.name);
     setPick(null); load();
   };
@@ -63,9 +84,16 @@ export default function ClientServices() {
         {SERVICE_CARDS.map(s => (
           <button key={s.name} onClick={() => choose(s)}
             className={`text-left rounded-2xl border-2 p-4 bg-white transition-all hover:-translate-y-0.5 hover:shadow-md ${pick?.name === s.name ? 'border-primary-600 ring-4 ring-primary-100' : 'border-gray-100 hover:border-primary-200'}`}>
-            <div className="text-3xl">{s.emoji}</div>
+            <div className="flex items-start justify-between gap-1">
+              <div className="text-3xl">{s.emoji}</div>
+              {s.addon === 'vat_invoice' && vatOn
+                ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Active</span>
+                : s.addon === 'vat_invoice' && vat?.requested
+                  ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Requested</span>
+                  : s.badge && <span className="rounded-full bg-gold-500 px-2 py-0.5 text-[10px] font-black text-primary-900">{s.badge}</span>}
+            </div>
             <div className="font-bold text-sm text-gray-800 mt-2 leading-tight">{s.name}</div>
-            <div className="text-[11px] text-gray-500 mt-0.5">{s.desc}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5">{s.addon === 'vat_invoice' && vatOn ? <span className="inline-flex items-center gap-0.5 font-semibold text-primary-700">Open VAT Invoices <ArrowRight size={11} /></span> : s.desc}</div>
           </button>
         ))}
       </div>
@@ -77,8 +105,28 @@ export default function ClientServices() {
             <button onClick={() => setPick(null)} className="p-1.5 rounded-lg hover:bg-white"><X size={16} /></button>
           </div>
           <div className="p-5 space-y-4">
+            {pick.addon === 'vat_invoice' && (
+              <div className="space-y-3">
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {VAT_POINTS.map(x => <li key={x} className="flex items-start gap-1.5 text-xs text-gray-700"><Check size={14} className="mt-0.5 shrink-0 text-emerald-600" />{x}</li>)}
+                </ul>
+                {vat?.requested && <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">You have already asked for VAT Invoice — TaxMate will contact you. You can still send a new request with more details.</div>}
+                {vatPriced ? (
+                  <div className="text-xs font-semibold text-gray-600">Choose a plan
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                      {[['monthly', 'Monthly', vatCat.price, '/ month'], ['annual', 'Annual', vatCat.annual_price, '/ year']].filter(([, , p]) => Number(p) > 0).map(([k, l, p, per]) => (
+                        <button key={k} type="button" onClick={() => setCycle(k)} className={`rounded-xl border-2 px-3 py-2.5 text-left ${cycle === k ? 'border-primary-600 bg-primary-50' : 'border-gray-100'}`}>
+                          <div className="text-sm font-bold text-gray-800">{l}</div><div className="text-xs font-normal text-gray-500">{rs(p)} {per}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : <div className="flex items-start gap-1.5 rounded-xl bg-primary-50/60 px-3 py-2 text-xs text-primary-900"><Info size={14} className="mt-0.5 shrink-0" />TaxMate will explain the plans and price when we contact you.</div>}
+                {Number(vatCat?.trial_days) > 0 && <div className="text-xs font-semibold text-emerald-700">🎁 {vatCat.trial_days}-day free trial available</div>}
+              </div>
+            )}
             <label className="block text-xs font-semibold text-gray-600">Tell us a little (optional)
-              <textarea className="input mt-1 resize-none" rows={3} maxLength={1000} placeholder="e.g. I started freelancing this year and need to register for TIN and file my return." value={f.details} onChange={e => setF({ ...f, details: e.target.value })} />
+              <textarea className="input mt-1 resize-none" rows={3} maxLength={900} placeholder={pick.addon === 'vat_invoice' ? 'e.g. VAT-registered business, about 40 invoices a month, 2 staff need access.' : 'e.g. I started freelancing this year and need to register for TIN and file my return.'} value={f.details} onChange={e => setF({ ...f, details: e.target.value })} />
             </label>
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="block text-xs font-semibold text-gray-600">Preferred date
