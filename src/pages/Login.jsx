@@ -23,6 +23,7 @@ export default function Login() {
   useEffect(() => {
     if (!authLoading && user && profile) {
       if (isAdmin) navigate(from?.startsWith('/admin') ? from : '/admin', { replace: true });
+      else if (isClient && from?.startsWith('/vat')) navigate(from, { replace: true });   // V64: VAT team members
       else if (isClient) navigate('/client', { replace: true, state: from?.startsWith('/client/') ? { next: from } : null });
     }
   }, [authLoading, user, profile, isAdmin, isClient, navigate, from]);
