@@ -32,6 +32,9 @@ export const SUB_STATUS = {
   requested: { label: 'Requested', cls: 'bg-amber-100 text-amber-800' },
   active:    { label: 'Active',    cls: 'bg-green-100 text-green-700' },
   paused:    { label: 'Paused',    cls: 'bg-gray-100 text-gray-600' },
+  trial:     { label: 'Trial',     cls: 'bg-sky-100 text-sky-700' },
+  suspended: { label: 'Suspended', cls: 'bg-red-100 text-red-700' },
+  expired:   { label: 'Expired',   cls: 'bg-red-50 text-red-600' },
   cancelled: { label: 'Cancelled', cls: 'bg-red-50 text-red-600' },
 };
 export const rsPlan = (n) => `Rs. ${Number(n || 0).toLocaleString('en-LK')}`;
@@ -100,7 +103,7 @@ export const DEFAULT_ADDONS = [
   { key: 'payroll', name: 'Payroll & APIT', price: 1500, active: true, tagline: 'Staff list, monthly APIT, EPF / ETF and payslips',
     features: ['Staff list with salary & allowances', 'Monthly APIT (Tax Table 01) worked out automatically', 'EPF 8% + 12% and ETF 3%', 'Payslips — PDF or WhatsApp', 'EPF / ETF, APIT and bank transfer reports'] },
 ];
-export const ADDON_EMOJI = { payroll: '👥' };
+export const ADDON_EMOJI = { payroll: '👥', vat_invoice: '🧾' };
 export const addonEmoji = (k) => ADDON_EMOJI[k] ?? '🧩';
 export async function loadAddons() {
   const { data } = await supabase.from('app_settings').select('value').eq('key', 'addons').maybeSingle();
@@ -113,6 +116,11 @@ export async function saveAddons(addons) {
     price: Math.max(0, Math.round(Number(a.price) || 0)), active: a.active !== false,
     tagline: String(a.tagline || '').trim().slice(0, 100),
     features: (a.features || []).map(f => String(f).trim()).filter(Boolean).slice(0, 10),
+    // V64: annual price, free-trial days and plan limits (VAT Invoice add-on) are kept
+    ...(a.annual_price != null ? { annual_price: Math.max(0, Math.round(Number(a.annual_price) || 0)) } : {}),
+    ...(a.trial_days != null ? { trial_days: Math.max(0, Math.min(90, Math.round(Number(a.trial_days) || 0))) } : {}),
+    ...(a.limits && typeof a.limits === 'object' ? { limits: Object.fromEntries(Object.entries(a.limits).filter(([k]) => /^[a-z_]{2,30}$/.test(k))
+      .map(([k, v]) => [k, typeof v === 'boolean' ? v : Math.max(0, Math.round(Number(v) || 0))])) } : {}),
   }));
   const keys = clean.map(a => a.key);
   if (new Set(keys).size !== keys.length) throw new Error('Each service needs a different code');
