@@ -54,7 +54,7 @@ export default function AddonsAdmin({ client, userId, onChange }) {
   const available = catalog.filter(a => (a.active !== false || a.key === 'vat_invoice') && !live.some(r => r.addon_key === a.key));   // VAT can be started by TaxMate before it is offered to clients
 
   return (
-    <div className="card">
+    <div id="addons" className="card scroll-mt-4">
       <div className="card-header"><Puzzle size={16} /> Add-on services
         {!f && available.length > 0 && <button onClick={() => { const a = available[0]; setF({ key: a.key, price: a.price, start: todayISO(), auto: true, cycle: 'monthly', trial: false }); }} className="ml-auto btn-secondary text-xs py-1"><Plus size={13} /> Add a service</button>}
       </div>
