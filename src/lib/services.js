@@ -4,6 +4,7 @@ export const SERVICE_CARDS = [
   { name: 'TIN Registration', emoji: '🆔', desc: 'Get your Taxpayer Identification Number', si: 'TIN ලියාපදිංචිය' },
   { name: 'Company Tax Return', emoji: '🏢', desc: 'Corporate income tax return & compliance', si: 'සමාගම් බදු ප්‍රකාශය' },
   { name: 'VAT', emoji: '🧮', desc: 'VAT registration & monthly / quarterly returns', si: 'වැට් බදු' },
+  { name: 'VAT Invoice & RAMIS', emoji: '📑', desc: 'Online VAT invoices in the IRD format · RAMIS-ready', si: 'VAT ඉන්වොයිස් සහ RAMIS', addon: 'vat_invoice', badge: 'NEW' },
   { name: 'PAYE / APIT', emoji: '👥', desc: 'Employee tax (APIT) calculations & filing', si: 'APIT' },
   { name: 'RAMIS account help', emoji: '🔐', desc: 'RAMIS login, PIN reset, e-services', si: 'RAMIS සහාය' },
   { name: 'Accounting & Bookkeeping', emoji: '📚', desc: 'Monthly books, ledgers & management accounts', si: 'ගිණුම් තැබීම' },
