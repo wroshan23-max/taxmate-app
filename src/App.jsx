@@ -16,6 +16,10 @@ import ClientLayout from './components/ClientLayout';
 const SharedDocument = lazyPage(() => import('./pages/SharedDocument'));
 const SharedFiles = lazyPage(() => import('./pages/SharedFiles'));
 const SharedTaxNotice = lazyPage(() => import('./pages/SharedTaxNotice'));
+const SharedInvoice = lazyPage(() => import('./pages/SharedInvoice'));
+const VatWorkspace = lazyPage(() => import('./pages/VatWorkspace'));
+const ClientVat = lazyPage(() => import('./pages/client/ClientVat'));
+const VatInvoicing = lazyPage(() => import('./pages/admin/VatInvoicing'));
 const Register = lazyPage(() => import('./pages/Register'));
 const AdminMessages = lazyPage(() => import('./pages/admin/Messages'));
 const Activity = lazyPage(() => import('./pages/admin/Activity'));
@@ -113,6 +117,16 @@ function ProtectedClient({ children }) {
   return children;
 }
 
+// V64: any signed-in user (team members of a business use only the VAT module)
+function ProtectedUser({ children }) {
+  const { user, loading, needsCode, mfa } = useAuth();
+  const loc = useLocation();
+  if (loading || (user && !mfa.loaded)) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />;
+  if (needsCode) return <MfaChallengeScreen />;
+  return children;
+}
+
 function RootRedirect() {
   const { user, isAdmin, isClient, loading } = useAuth();
   if (loading) return <LoadingScreen />;
@@ -178,6 +192,10 @@ export default function App() {
       <Route path="/d/:token" element={<SharedFiles />} />
       {/* Public (V63): APIT / instalment payment notice */}
       <Route path="/notice/:token" element={<SharedTaxNotice />} />
+      {/* V64: customer page of a VAT invoice / note (secure, expiring link) */}
+      <Route path="/i/:token" element={<SharedInvoice />} />
+      {/* V64: VAT Invoice for team members of a business */}
+      <Route path="/vat" element={<ProtectedUser><VatWorkspace /></ProtectedUser>} />
       {/* Public: create password from an invite / reset link */}
       <Route path="/invite/:token" element={<InvitePage />} />
       <Route path="/reset/:token" element={<ResetPasswordPage />} />
@@ -201,6 +219,7 @@ export default function App() {
         <Route path="calculator" element={<Calculator />} />
         <Route path="tax-returns" element={<TaxReturns />} />
         <Route path="tax-payments" element={<TaxPaymentsDuePage />} />
+        <Route path="vat" element={<VatInvoicing />} />
         <Route path="assets" element={<AssetStatements />} />
         <Route path="calendar" element={<TaxCalendar role="admin" />} />
         <Route path="ird-codes" element={<IrdCodes />} />
@@ -232,6 +251,7 @@ export default function App() {
         <Route path="services" element={<ClientServices />} />
         <Route path="plan" element={<ClientPlan />} />
         <Route path="payroll" element={<ClientPayroll />} />
+        <Route path="vat" element={<ClientVat />} />
         <Route path="income" element={<ClientIncome />} />
         <Route path="calendar" element={<TaxCalendar role="client" />} />
         <Route path="invite" element={<ClientInvite />} />
