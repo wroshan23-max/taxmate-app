@@ -86,6 +86,7 @@ export default function ServiceRequests() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {r.clients?.mobile && <a href={`https://wa.me/${waNumber(r.clients.mobile)}?text=${encodeURIComponent(waText(r))}`} target="_blank" rel="noreferrer" className="btn-secondary text-xs py-1"><MessageCircle size={13} /> WhatsApp</a>}
                     {r.clients?.mobile && <a href={`tel:${r.clients.mobile}`} className="btn-secondary text-xs py-1"><Phone size={13} /> Call</a>}
+                    {cardFor(r.service).addon && <Link to={`/admin/clients/${r.client_id}?tab=overview#addons`} className="btn-secondary text-xs py-1 border-primary-200 text-primary-700"><ExternalLink size={13} /> Switch on in Add-ons</Link>}
                     <button onClick={() => save(r)} disabled={!dirty || busy === r.id} className="ml-auto btn-primary text-xs py-1.5">{busy === r.id ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>
                   </div>
                 </div>

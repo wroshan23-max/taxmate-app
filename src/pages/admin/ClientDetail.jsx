@@ -72,6 +72,13 @@ export default function ClientDetail() {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview');
 
   useEffect(() => { loadAll(); }, [id]);
+  // V64.1: /admin/clients/:id?tab=overview#addons (from a VAT Invoice service request) → scroll to Add-on services
+  const hasClient = !!client;
+  useEffect(() => {
+    if (!hasClient || window.location.hash !== '#addons') return undefined;
+    const t = setTimeout(() => document.getElementById('addons')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 600);
+    return () => clearTimeout(t);
+  }, [hasClient, id]);
   const [plan, setPlan] = useState(null);   // active subscription → premium look in the header
   const [payrollOn, setPayrollOn] = useState(null);
   const [payrollKey, setPayrollKey] = useState(0);
