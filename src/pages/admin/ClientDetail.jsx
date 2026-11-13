@@ -30,6 +30,7 @@ import TaxReviewsAdmin from '../../components/TaxReviewsAdmin';
 import SubscriptionAdmin from '../../components/SubscriptionAdmin';
 import AddonsAdmin from '../../components/AddonsAdmin';
 import PayrollModule from '../../components/PayrollModule';
+import VatApp from '../../components/vat/VatApp';
 import { ReturnStepper, StartTracking, setReturnStage } from '../../components/ReturnTracker';
 import { FlagButtons, LabelChips, ManageLabels } from '../../components/ClientFlags';
 import { loadLabels, loadFlags } from '../../lib/clientFlags';
@@ -199,7 +200,7 @@ export default function ClientDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
-        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['documents', 'Documents'], ['payroll', 'Payroll'], ['invoices', 'Invoices']].map(([t, label]) => (
+        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['documents', 'Documents'], ['payroll', 'Payroll'], ['vat', 'VAT Invoices'], ['invoices', 'Invoices']].map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -444,6 +445,7 @@ export default function ClientDetail() {
         <div className="card p-3 text-sm bg-amber-50 border-amber-200 text-amber-900">Payroll is not switched on for this client (no Standard / Premium plan and no Payroll add-on). You can still prepare it here; the client sees it once you start the add-on in <button onClick={() => setTab('overview')} className="underline font-semibold">Overview → Add-on services</button>.</div>
       )}
       {tab === 'payroll' && <PayrollModule clientId={client.id} clientName={client.full_name} isAdmin canEdit userId={user?.id} />}
+      {tab === 'vat' && <VatApp clientId={client.id} />}
 
       {tab === 'invoices' && (
         <div className="card">
