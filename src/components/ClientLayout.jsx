@@ -30,6 +30,7 @@ const nav = [
   { to: '/client/services', icon: CalendarCheck, label: 'Book a Service', feature: 'services' },
   { to: '/client/plan', icon: Crown, label: 'My Plan', feature: 'plans' },
   { to: '/client/payroll', icon: Users, label: 'Payroll', feature: 'payroll' },
+  { to: '/client/vat', icon: Receipt, label: 'VAT Invoices', feature: 'vat' },
   { to: '/client/documents', icon: FolderLock, label: 'My Documents', feature: 'documents' },
   { to: '/client/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/client/assets', icon: Landmark, label: 'Assets & Liabilities' },
@@ -57,7 +58,10 @@ export default function ClientLayout() {
   const [fam, setFam] = useState(null);
   useEffect(() => { if (profile?.id && !viewAs) supabase.rpc('my_family').then(({ data }) => setFam(data ?? null)); }, [profile?.id, viewAs]);
   const members = fam?.members ?? [];
-  const feats = { ...features, payroll: payrollOn, family: members.length > 0 };
+  // V64: VAT Invoice menu — when the business has (or had) the add-on
+  const [vatOn, setVatOn] = useState(false);
+  useEffect(() => { if (profile?.id) supabase.rpc('vi_my_workspaces').then(({ data }) => setVatOn((data || []).some(w => w.role === 'owner' && w.status !== 'none'))); }, [profile?.id]);
+  const feats = { ...features, payroll: payrollOn, family: members.length > 0, vat: vatOn };
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const unread = useUnreadMessages('client', features.messages !== false);

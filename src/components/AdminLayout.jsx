@@ -17,6 +17,7 @@ const nav = [
   { to: '/admin/calculator', icon: Calculator, label: 'IIT Calculator' },
   { to: '/admin/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/admin/tax-payments', icon: Wallet, label: 'Tax Payments Due' },
+  { to: '/admin/vat', icon: FileText, label: 'VAT Invoicing' },
   { to: '/admin/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/admin/calendar', icon: CalendarDays, label: 'Tax Calendar' },
   { to: '/admin/ird-codes', icon: Hash, label: 'IRD Payment Codes' },

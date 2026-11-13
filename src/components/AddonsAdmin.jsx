@@ -18,7 +18,7 @@ export default function AddonsAdmin({ client, userId, onChange }) {
   const load = async () => {
     const [cat, plans, { data: a }, { data: sub }] = await Promise.all([
       loadAddons(), loadPlans(),
-      supabase.from('service_addons').select('*').eq('client_id', client.id).in('status', ['requested', 'active', 'paused']).order('created_at', { ascending: false }),
+      supabase.from('service_addons').select('*').eq('client_id', client.id).in('status', ['requested', 'trial', 'active', 'paused', 'suspended']).order('created_at', { ascending: false }),
       supabase.from('subscriptions').select('plan_key, plan_name').eq('client_id', client.id).eq('status', 'active').maybeSingle(),
     ]);
     setCatalog(cat); setRows(a ?? []);
@@ -35,35 +35,39 @@ export default function AddonsAdmin({ client, userId, onChange }) {
   }, auto ? `${r.addon_name} is active — first invoice created` : `${r.addon_name} is active — bill it manually`);
   const start = () => run(async () => {
     const a = catalog.find(x => x.key === f.key); if (!a) throw new Error('Choose a service');
+    // V64: VAT Invoice can be monthly or annual, and can start as a free trial
+    const trial = a.key === 'vat_invoice' && f.trial;
+    const trialEnds = trial ? new Date(Date.now() + (Number(a.trial_days) || 14) * 86400000).toISOString().slice(0, 10) : null;
     const { data, error } = await supabase.from('service_addons').insert({
-      client_id: client.id, addon_key: a.key, addon_name: a.name, price: Number(f.price) || 0, status: 'active',
-      auto_invoice: f.auto, start_date: f.start, next_bill_date: f.start, created_by: userId,
+      client_id: client.id, addon_key: a.key, addon_name: a.name, price: Number(f.price) || 0, status: trial ? 'trial' : 'active',
+      billing_cycle: f.cycle || 'monthly', trial_ends: trialEnds,
+      auto_invoice: f.auto, start_date: f.start, next_bill_date: trial ? trialEnds : f.start, created_by: userId,
     }).select().single();
     if (error) throw error.code === '23505' ? new Error(`${a.name} is already active for this client`) : error;
-    if (f.auto && f.start <= todayISO() && Number(f.price) > 0) await billAddonNow(data);
+    if (!trial && f.auto && f.start <= todayISO() && Number(f.price) > 0) await billAddonNow(data);
     setF(null);
   }, 'Service started');
 
   if (rows === null) return null;
   const reqs = rows.filter(r => r.status === 'requested');
   const live = rows.filter(r => r.status !== 'requested');
-  const available = catalog.filter(a => a.active !== false && !live.some(r => r.addon_key === a.key));
+  const available = catalog.filter(a => (a.active !== false || a.key === 'vat_invoice') && !live.some(r => r.addon_key === a.key));   // VAT can be started by TaxMate before it is offered to clients
 
   return (
     <div className="card">
       <div className="card-header"><Puzzle size={16} /> Add-on services
-        {!f && available.length > 0 && <button onClick={() => { const a = available[0]; setF({ key: a.key, price: a.price, start: todayISO(), auto: true }); }} className="ml-auto btn-secondary text-xs py-1"><Plus size={13} /> Add a service</button>}
+        {!f && available.length > 0 && <button onClick={() => { const a = available[0]; setF({ key: a.key, price: a.price, start: todayISO(), auto: true, cycle: 'monthly', trial: false }); }} className="ml-auto btn-secondary text-xs py-1"><Plus size={13} /> Add a service</button>}
       </div>
       <div className="p-4 space-y-3">
         {payrollPlan && <div className="text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">👥 Payroll & APIT is included in the client's <b>{payrollPlan}</b> plan — no add-on needed.</div>}
 
         {reqs.map(r => (
           <div key={r.id} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm space-y-2">
-            <div><b>{client.full_name?.split(' ')[0]}</b> asked for <b>{addonEmoji(r.addon_key)} {r.addon_name}</b> ({rsPlan(r.price)}/month) on {fmtDate(r.created_at)}{r.client_note ? ` — “${r.client_note}”` : ''}.</div>
+            <div><b>{client.full_name?.split(' ')[0]}</b> asked for <b>{addonEmoji(r.addon_key)} {r.addon_name}</b> ({rsPlan(r.price)}/{r.billing_cycle === 'annual' ? 'year' : 'month'}) on {fmtDate(r.created_at)}{r.client_note ? ` — “${r.client_note}”` : ''}.</div>
             <div className="flex gap-2 flex-wrap items-center">
-              <label className="text-[11px] font-semibold text-gray-600">Price / month <input className="input inline-block w-24 py-0.5 text-xs text-right ml-1" inputMode="decimal" defaultValue={r.price}
+              <label className="text-[11px] font-semibold text-gray-600">Price / {r.billing_cycle === 'annual' ? 'year' : 'month'} <input className="input inline-block w-24 py-0.5 text-xs text-right ml-1" inputMode="decimal" defaultValue={r.price}
                 onBlur={e => { const v = Number(e.target.value.replace(/[^\d.]/g, '')) || 0; if (v !== Number(r.price)) run(() => upd(r.id, { price: v })); }} /></label>
-              <button disabled={busy} onClick={() => approve(r, true)} className="btn-primary text-xs py-1"><Check size={13} /> Approve (auto monthly invoice)</button>
+              <button disabled={busy} onClick={() => approve(r, true)} className="btn-primary text-xs py-1"><Check size={13} /> Approve (auto {r.billing_cycle === 'annual' ? 'yearly' : 'monthly'} invoice)</button>
               <button disabled={busy} onClick={() => approve(r, false)} className="btn-secondary text-xs py-1">Approve (I invoice manually)</button>
               <button disabled={busy} onClick={() => run(() => upd(r.id, { status: 'cancelled', cancelled_at: new Date().toISOString() }), 'Request declined')} className="text-xs text-gray-500 hover:text-red-600">Decline</button>
             </div>
@@ -74,24 +78,26 @@ export default function AddonsAdmin({ client, userId, onChange }) {
           <div key={r.id} className="rounded-xl border border-gray-200 p-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xl">{addonEmoji(r.addon_key)}</span>
-              <div className="flex-1 min-w-0"><div className="font-semibold text-sm">{r.addon_name} <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${SUB_STATUS[r.status].cls}`}>{SUB_STATUS[r.status].label}</span></div>
-                <div className="text-xs text-gray-500">Since {fmtDate(r.start_date)} · {r.auto_invoice ? 'auto monthly invoice' : 'invoiced manually'} · next {r.status === 'paused' ? 'paused' : r.next_bill_date ? fmtDate(r.next_bill_date) : '—'}</div></div>
-              <div className="font-black text-primary-800">{rsPlan(r.price)}<span className="text-xs font-normal text-gray-400">/m</span></div>
+              <div className="flex-1 min-w-0"><div className="font-semibold text-sm">{r.addon_name} <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${(SUB_STATUS[r.status] || SUB_STATUS.active).cls}`}>{(SUB_STATUS[r.status] || { label: r.status }).label}</span></div>
+                <div className="text-xs text-gray-500">Since {fmtDate(r.start_date)} · {r.auto_invoice ? `auto ${r.billing_cycle === 'annual' ? 'yearly' : 'monthly'} invoice` : 'invoiced manually'}{r.status === 'trial' && r.trial_ends ? ` · trial until ${fmtDate(r.trial_ends)}` : ''} · next {r.status === 'paused' ? 'paused' : r.next_bill_date ? fmtDate(r.next_bill_date) : '—'}</div></div>
+              <div className="font-black text-primary-800">{rsPlan(r.price)}<span className="text-xs font-normal text-gray-400">/{r.billing_cycle === 'annual' ? 'yr' : 'm'}</span></div>
             </div>
             {edit?.id === r.id ? (
               <div className="grid sm:grid-cols-4 gap-2 items-end">
-                <label className="text-[11px] font-semibold text-gray-500">Price / month<input className="input mt-0.5 py-1 text-xs text-right" inputMode="decimal" value={edit.price} onChange={e => setEdit({ ...edit, price: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+                <label className="text-[11px] font-semibold text-gray-500">Price / {r.billing_cycle === 'annual' ? 'year' : 'month'}<input className="input mt-0.5 py-1 text-xs text-right" inputMode="decimal" value={edit.price} onChange={e => setEdit({ ...edit, price: e.target.value.replace(/[^\d.]/g, '') })} /></label>
                 <label className="text-[11px] font-semibold text-gray-500">Next invoice date<input type="date" className="input mt-0.5 py-1 text-xs" value={edit.next ?? ''} onChange={e => setEdit({ ...edit, next: e.target.value })} /></label>
                 <label className="text-xs inline-flex items-center gap-1.5 pb-1.5"><input type="checkbox" checked={edit.auto} onChange={e => setEdit({ ...edit, auto: e.target.checked })} /> Auto monthly invoice</label>
                 <button disabled={busy} onClick={() => run(async () => { await upd(r.id, { price: Number(edit.price) || 0, next_bill_date: edit.next || null, auto_invoice: edit.auto }); setEdit(null); }, 'Saved')} className="btn-primary text-xs py-1.5 justify-center"><Save size={13} /> Save</button>
               </div>
             ) : (
               <div className="flex gap-2 flex-wrap">
-                {r.status === 'active' && <button disabled={busy} onClick={() => run(() => billAddonNow(r), 'Invoice created for this month')} className="btn-primary text-xs py-1"><Receipt size={13} /> Bill now</button>}
+                {r.status === 'active' && <button disabled={busy} onClick={() => run(() => billAddonNow(r), 'Invoice created')} className="btn-primary text-xs py-1"><Receipt size={13} /> Bill now</button>}
+                {r.status === 'trial' && <button disabled={busy} onClick={() => run(async () => { await upd(r.id, { status: 'active', start_date: todayISO(), next_bill_date: todayISO(), trial_ends: null }); if (r.auto_invoice && Number(r.price) > 0) await billAddonNow({ ...r, status: 'active' }); }, 'Activated — paid subscription started')} className="btn-primary text-xs py-1"><Check size={13} /> End trial &amp; activate</button>}
+                {r.addon_key === 'vat_invoice' && r.status === 'active' && <button disabled={busy} onClick={() => { if (window.confirm('Suspend VAT Invoice? The client keeps read-only access to their records.')) run(() => upd(r.id, { status: 'suspended' }), 'Suspended'); }} className="btn-secondary text-xs py-1"><Pause size={13} /> Suspend</button>}
                 <button onClick={() => setEdit({ id: r.id, price: r.price, next: r.next_bill_date, auto: r.auto_invoice })} className="btn-secondary text-xs py-1">Edit</button>
                 {r.status === 'active'
                   ? <button disabled={busy} onClick={() => run(() => upd(r.id, { status: 'paused' }), 'Paused — no invoices until resumed')} className="btn-secondary text-xs py-1"><Pause size={13} /> Pause</button>
-                  : <button disabled={busy} onClick={() => run(() => upd(r.id, { status: 'active' }), 'Resumed')} className="btn-secondary text-xs py-1"><Play size={13} /> Resume</button>}
+                  : ['paused', 'suspended'].includes(r.status) && <button disabled={busy} onClick={() => run(() => upd(r.id, { status: 'active' }), 'Resumed')} className="btn-secondary text-xs py-1"><Play size={13} /> Resume</button>}
                 <button disabled={busy} onClick={() => { if (window.confirm(`Stop ${r.addon_name}? No more invoices will be created.`)) run(() => upd(r.id, { status: 'cancelled', cancelled_at: new Date().toISOString() }), 'Service stopped'); }} className="text-xs text-gray-500 hover:text-red-600 inline-flex items-center gap-1"><XCircle size={13} /> Stop</button>
               </div>
             )}
@@ -104,16 +110,20 @@ export default function AddonsAdmin({ client, userId, onChange }) {
           <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-3 space-y-2">
             <div className="grid sm:grid-cols-2 gap-2">
               {available.map(a => (
-                <button key={a.key} onClick={() => setF({ ...f, key: a.key, price: a.price })} className={`text-left rounded-xl border-2 p-2.5 ${f.key === a.key ? 'border-primary-600 bg-white' : 'border-transparent bg-white/60 hover:border-primary-200'}`}>
+                <button key={a.key} onClick={() => setF({ ...f, key: a.key, price: f.cycle === 'annual' && a.annual_price ? a.annual_price : a.price })} className={`text-left rounded-xl border-2 p-2.5 ${f.key === a.key ? 'border-primary-600 bg-white' : 'border-transparent bg-white/60 hover:border-primary-200'}`}>
                   <div className="font-bold text-sm">{addonEmoji(a.key)} {a.name} <span className="font-normal text-gray-500">· {rsPlan(a.price)}/m</span></div>
                   <div className="text-[11px] text-gray-500">{a.tagline}</div>
                 </button>
               ))}
             </div>
             <div className="grid sm:grid-cols-3 gap-2 items-end">
-              <label className="text-[11px] font-semibold text-gray-500">Price / month (Rs.)<input className="input mt-0.5 py-1 text-xs text-right" inputMode="decimal" value={f.price} onChange={e => setF({ ...f, price: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+              {f.key === 'vat_invoice' && (
+                <label className="text-[11px] font-semibold text-gray-500">Billing<select className="input mt-0.5 py-1 text-xs" value={f.cycle} onChange={e => { const a = catalog.find(x => x.key === f.key); setF({ ...f, cycle: e.target.value, price: e.target.value === 'annual' ? (a?.annual_price ?? f.price) : (a?.price ?? f.price) }); }}><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
+              )}
+              {f.key === 'vat_invoice' && <label className="text-xs inline-flex items-center gap-1.5 pb-1.5"><input type="checkbox" checked={!!f.trial} onChange={e => setF({ ...f, trial: e.target.checked })} /> Free trial ({catalog.find(x => x.key === 'vat_invoice')?.trial_days || 14} days)</label>}
+              <label className="text-[11px] font-semibold text-gray-500">Price / {f.cycle === 'annual' ? 'year' : 'month'} (Rs.)<input className="input mt-0.5 py-1 text-xs text-right" inputMode="decimal" value={f.price} onChange={e => setF({ ...f, price: e.target.value.replace(/[^\d.]/g, '') })} /></label>
               <label className="text-[11px] font-semibold text-gray-500">Start / first invoice<input type="date" className="input mt-0.5 py-1 text-xs" value={f.start} onChange={e => setF({ ...f, start: e.target.value })} /></label>
-              <label className="text-xs inline-flex items-center gap-1.5 pb-1.5"><input type="checkbox" checked={f.auto} onChange={e => setF({ ...f, auto: e.target.checked })} /> Auto monthly invoice</label>
+              <label className="text-xs inline-flex items-center gap-1.5 pb-1.5"><input type="checkbox" checked={f.auto} onChange={e => setF({ ...f, auto: e.target.checked })} /> Auto {f.cycle === 'annual' ? 'yearly' : 'monthly'} invoice</label>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setF(null)} className="btn-secondary text-xs py-1.5 flex-1 justify-center">Cancel</button>
