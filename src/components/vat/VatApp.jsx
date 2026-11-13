@@ -1,7 +1,7 @@
 // V64 — VAT Invoice & RAMIS add-on: the whole module for one business (client portal, team members and TaxMate admin)
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, FileText, Users, Package, Wallet, Landmark, Inbox, BarChart3, Settings as Cog, Crown, ShieldCheck, AlertTriangle, Plus, History } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Package, Wallet, Landmark, Inbox, BarChart3, Settings as Cog, Crown, ShieldCheck, AlertTriangle, Plus, History, BookOpen } from 'lucide-react';
 import { vatContext, loadSettings, loadRates, loadCustomers, loadItems, loadBranches, loadDocs } from '../../lib/vat/api';
 import { setLocale, t } from '../../lib/vat/i18n';
 import { SUBSCRIPTION, ROLES, dmy } from '../../lib/vat/format';
@@ -19,6 +19,7 @@ import Reports from './Reports';
 import Settings from './Settings';
 import Subscription from './Subscription';
 import Audit from './Audit';
+import Guide from './Guide';
 
 const NAV = [
   { v: 'dashboard', icon: LayoutDashboard, k: 'nav.dashboard' },
@@ -32,7 +33,9 @@ const NAV = [
   { v: 'audit', icon: History, k: 'nav.audit', perm: 'reports' },
   { v: 'settings', icon: Cog, k: 'nav.settings' },
   { v: 'subscription', icon: Crown, k: 'nav.subscription' },
+  { v: 'guide', icon: BookOpen, k: 'nav.guide', live: true },   // V64.2 — only while the add-on is switched on
 ];
+const LIVE = ['trial', 'active', 'past_due', 'paused', 'suspended'];
 
 /**
  * clientId  the business (tenant)
@@ -115,7 +118,8 @@ export default function VatApp({ clientId, syncUrl = false }) {
     );
   };
 
-  const navItems = NAV.filter((n) => !n.perm || can(n.perm));
+  const guideOn = LIVE.includes(st) || ctx.role === 'taxmate';
+  const navItems = NAV.filter((n) => (!n.perm || can(n.perm)) && (!n.live || guideOn));
   let body;
   if (noAddon && view !== 'subscription') body = <Subscription app={app} intro />;
   else if (view === 'dashboard') body = <Dashboard app={app} />;
@@ -132,6 +136,7 @@ export default function VatApp({ clientId, syncUrl = false }) {
   else if (view === 'audit') body = <Audit app={app} />;
   else if (view === 'settings') body = <Settings app={app} />;
   else if (view === 'subscription') body = <Subscription app={app} />;
+  else if (view === 'guide' && guideOn) body = <Guide app={app} />;
   else body = <Dashboard app={app} />;
 
   return (
@@ -164,6 +169,7 @@ export default function VatApp({ clientId, syncUrl = false }) {
         <div className="card border-primary-200 bg-primary-50 p-3 text-sm text-primary-900">
           Start with <b>Settings → Company &amp; VAT</b>: your registered name, TIN, VAT registration and address appear on every tax invoice.
           <button type="button" onClick={() => go('settings')} className="ml-2 font-semibold underline">Open setup</button>
+          {guideOn && <button type="button" onClick={() => go('guide')} className="ml-3 inline-flex items-center gap-1 font-semibold underline"><BookOpen size={13} /> {t('nav.guide')}</button>}
         </div>
       )}
 
