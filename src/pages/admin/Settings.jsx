@@ -623,6 +623,7 @@ export const PORTAL_FEATURES = [
   ['tax_calculator', '🧮', 'Tax Calculator (detailed)', 'Full calculator — monthly / annual, local, foreign or mixed income, with reliefs.'],
   ['tax_calendar', '📅', 'Tax Calendar & due dates', 'IRD due dates on their dashboard and a full calendar.'],
   ['ird_codes', '#️⃣', 'IRD Payment Codes', 'Clients pick a tax (APIT, VAT, SSCL, income tax…) and month and see the Tax Type Code, Payment Period Code, category and due date.'],
+  ['activity_codes', '🔎', 'RAMIS Activity Codes', 'Clients search the 1,872 IRD economic activity codes (6 digits) for their business or profession and copy the code for RAMIS.'],
   ['reminders', '🔔', 'Reminders', 'Clients see your reminders and can add their own.'],
   ['documents', '🗂️', 'Document vault', 'Clients upload salary slips, bank certificates etc. and download files you share.'],
   ['return_tracker', '🚦', 'Return progress tracker', 'Clients see where their return is: Documents received → Computing → Ready to review → Filed in RAMIS.'],
@@ -664,7 +665,7 @@ function PortalTab() {
   };
 
   if (!cfg) return <div className="card p-6 text-gray-400 text-sm">Loading…</div>;
-  const isOn = (k) => cfg[k] !== false;
+  const isOn = (k) => (k === 'activity_codes' && !('activity_codes' in cfg) ? cfg.ird_codes : cfg[k]) !== false;   // V65: follows IRD codes until it has its own value
   return (
     <div className="space-y-4">
       <PushSettingsCard />
