@@ -25,7 +25,7 @@ const nav = [
   { to: '/client/income', icon: Wallet, label: 'Monthly Income', feature: 'income_sheets' },
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
   { to: '/client/ird-codes', icon: Hash, label: 'IRD Payment Codes', feature: 'ird_codes' },
-  { to: '/client/activity-codes', icon: ListTree, label: 'Activity Codes', feature: 'ird_codes' },
+  { to: '/client/activity-codes', icon: ListTree, label: 'Activity Codes', feature: 'activity_codes' },
   { to: '/client/invite', icon: Gift, label: 'Invite Friends', feature: 'referrals', own: true },
   { to: '/client/services', icon: CalendarCheck, label: 'Book a Service', feature: 'services' },
   { to: '/client/plan', icon: Crown, label: 'My Plan', feature: 'plans' },
@@ -44,7 +44,7 @@ export default function ClientLayout() {
   const { profile, signOut, viewAs } = useAuth();
   const navigate = useNavigate();
   // Features switched on by TaxMate (Tax Calculator on/off, Monthly Income sheet enabled)
-  const [features, setFeatures] = useState({ quick_tax: true, tax_calculator: true, tax_calendar: true, ird_codes: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, services: true, summary_letters: true, plans: true, tax_reviews: true, income_sheets: 0, loaded: false });
+  const [features, setFeatures] = useState({ quick_tax: true, tax_calculator: true, tax_calendar: true, ird_codes: true, activity_codes: true, reminders: true, referrals: true, documents: true, return_tracker: true, messages: true, services: true, summary_letters: true, plans: true, tax_reviews: true, income_sheets: 0, loaded: false });
   useEffect(() => {
     supabase.rpc('my_portal_features').then(({ data }) => { if (data) setFeatures({ ...data, loaded: true }); else setFeatures(f => ({ ...f, loaded: true })); });
   }, [profile?.id]);
@@ -61,7 +61,7 @@ export default function ClientLayout() {
   // V64: VAT Invoice menu — when the business has (or had) the add-on
   const [vatOn, setVatOn] = useState(false);
   useEffect(() => { if (profile?.id) supabase.rpc('vi_my_workspaces').then(({ data }) => setVatOn((data || []).some(w => w.role === 'owner' && w.status !== 'none'))); }, [profile?.id]);
-  const feats = { ...features, payroll: payrollOn, family: members.length > 0, vat: vatOn };
+  const feats = { ...features, activity_codes: features.activity_codes ?? features.ird_codes, payroll: payrollOn, family: members.length > 0, vat: vatOn };
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const unread = useUnreadMessages('client', features.messages !== false);
