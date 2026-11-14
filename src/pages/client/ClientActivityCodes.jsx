@@ -4,7 +4,7 @@ import ActivityCodeFinder from '../../components/ActivityCodeFinder';
 
 export default function ClientActivityCodes() {
   const features = useOutletContext() ?? {};
-  if (features.loaded && features.ird_codes === false) return (
+  if (features.loaded && (features.activity_codes ?? features.ird_codes) === false) return (
     <div className="card p-8 text-center space-y-3"><ListTree size={36} className="mx-auto text-gray-300" /><p className="text-gray-600">Activity codes are not available right now.</p><Link to="/client" className="btn-secondary text-sm inline-flex">Back to dashboard</Link></div>
   );
   return (
