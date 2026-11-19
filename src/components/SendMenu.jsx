@@ -14,7 +14,7 @@ import { ensureShareToken, disableShareLink, shareUrl, whatsappLink, emailLink, 
  *  beforeSend   optional async () => patch   (e.g. mark a draft invoice as sent)
  *  onChange     (patch) => void               (update the row in the parent list)
  */
-export default function SendMenu({ recipients, table, row, phone, email, subject, buildMessage, beforeSend, onChange, label = 'Send' }) {
+export default function SendMenu({ recipients, table, row, phone: phoneProp, email: emailProp, subject, buildMessage, beforeSend, onChange, label = 'Send' }) {
   const [open, setOpen] = useState(false);
   const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
 
