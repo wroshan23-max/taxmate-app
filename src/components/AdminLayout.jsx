@@ -8,12 +8,13 @@ import MobileDrawer from './MobileDrawer';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet, PhoneCall
 } from 'lucide-react';
 
 const nav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/admin/clients', icon: Users, label: 'Clients' },
+  { to: '/admin/calls', icon: PhoneCall, label: 'Call Log' },
   { to: '/admin/calculator', icon: Calculator, label: 'IIT Calculator' },
   { to: '/admin/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/admin/tax-payments', icon: Wallet, label: 'Tax Payments Due' },
