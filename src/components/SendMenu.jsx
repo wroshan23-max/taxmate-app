@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Send, Mail, Link2, Copy, MessageCircle, Share2, Unlink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import FloatingMenu from './FloatingMenu';
 import { ensureShareToken, disableShareLink, shareUrl, whatsappLink, emailLink, waNumber } from '../lib/share';
 
 /**
@@ -16,6 +17,8 @@ import { ensureShareToken, disableShareLink, shareUrl, whatsappLink, emailLink, 
  */
 export default function SendMenu({ recipients, table, row, phone: phoneProp, email: emailProp, subject, buildMessage, beforeSend, onChange, label = 'Send' }) {
   const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const close = useCallback(() => setOpen(false), []);
   const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share;
 
   const go = async (channel, to = null) => {
@@ -67,14 +70,12 @@ export default function SendMenu({ recipients, table, row, phone: phoneProp, ema
   const item = 'w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-50';
   return (
     <div className="relative inline-block">
-      <button type="button" onClick={() => setOpen(o => !o)}
+      <button ref={btnRef} type="button" onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open}
         className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-green-600 text-white hover:bg-green-700">
         <Send size={12} /> {label}
       </button>
       {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-50 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+        <FloatingMenu anchorRef={btnRef} onClose={close} align="right">
             {(recipients?.length ? recipients : [{ phone: phoneProp, email: emailProp }]).map((r, k) => (
               <div key={k} className={k ? 'border-t border-gray-100' : ''}>
                 {r.label && <div className="px-3 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-gray-400 truncate">{r.label}</div>}
@@ -88,8 +89,7 @@ export default function SendMenu({ recipients, table, row, phone: phoneProp, ema
             {row.share_token && (
               <button className={`${item} text-red-600 border-t border-gray-100`} onClick={disable}><Unlink size={15} /> Turn off shared link</button>
             )}
-          </div>
-        </>
+        </FloatingMenu>
       )}
     </div>
   );
