@@ -72,7 +72,7 @@ export default function IncomeSheetsAdmin({ client }) {
   const enable = async (forClient = true) => {
     const { data: row, error } = await supabase.from('income_sheets').insert({ client_id: client.id, year, data: emptySheet(), enabled: forClient, created_by: user.id }).select().single();
     if (error) return toast.error(/duplicate|unique/i.test(error.message) ? `A Y/A ${year} sheet already exists` : error.message);
-    toast.success(forClient ? `Monthly income sheet enabled for Y/A ${year}` : `Y/A ${year} sheet ready — enter the figures`);
+    toast.success(forClient ? (client.profile_id ? `Monthly income sheet enabled for Y/A ${year}` : `Y/A ${year} sheet enabled — ${client.full_name} will see it after they log in`) : `Y/A ${year} sheet ready — enter the figures`, { duration: 5000 });
     await load();
     if (!forClient && row) { setOpenId(null); setEditId(row.id); }
   };
@@ -99,7 +99,7 @@ export default function IncomeSheetsAdmin({ client }) {
     navigate('/admin/calculator', { state: { newReturn: { client_id: client.id, year: s.year, label: `From income sheet ${s.year}`, input_data: { form: 'IIT_RETURN', ...input } } } });
   };
   const msg = (s) => async () => {
-    if (!client.profile_id) throw new Error('This client has no portal login yet. Invite them from the Overview tab first.');
+    if (!client.profile_id) throw new Error('No portal login yet — invite them from the Overview tab first. The sheet is already waiting for them.');
     if (!s.enabled) await patch(s, { enabled: true });
     const first = (client.contact_preferred && client.contact_name ? client.contact_name : client.full_name || '').trim().split(/\s+/).slice(-1)[0];
     return `Dear ${first || 'Sir/Madam'},
@@ -120,7 +120,7 @@ WhatsApp ${FIRM.whatsapp}`;
       <div className="p-5 space-y-3">
         {!client.profile_id && (
           <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5 flex gap-2"><AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
-            {client.full_name} has no portal login yet, so they can't fill it online. Invite them from the Overview tab.</div>
+            <span>{client.full_name} has no portal login yet. You can still enable the sheet — it will be waiting in their portal (menu <b>Monthly Income</b>) as soon as they log in. Invite them from the <b>Overview</b> tab.</span></div>
         )}
         <div className="flex flex-wrap items-end gap-3">
           <div>
@@ -129,7 +129,7 @@ WhatsApp ${FIRM.whatsapp}`;
               {alYears().map(y => <option key={y} value={y} disabled={have.has(y)}>{y}{have.has(y) ? ' ✓' : ''}</option>)}
             </select>
           </div>
-          <button onClick={() => enable(true)} disabled={have.has(year) || !client.profile_id} title={client.profile_id ? '' : 'No portal login yet'} className="btn-primary text-sm"><Plus size={15} /> Enable for client · Y/A {year}</button>
+          <button onClick={() => enable(true)} disabled={have.has(year)} title={client.profile_id ? '' : 'The sheet waits in their portal until they log in'} className="btn-primary text-sm"><Plus size={15} /> Enable for client · Y/A {year}</button>
           <button onClick={() => enable(false)} disabled={have.has(year)} className="btn-secondary text-sm"><PencilLine size={15} /> I'll enter it myself</button>
         </div>
         <p className="text-xs text-gray-400">The client enters each month's salary, rent, interest, foreign income and business income &amp; expenses, then submits — or you enter / correct the figures yourself with <b>Edit</b> (e.g. from bank statements or a WhatsApp photo). Use <b>Open in IIT Return</b> to turn it into a computation.</p>
