@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import ClientPicker from '../../components/ClientPicker';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -52,7 +53,7 @@ export default function Invoices() {
   const loadAll = async () => {
     const [inv, cls, bk, st] = await Promise.all([
       supabase.from('invoices').select('*, clients(client_no, full_name, tin, nic, mobile, email, address, contact_name, contact_relation, contact_mobile, contact_email, contact_preferred), invoice_items(*)').order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, full_name, tin, nic, mobile, email, address').is('archived_at', null).order('full_name'),
+      supabase.from('clients').select('id, client_no, full_name, tin, nic, mobile, email, address').is('archived_at', null).order('full_name'),
       supabase.from('bank_accounts').select('*').order('created_at'),
       supabase.from('app_settings').select('value').eq('key', 'firm_signature').maybeSingle(),
     ]);
@@ -345,10 +346,7 @@ export default function Invoices() {
             <div className="card p-5">
               <Step n="2">Client Details</Step>
               <Label>Load from Client Database</Label>
-              <select className="input mb-3" value={form.client_id} onChange={e => pickClient(e.target.value)}>
-                <option value="">— Select Client (or type details below) —</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.full_name}{c.tin ? ` | TIN: ${c.tin}` : ''}</option>)}
-              </select>
+              <ClientPicker className="mb-3" clients={clients} value={form.client_id} onChange={pickClient} />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Client Name *" value={form.client.name} onChange={v => setClient({ name: v })} />
                 <Field label="TIN Number" value={form.client.tin} onChange={v => setClient({ tin: v })} />
