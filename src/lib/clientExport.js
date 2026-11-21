@@ -2,7 +2,7 @@
 // Sheets: Client details · Monthly income (one per Y/A) · Assets & liabilities (one per Y/A) · Payroll staff · Payroll months
 import { supabase } from './supabase';
 import { downloadXlsx } from './xlsx';
-import { GROUPS as INC_GROUPS, monthLabel, rowTotal, sheetTotals, cell as incCell, SHEET_STATUS } from './incomeSheet';
+import { groupsFor, monthLabel, rowTotal, sheetTotals, cell as incCell, SHEET_STATUS } from './incomeSheet';
 import { SECTIONS, rowsOf, isRowEmpty, totals as alTotals, num } from './assets';
 import { calcLine, periodLabel } from './payroll';
 
@@ -67,14 +67,14 @@ function incomeSheet(c, s) {
     [],
     [h('Item (Rs.)'), ...months.map(h), h('Total')],
   ];
-  for (const g of INC_GROUPS) {
+  for (const g of groupsFor(!!s.biz_mode, d)) {
     rows.push([sub(g.en)]);
     for (const r of g.rows) {
       const vals = Array.from({ length: 12 }, (_, i) => { const v = incCell(d, r.key, i); return v === '' ? '' : m(n(v)); });
       rows.push([r.en, ...vals, mb(rowTotal(d, r.key))]);
     }
   }
-  const tt = sheetTotals(d);
+  const tt = sheetTotals(d, !!s.biz_mode);
   rows.push([], [sub('Totals for the year')],
     [b('Income in Sri Lanka'), ...Array(12).fill(''), mb(tt.income)],
     [b('Foreign-currency income (Rs.)'), ...Array(12).fill(''), mb(tt.fx)],
@@ -83,6 +83,10 @@ function incomeSheet(c, s) {
     [b('Business profit / (loss)'), ...Array(12).fill(''), mb(tt.bizProfit)],
     [b('Tax already deducted'), ...Array(12).fill(''), mb(tt.credit)],
     [b('Months filled'), ...Array(12).fill(''), b(tt.monthsFilled)]);
+  if (s.biz_mode && (d.assets || []).length) {
+    rows.push([], [sub('Equipment used for work')], [h('Item'), h('Date bought'), h('Cost (Rs.)'), h('Used for work'), h('Sold?'), h('Note')]);
+    for (const a of d.assets) rows.push([a.item, a.date, m(n(a.cost)), a.work === 'partly' ? 'Partly' : 'Only for work', a.disposed ? `Yes ${a.disposedOn || ''}`.trim() : 'No', a.note || '']);
+  }
   if (d.note || s.client_note) rows.push([], ['Client note', w(d.note || s.client_note)]);
   if (s.admin_note) rows.push(['TaxMate note', w(s.admin_note)]);
   return { name: `Income ${s.year.replace('/', '-')}`, rows, widths: [38, ...Array(12).fill(12), 15], freeze: 4 };
