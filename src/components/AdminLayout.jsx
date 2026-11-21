@@ -5,6 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { logActivity } from '../lib/activity';
 import { useUnreadMessages } from '../lib/messages';
 import MobileDrawer from './MobileDrawer';
+import { supabase } from '../lib/supabase';
+import { loadPayFlag } from '../lib/share';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
@@ -40,6 +42,7 @@ export default function AdminLayout() {
   const [open, setOpen] = useState(false);
   const unread = useUnreadMessages('admin');
   // "online now" for staff too (no page-view logging for admins)
+  useEffect(() => { loadPayFlag(supabase); }, []);   // V67: invoice messages mention online payment when PayHere is on
   useEffect(() => {
     logActivity('ping', '/admin');
     const t = setInterval(() => { if (document.visibilityState === 'visible') logActivity('ping', '/admin'); }, 60000);
