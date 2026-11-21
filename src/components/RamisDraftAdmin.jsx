@@ -16,7 +16,7 @@ const T = {
   inst:     [['label', 'Instalment', 'w-32', 'ro'], ['due', 'Due date', 'w-28', 'ro'], ['date', 'Payment date', 'w-36', 'date'], ['amount', 'Amount paid (Rs.)', 'w-36', 'money']],
   immovable:[['situation', 'Situation of property'], ['acquired', 'Date acquired', 'w-32', 'date'], ['cost', 'Cost (Rs.)', 'w-32', 'money'], ['value', 'Market value (Rs.)', 'w-32', 'money']],
   vehicles: [['description', 'Description'], ['regno', 'Reg. No.', 'w-28'], ['acquired', 'Date acquired', 'w-32', 'date'], ['value', 'Cost / market value (Rs.)', 'w-32', 'money']],
-  deposits: [['bank', 'Bank / institution'], ['acno', 'Account No.', 'w-28'], ['invested', 'Amount invested (Rs.)', 'w-32', 'money'], ['interest', 'Interest (Rs.)', 'w-28', 'money'], ['balance', 'Balance (Rs.)', 'w-32', 'money']],
+  deposits: [['bank', 'Bank / institution'], ['acno', 'Account No.', 'w-40'], ['invested', 'Amount invested (Rs.)', 'w-32', 'money'], ['interest', 'Interest (Rs.)', 'w-28', 'money'], ['balance', 'Balance (Rs.)', 'w-32', 'money']],
   shares:   [['company', 'Company / institution'], ['units', 'No. of shares', 'w-24'], ['acquired', 'Date acquired', 'w-32', 'date'], ['value', 'Cost / market value (Rs.)', 'w-32', 'money'], ['dividend', 'Net dividend (Rs.)', 'w-28', 'money']],
   otherMovable: [['description', 'Description'], ['value', 'Value (Rs.)', 'w-32', 'money']],
   business: [['name', 'Name of business'], ['current', 'Current A/C (Rs.)', 'w-32', 'money'], ['capital', 'Capital A/C (Rs.)', 'w-32', 'money']],
