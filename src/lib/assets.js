@@ -76,11 +76,11 @@ export const SECTIONS = [
     en: 'Bank & Financial Institution Deposits', si: 'බැංකු හා මූල්‍ය ආයතන තැන්පතු',
     help: 'Savings, current, fixed and foreign-currency accounts — balance on 31 March.',
     helpSi: 'ඉතිරි කිරීම්, ජංගම, ස්ථාවර හා විදේශ මුදල් ගිණුම් — මාර්තු 31 ශේෂය.',
-    add: 'Add account', title: (r) => [r.bank, r.type, r.acno && `…${r.acno}`].filter(Boolean).join(' · '),
+    add: 'Add account', title: (r) => [r.bank, r.type, r.acno && `A/C ${r.acno}`].filter(Boolean).join(' · '),
     cols: [
       { key: 'bank', en: 'Bank / institution', si: 'බැංකුව / ආයතනය', type: 'text', required: true, placeholder: 'Bank of Ceylon' },
       { key: 'type', en: 'Account type', si: 'ගිණුම් වර්ගය', type: 'select', required: true, options: ['Savings', 'Current', 'Fixed deposit', 'Foreign currency', 'Other'] },
-      { key: 'acno', en: 'A/C No. (last 4 digits)', si: 'ගිණුම් අංකය (අවසන් ඉලක්කම් 4)', type: 'text', placeholder: '4587', maxLength: 6 },
+      { key: 'acno', en: 'Account number', si: 'ගිණුම් අංකය', type: 'text', placeholder: 'e.g. 100234567890', maxLength: 40 },
       { ...VALUE, en: 'Balance on 31 March (Rs.)', si: 'මාර්තු 31 ශේෂය (රු.)' },
     ],
   },
