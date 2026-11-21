@@ -48,6 +48,12 @@ export function calcMessage(calc, client, url) {
   return lines.join('\n');
 }
 
+// V67: is online card payment (PayHere) switched on? Loaded once by the admin layout.
+export const PAY = { online: false };
+export async function loadPayFlag(supabase) {
+  try { const { data } = await supabase.from('app_settings').select('value').eq('key', 'payments').maybeSingle(); PAY.online = !!data?.value?.payhere; } catch { /* keep false */ }
+}
+
 export function invoiceMessage(inv, url) {
   const c = billTo(inv);
   const first = (c.name || '').trim().split(/\s+/).slice(-1)[0] || 'Sir/Madam';
@@ -56,9 +62,9 @@ export function invoiceMessage(inv, url) {
     '',
     `Invoice ${inv.invoice_no} dated ${inv.issue_date} for ${rs(inv.total_amount)}${inv.due_date ? ` (due ${inv.due_date})` : ''}.`,
     '',
-    `View / download PDF: ${url}`,
+    PAY.online && ['unpaid', 'overdue', 'draft'].includes(inv.status) ? `View, download or PAY ONLINE (card / eZ Cash / mCash / internet banking): ${url}` : `View / download PDF: ${url}`,
     '',
-    'Bank transfer details are on the invoice.',
+    PAY.online ? 'Or pay by bank transfer — details are on the invoice.' : 'Bank transfer details are on the invoice.',
     '',
     'Thank you,', FIRM.name, FIRM.phone,
   ].join('\n');
