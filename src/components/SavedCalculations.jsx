@@ -7,6 +7,8 @@ import { buildStatementHtml, openStatement } from '../lib/iitStatement';
 import { calcMessage } from '../lib/share';
 import SendMenu from './SendMenu';
 import { recipientsOf } from '../lib/contacts';
+import TaxBalancePayment from './TaxBalancePayment';
+import { loadBalancePayments } from '../lib/taxBalance';
 
 const AMT_STYLE = { payable: 'text-red-700', refund: 'text-green-700', nil: 'text-gray-500', instalment: 'text-primary-700' };
 const AMT_LABEL = { payable: 'Payable', refund: 'Refund', nil: 'Nil', instalment: 'Instalment' };
@@ -34,6 +36,8 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
   const [year, setYear]       = useState('all');
   const [show, setShow]       = useState('all');
   const [openId, setOpenId]   = useState(null);
+  const [paid, setPaid]       = useState({});   // V71: { 'client|year': tax_balance_payments row }
+  const loadPaid = () => loadBalancePayments(clientId).then(setPaid).catch(() => {});
 
   const load = async () => {
     setLoading(true);
@@ -47,7 +51,7 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
     setRows(data ?? []);
     setLoading(false);
   };
-  useEffect(() => { load(); }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); loadPaid(); }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patchRow = (id, patch) => setRows(rs => rs.map(x => (x.id === id ? { ...x, ...patch } : x)));
   const years = useMemo(() => [...new Set(rows.map(r => r.year))].sort().reverse(), [rows]);
@@ -237,6 +241,11 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
                             <button onClick={() => remove(r)} className="text-xs px-2 py-1 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50" title="Delete version"><Trash2 size={13} /></button>
                           </div>
                         </div>
+                        {isFinal && sm.status === 'payable' && sm.kind !== 'quarterly' && (
+                          <div className="px-5 pb-3 -mt-1">
+                            <TaxBalancePayment role="admin" calc={r} clientId={r.client_id} amountDue={Math.abs(sm.amount)} payment={paid[`${r.client_id}|${r.year}`]} onChange={loadPaid} />
+                          </div>
+                        )}
                         {isOpen && (
                           <div className="bg-gray-50 border-t border-gray-100 p-3">
                             <iframe title={`Statement ${r.id}`} srcDoc={buildStatementHtml(r, c, { withToolbar: false })}
