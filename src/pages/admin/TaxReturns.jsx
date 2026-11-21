@@ -8,12 +8,14 @@ import { summarizeCalc } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
 import { ReturnStepper, setReturnStage } from '../../components/ReturnTracker';
 import { STAGES, docYears, defaultDocYear } from '../../lib/documents';
+import { loadBalancePayments } from '../../lib/taxBalance';
 
 
 export default function TaxReturns() {
   const { user } = useAuth();
   const [returns, setReturns] = useState([]);
   const [calcs, setCalcs] = useState({});   // latest annual calc per `${client_id}|${year}`
+  const [paid, setPaid] = useState({});     // V71: tax balance payments per `${client_id}|${year}`
   const [clients, setClients] = useState([]);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -25,6 +27,7 @@ export default function TaxReturns() {
   useEffect(() => { loadAll(); }, []);
 
   const loadAll = async () => {
+    loadBalancePayments().then(setPaid).catch(() => {});
     const [{ data: rets }, { data: cls }, { data: cs }] = await Promise.all([
       supabase.from('tax_returns').select('*, clients(full_name, tin, nic, address, employer, resident_status)').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, full_name, tin').is('archived_at', null).order('full_name'),
@@ -130,6 +133,7 @@ export default function TaxReturns() {
                     <td className="table-td hidden md:table-cell text-sm font-semibold text-primary-700">
                       {tax != null ? fmtRs(tax) : '—'}
                       {sm && <div className={`text-xs font-normal ${sm.status === 'refund' ? 'text-green-700' : 'text-red-600'}`}>{sm.status === 'refund' ? 'Refund' : 'Balance'} {fmtRs(Math.abs(sm.amount))}</div>}
+                      {sm?.status === 'payable' && paid[`${r.client_id}|${r.year}`] && (() => { const p = paid[`${r.client_id}|${r.year}`]; const ok = p.paid_by_role === 'admin' || p.checked_at; return <div className={`text-[10px] font-bold ${ok ? 'text-green-700' : 'text-amber-600'}`}>{ok ? '💰 PAID' : '⏳ PAID — check'} {fmtRs(p.paid_amount)}</div>; })()}
                       {calc && <div className={`text-[10px] font-bold ${calc.status === 'final' ? 'text-green-700' : 'text-amber-600'}`}>{calc.status === 'final' ? '✅ FINAL' : '📝 DRAFT'}</div>}
                     </td>
                     <td className="table-td"><ReturnStepper ret={r} size="sm" onSet={(st) => updateStage(r.id, st)} /></td>

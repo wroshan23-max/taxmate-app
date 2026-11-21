@@ -34,7 +34,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird, pays, srs, lets, subReq, revReq, adReq, calcPaid, taxChk, taxLate, calls, docsDone, letters, work] = await Promise.all([
+      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird, pays, srs, lets, subReq, revReq, adReq, calcPaid, taxChk, taxLate, calls, docsDone, letters, work, taxPaid] = await Promise.all([
         supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').is('archived_at', null).order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
@@ -64,10 +64,12 @@ export default function Dashboard() {
         supabase.from('engagement_letters').select('id, client_id, letter_no, status, sent_at, signed_at, signer_name, decline_reason, declined_at, clients(full_name)').in('status', ['sent', 'signed', 'declined']).gte('sent_at', new Date(Date.now() - 60 * 86400e3).toISOString()).limit(200),
         // V70: work-board tasks due by today (mine or unassigned are shown)
         supabase.from('work_items').select('id, title, due_date, assignee, priority, clients(full_name)').neq('stage', 'done').lte('due_date', new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10)).order('due_date').limit(200),
+        // V71: clients who marked their Y/A tax as paid — check the receipt
+        supabase.from('tax_balance_payments').select('id, client_id, year, paid_amount, paid_on, receipt_doc_id, updated_at, clients(full_name)').eq('paid_by_role', 'client').is('checked_at', null).order('updated_at', { ascending: false }).limit(200),
       ]);
       setD({
         clients: cl.data ?? [], returns: rt.data ?? [], invoices: inv.data ?? [], calcs: calc.data ?? [],
-        requests: req.data ?? [], pays: pays.data ?? [], srs: srs.data ?? [], lets: lets.data ?? [], subReq: subReq.data ?? [], revReq: revReq.data ?? [], adReq: adReq.data ?? [], calcPaid: calcPaid.data ?? [], taxChk: taxChk.data ?? [], taxLate: taxLate.data ?? [], calls: calls.data ?? [], docsDone: docsDone.data ?? [], letters: letters.data ?? [], work: work.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
+        requests: req.data ?? [], pays: pays.data ?? [], srs: srs.data ?? [], lets: lets.data ?? [], subReq: subReq.data ?? [], revReq: revReq.data ?? [], adReq: adReq.data ?? [], calcPaid: calcPaid.data ?? [], taxChk: taxChk.data ?? [], taxLate: taxLate.data ?? [], calls: calls.data ?? [], docsDone: docsDone.data ?? [], letters: letters.data ?? [], work: work.data ?? [], taxPaid: taxPaid.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
       });
     })();
   }, []);
@@ -97,6 +99,8 @@ export default function Dashboard() {
     const svcName = { iit: 'IIT', tin: 'TIN', company: 'Company tax', vat: 'VAT', apit: 'APIT', ramis: 'RAMIS', bookkeeping: 'Bookkeeping', fs: 'Financial statements', payroll: 'Payroll', consult: 'Consultation', digital: 'Digital bookkeeping', other: 'Other' };
     const colomboToday = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
     const attention = [
+      ...d.taxPaid.map(x => ({ key: `tbp${x.id}`, icon: CreditCard, tone: 'green', to: `/admin/clients/${x.client_id}?tab=calculations`, when: x.updated_at,
+        text: `${x.clients?.full_name ?? 'Client'} paid the Y/A ${x.year} tax — ${fmtRs(x.paid_amount)}${x.receipt_doc_id ? '' : ' (no receipt yet)'}. Check & confirm` })),
       ...d.work.filter(x => !x.assignee || x.assignee === user?.id).map(x => ({ key: `wk${x.id}`, icon: KanbanSquare, tone: x.due_date < colomboToday ? 'red' : 'amber', to: `/admin/work?task=${x.id}`, when: x.due_date,
         text: `${x.assignee ? 'Your task' : 'Unassigned task'}${x.due_date < colomboToday ? ` overdue since ${fmtDate(x.due_date)}` : ' due today'}: ${x.title}${x.clients?.full_name ? ` — ${x.clients.full_name}` : ''}${x.priority === 'high' ? ' 🔴' : ''}` })),
       ...d.letters.filter(x => (x.status === 'signed' && x.signed_at > new Date(Date.now() - 7 * 86400e3).toISOString()) || (x.status === 'declined' && x.declined_at > new Date(Date.now() - 14 * 86400e3).toISOString()) || (x.status === 'sent' && x.sent_at < new Date(Date.now() - 5 * 86400e3).toISOString()))
