@@ -36,7 +36,8 @@ const SECTIONS = [
     ['forFx', 'Other foreign-source income — foreign currency through a bank', { fx: true }],
   ] },
   { key: 'spec', icon: Sparkles, color: 'text-purple-600', en: 'Special rates', si: 'විශේෂ අනුපාත', cage: 'Cages 130 / 140', fields: [
-    ['termBen', 'Terminal benefits (0% / 6% / 12%)', { annual: true }], ['invGain', 'Gains on investment assets (10%)', { annual: true }],
+    ['termBen', 'Terminal benefits (0% / 6% / 12%)', { annual: true }], ['invGain', 'Gains on investment assets (10%)', { annual: true, label2627: 'Gains on investment assets — realised before 3 June 2026 (10%)' }],
+    ['invGain15', 'Gains on investment assets — realised from 3 June 2026 (15%)', { annual: true, from: '2026/27' }],
   ] },
   { key: 'rel', icon: HeartHandshake, color: 'text-pink-600', en: 'Reliefs & qualifying payments', si: 'සහන හා සුදුසුකම් ලත් ගෙවීම්', cage: 'Cages 60 / 100', fields: [
     ['solar', 'Solar panels (max Rs. 600,000)', { annual: true }], ['donCharity', 'Approved charities (max Rs. 75,000)', { annual: true }],
@@ -45,7 +46,7 @@ const SECTIONS = [
   { key: 'cr', icon: Receipt, color: 'text-teal-600', en: 'Tax already paid', si: 'දැනටමත් ගෙවූ බදු', cage: 'Schedule 9 · Cage 180', fields: [
     ['apitPrimary', 'APIT — primary employment (903)', { annual: true }], ['apitSecondary', 'APIT — secondary employment (904)', { annual: true }],
     ['whtInterest', 'WHT / AIT on interest (908)', { annual: true }], ['whtRent', 'WHT on rent (908)', { annual: true }],
-    ['whtService', 'AIT on service fees (908)', { annual: true }], ['whtOther', 'Other WHT (908)', { annual: true }],
+    ['whtService', 'WHT / AIT on service fees — incl. 5% WHT from 3 Jun 2026 (908)', { annual: true }], ['whtOther', 'Other WHT (908)', { annual: true }],
     ['instalments', 'Quarterly instalments paid (911)', { annual: true }], ['ftc', 'Foreign tax credit (901)', { annual: true }],
     ['termTaxDed', 'Tax deducted on terminal benefits (905)', { annual: true }], ['gainTaxPaid', 'Investment gain tax paid (909/910)', { annual: true }],
   ] },
@@ -140,7 +141,7 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
         ...r.prog.detail.filter(s => s.taxed > 0).map(s => ({ label: `${rs(s.taxed)} @ ${pct(s.rate)}`, tax: s.tax })),
         ...r.fx.bands.map(b => ({ label: `Foreign ${rs(b.taxed)} @ ${pct(b.rate)}`, tax: b.tax })),
         ...(r.term.tax > 0 ? [{ label: 'Terminal benefits tax', tax: r.term.tax }] : []),
-        ...(r.gainTax > 0 ? [{ label: 'Investment gains @ 10%', tax: r.gainTax }] : []),
+        ...(r.gainTax > 0 ? [{ label: toNum(f.invGain15) > 0 && year >= '2026/27' ? 'Investment gains @ 10% / 15%' : 'Investment gains @ 10%', tax: r.gainTax }] : []),
       ] },
       cages: { 10: r.cage10, 20: r.cage20, 30: r.cage30, 40: r.cage40, 50: r.cage50, 60: r.reliefs, 100: r.cage100, 120: r.cage120, 130: r.term.tax, 140: r.gainTax, 170: r.cage170, 180: r.cage180, 190: Math.max(0, r.balance), 200: Math.max(0, -r.balance), 210: r.cage210 },
       personalRelief: r.prUsed, solarRelief: r.solarUsed, foreignTax: r.fx.tax, sources: r.sources,
@@ -195,7 +196,7 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
     }
     const { input: imp, bizLoss } = sheetToReturnInput(data.data, working);
     if (Object.keys(f).some(k => toNum(f[k])) && !window.confirm('Replace the income & tax-paid figures with the client\'s sheet? Reliefs and other fields you entered stay.')) return;
-    const keep = Object.fromEntries(Object.entries(f).filter(([k]) => ['solar', 'donCharity', 'donGovt', 'qpOther', 'bizLossBF', 'termBen', 'invGain', 'forExempt', 'othExempt', 'ftc', 'instalments', 'termTaxDed', 'gainTaxPaid', 'apitSecondary', 'empSecondary', 'empBenefits', 'bizPartner', 'othInv', 'forTaxable'].includes(k)));
+    const keep = Object.fromEntries(Object.entries(f).filter(([k]) => ['solar', 'donCharity', 'donGovt', 'qpOther', 'bizLossBF', 'termBen', 'invGain', 'forExempt', 'othExempt', 'invGain15', 'ftc', 'instalments', 'termTaxDed', 'gainTaxPaid', 'apitSecondary', 'empSecondary', 'empBenefits', 'bizPartner', 'othInv', 'forTaxable'].includes(k)));
     setPeriod('annual');
     setF({ ...keep, ...Object.fromEntries(Object.entries(imp).map(([k, v]) => [k, String(v)])) });
     setOpen(o => ({ ...o, emp: true, biz: true, inv: true, oth: true, cr: true }));
@@ -276,7 +277,8 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
                 )}
                 {isOpen && (
                   <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 gap-3 border-t border-gray-100">
-                    {s.fields.map(([k, lbl, o = {}]) => {
+                    {s.fields.filter(([, , o = {}]) => !o.from || year >= o.from).map(([k, lbl0, o = {}]) => {
+                      const lbl = o.label2627 && year >= '2026/27' ? o.label2627 : lbl0;
                       const perMonth = monthly && RETURN_MONTHLY_KEYS.includes(k);
                       return (
                         <div key={k} className={o.fx ? 'sm:col-span-2' : ''}>
