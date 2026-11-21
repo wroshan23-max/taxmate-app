@@ -42,7 +42,7 @@ export async function loadTemplate() {
 }
 export async function saveTemplate(t) {
   const { error } = await supabase.from('app_settings').upsert({ key: 'engagement_template', value: { sections: t.sections, consents: t.consents }, updated_at: new Date().toISOString() });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(/row-level security|42501/.test(`${error.code} ${error.message}`) ? 'Only a full admin can change the default template.' : error.message);
 }
 
 const err = (e) => new Error(String(e?.message || e).replace(/^.*?ERROR:\s*/, ''));
