@@ -87,7 +87,7 @@ function CallForm({ initial, onClose, onSaved }) {
     <Modal title={f.id ? 'Edit call' : 'Log a call'} onClose={onClose} footer={footer}>
       <div className="space-y-4">
         <div className="flex flex-wrap gap-1.5">
-          {Object.entries(CHANNELS).map(([k, [e, l]]) => <Chip key={k} on={f.channel === k} onClick={() => set({ channel: k })}>{e} {l}</Chip>)}
+          {Object.entries(CHANNELS).filter(([k]) => k !== 'web' || f.channel === 'web').map(([k, [e, l]]) => <Chip key={k} on={f.channel === k} onClick={() => set({ channel: k })}>{e} {l}</Chip>)}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-xs font-semibold text-gray-600">Phone number *

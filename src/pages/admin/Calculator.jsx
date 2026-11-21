@@ -228,6 +228,7 @@ function QuarterlyIIT({ clients, user, preset }) {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 mb-4">
           <strong>Formula: Instalment = (A − C) ÷ B</strong><br />
           A = Preceding year gross tax &nbsp;|&nbsp; C = Tax already paid this year &nbsp;|&nbsp; B = Remaining quarters including current<br />
+          {ys >= 2026 && <span className="block mt-1">From Y/A 2026/27 the Statement of Estimated Tax is discontinued — instalments are based on the income tax payable for the preceding year (Inland Revenue (Amendment) Act No. 11 of 2026). Use Method 1.</span>}
         </div>
 
         <div className="mb-4">
@@ -256,7 +257,7 @@ function QuarterlyIIT({ clients, user, preset }) {
 
         {method === 'm1' ? (
           <div className="space-y-3">
-            <RsField label={`Preceding Year Gross Tax (A) — Y/A ${prevYa}`} hint="Gross IIT before credits from the 2025/26 return" value={prevTax} onChange={setPrevTax} required />
+            <RsField label={`Preceding Year Gross Tax (A) — Y/A ${prevYa}`} hint={`Gross IIT before credits from the ${prevYa} return`} value={prevTax} onChange={setPrevTax} required />
             <RsField label="Credits & Prior Instalments Paid (C)" hint={`APIT/WHT deducted + quarterly instalments already paid this Y/A ${ya}`} value={paid} onChange={setPaid} />
             {v(prevTax) > 0 && (
               <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 space-y-2 text-sm">
