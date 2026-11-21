@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -113,8 +114,15 @@ export default function TaxReturns() {
                   return (
                   <tr key={r.id} className="hover:bg-gray-50">
                     <td className="table-td">
-                      <div className="font-semibold text-sm">{r.clients?.full_name ?? '—'}</div>
-                      <div className="text-xs text-gray-400">{r.clients?.tin ?? '—'}</div>
+                      {r.client_id ? (
+                        <Link to={`/admin/clients/${r.client_id}`} title="Open client profile" className="group block">
+                          <div className="font-semibold text-sm text-primary-800 group-hover:text-primary-600 group-hover:underline">{r.clients?.full_name ?? '—'}</div>
+                          <div className="text-xs text-gray-400">{r.clients?.tin ?? '—'}</div>
+                        </Link>
+                      ) : (<>
+                        <div className="font-semibold text-sm">{r.clients?.full_name ?? '—'}</div>
+                        <div className="text-xs text-gray-400">{r.clients?.tin ?? '—'}</div>
+                      </>)}
                     </td>
                     <td className="table-td text-sm">{r.year}</td>
                     <td className="table-td hidden sm:table-cell text-xs text-gray-500">{fmtDate(r.due_date)}</td>
