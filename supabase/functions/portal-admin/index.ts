@@ -6,6 +6,7 @@
 //
 //  Public actions (token based):  accept_invite, reset_password
 //  Admin actions (caller must be an admin): list_users, set_role, delete_user
+//  V70: set_role / delete_user need a full admin (not staff)
 // ═══════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 
@@ -87,8 +88,10 @@ Deno.serve(async (req) => {
     const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
     const { data: caller } = await admin.auth.getUser(jwt);
     if (!caller?.user) return reply({ error: 'Please sign in again.' });
-    const { data: me } = await admin.from('profiles').select('role').eq('id', caller.user.id).single();
+    const { data: me } = await admin.from('profiles').select('*').eq('id', caller.user.id).single();
     if (me?.role !== 'admin') return reply({ error: 'Admins only.' });
+    // V70: staff (limited admins) cannot change anyone's access or delete logins
+    const isOwner = me?.staff_level !== 'staff';
     // Two-step login: an admin with an authenticator app or login PIN must have completed that step
     // (the database decides: my_second_step_ok() runs as the caller)
     const asCaller = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
@@ -102,14 +105,14 @@ Deno.serve(async (req) => {
       const { data: list, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
       if (error) return reply({ error: error.message });
       const [{ data: profiles }, { data: clients }] = await Promise.all([
-        admin.from('profiles').select('id, role, full_name'),
+        admin.from('profiles').select('*'),
         admin.from('clients').select('id, full_name, tin, mobile, profile_id').not('profile_id', 'is', null),
       ]);
       const users = list.users.map((u) => {
         const p = profiles?.find((x) => x.id === u.id);
         const c = clients?.find((x) => x.profile_id === u.id);
         return {
-          id: u.id, email: u.email, role: p?.role ?? 'client', full_name: p?.full_name ?? '',
+          id: u.id, email: u.email, role: p?.role ?? 'client', full_name: p?.full_name ?? '', staff: p?.staff_level === 'staff',
           created_at: u.created_at, last_sign_in_at: u.last_sign_in_at ?? null,
           client_id: c?.id ?? null, client_name: c?.full_name ?? null, client_tin: c?.tin ?? null, client_mobile: c?.mobile ?? null,
           is_me: u.id === myId,
@@ -117,6 +120,8 @@ Deno.serve(async (req) => {
       });
       return reply({ ok: true, users });
     }
+
+    if ((action === 'set_role' || action === 'delete_user') && !isOwner) return reply({ error: 'Only a full admin can change access or remove logins.' });
 
     if (action === 'set_role') {
       const { user_id, role } = body;
