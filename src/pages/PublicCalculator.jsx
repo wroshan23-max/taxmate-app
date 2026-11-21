@@ -1,18 +1,23 @@
 import { useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { LogIn, MessageCircle, UserPlus, ShieldCheck, FileCheck2, Clock, Globe, Hash } from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { LogIn, MessageCircle, UserPlus, ShieldCheck, FileCheck2, Clock, Globe, Hash, Zap, SlidersHorizontal } from 'lucide-react';
 import SimpleTaxCalculator from '../components/SimpleTaxCalculator';
+import AdvancedCalculator from './client/ClientTaxCalculator';
 import { FIRM, websiteUrl } from '../lib/iitStatement';
 
 const wa = () => `https://wa.me/94${String(FIRM.whatsapp || FIRM.phone || '').replace(/\D/g, '').replace(/^0/, '')}?text=${encodeURIComponent('Hi TaxMate! I used your tax calculator. I would like help with my income tax return.')}`;
 
-/** Public, no-login simple tax calculator: /calculator */
+/** Public, no-login tax calculators: /calculator (quick) · /calculator?type=advanced or /advanced-tax-calculator (V73) */
 export default function PublicCalculator() {
+  const [params, setParams] = useSearchParams();
+  const loc = useLocation();
+  const advanced = params.get('type') === 'advanced' || loc.pathname === '/advanced-tax-calculator';
+  const pick = (adv) => setParams(adv ? { type: 'advanced' } : {}, { replace: true });
   useEffect(() => {
     const t = document.title;
-    document.title = 'Sri Lanka Income Tax Calculator 2025/26 · TaxMate Solutions';
+    document.title = advanced ? 'Advanced Income Tax Calculator Sri Lanka 2025/26 & 2026/27 · TaxMate Solutions' : 'Sri Lanka Income Tax Calculator 2025/26 · TaxMate Solutions';
     return () => { document.title = t; };
-  }, []);
+  }, [advanced]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -32,7 +37,11 @@ export default function PublicCalculator() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 -mt-16 pb-10 space-y-6">
-        <SimpleTaxCalculator mode="public" />
+        <div className="flex gap-2 rounded-2xl bg-white p-1.5 shadow-sm border border-gray-100 w-fit max-w-full">
+          <button type="button" onClick={() => pick(false)} className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold ${!advanced ? 'bg-primary-700 text-white' : 'text-gray-600 hover:bg-gray-50'}`}><Zap size={15} /> Quick</button>
+          <button type="button" onClick={() => pick(true)} className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold ${advanced ? 'bg-primary-700 text-white' : 'text-gray-600 hover:bg-gray-50'}`}><SlidersHorizontal size={15} /> Advanced <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${advanced ? 'bg-gold-500 text-primary-900' : 'bg-gold-500/20 text-amber-800'}`}>2025/26 · 2026/27</span></button>
+        </div>
+        {advanced ? <AdvancedCalculator publicMode /> : <SimpleTaxCalculator mode="public" />}
 
         <section className="relative overflow-hidden rounded-3xl bg-white border border-gray-100 shadow-sm p-6 sm:p-8">
           <div className="absolute -right-16 -bottom-16 w-64 h-64 rounded-full bg-gold-500/10 blur-2xl" />
