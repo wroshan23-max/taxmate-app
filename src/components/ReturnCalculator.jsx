@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { computeReturn, RETURN_YEARS, RETURN_MONTHLY_KEYS, annualToReturnInput, calcKind } from '../lib/iitCalc';
 import { openStatement } from '../lib/iitStatement';
 import { sheetToReturnInput } from '../lib/incomeSheet';
+import { computeWorking, loadOffice } from '../lib/bizWorking';
 import { paidTotals } from '../lib/taxPayments';
 
 const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
@@ -186,7 +187,13 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
     const { data, error } = await supabase.from('income_sheets').select('*').eq('client_id', clientId).eq('year', year).maybeSingle();
     if (error) return toast.error(error.message);
     if (!data) return toast.error(`No monthly income sheet for Y/A ${year}. Enable one on the client's page.`);
-    const { input: imp, bizLoss } = sheetToReturnInput(data.data);
+    // V72: Business & Freelance tool — net business income after work-use % and capital allowances
+    let working = null;
+    if (data.biz_mode) {
+      try { const o = await loadOffice(data.id); working = computeWorking(data.data, o.data || {}, data.year); } catch (e) { return toast.error(e.message); }
+      if (working.issues.length) toast(`Business working: ${working.issues[0]}`, { icon: '⚠️', duration: 6000 });
+    }
+    const { input: imp, bizLoss } = sheetToReturnInput(data.data, working);
     if (Object.keys(f).some(k => toNum(f[k])) && !window.confirm('Replace the income & tax-paid figures with the client\'s sheet? Reliefs and other fields you entered stay.')) return;
     const keep = Object.fromEntries(Object.entries(f).filter(([k]) => ['solar', 'donCharity', 'donGovt', 'qpOther', 'bizLossBF', 'termBen', 'invGain', 'forExempt', 'othExempt', 'ftc', 'instalments', 'termTaxDed', 'gainTaxPaid', 'apitSecondary', 'empSecondary', 'empBenefits', 'bizPartner', 'othInv', 'forTaxable'].includes(k)));
     setPeriod('annual');

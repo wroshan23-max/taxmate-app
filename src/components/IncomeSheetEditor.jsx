@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Save, X, Loader2, ArrowRightToLine, Eraser, ClipboardPaste, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { GROUPS, ROWS, MONTHS, monthLabel, cell, rowTotal, monthTotals, sheetTotals, cleanSheet, emptySheet } from '../lib/incomeSheet';
+import { groupsFor, MONTHS, monthLabel, cell, rowTotal, monthTotals, sheetTotals, cleanSheet, emptySheet } from '../lib/incomeSheet';
 
 const toNum = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
 const fmt = (v) => (toNum(v) ? toNum(v).toLocaleString('en-LK') : '');
@@ -30,6 +30,9 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const base = useRef(sheet.updated_at);
   const clientMayEdit = sheet.enabled && sheet.status === 'open' && !!client.profile_id;
+  const biz = !!sheet.biz_mode;
+  const groups = groupsFor(biz, data);
+  const ROWS = groups.flatMap(g => g.rows);   // the rows in the order shown (paste & keyboard moves)
 
   useEffect(() => {
     const h = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
@@ -82,7 +85,9 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
     if (now && base.current && new Date(now.updated_at).getTime() !== new Date(base.current).getTime()
       && !window.confirm('This sheet was changed after you opened it (maybe by the client). Save anyway and replace those changes?')) { setBusy(false); return; }
     const ts = new Date().toISOString();
-    const payload = { data: { ...cleanSheet(data), note: sheet.data?.note ?? '' }, updated_at: ts, ...extra };
+    // keep the latest equipment list (the client or the Business working may have changed it)
+    const { data: cur } = await supabase.from('income_sheets').select('data').eq('id', sheet.id).single();
+    const payload = { data: { ...cleanSheet(data), note: sheet.data?.note ?? '', assets: cur?.data?.assets ?? data.assets ?? [] }, updated_at: ts, ...extra };
     const { error } = await supabase.from('income_sheets').update(payload).eq('id', sheet.id);
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -93,7 +98,7 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
   };
   const close = () => { if (dirty && !window.confirm('Close without saving your changes?')) return; onClose?.(); };
 
-  const t = sheetTotals(data);
+  const t = sheetTotals(data, biz);
   let ri = -1;
 
   return (
@@ -129,7 +134,7 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
             <th className="px-1" />
           </tr></thead>
           <tbody>
-            {GROUPS.map(g => [
+            {groups.map(g => [
               <tr key={g.key}><td className="px-3 pt-3 pb-1 font-bold text-gray-700 sticky left-0 z-10 bg-white whitespace-nowrap">{g.en}</td><td colSpan={14} /></tr>,
               ...g.rows.map(r => {
                 ri += 1; const rIdx = ri;
@@ -150,8 +155,8 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
                 );
               }),
             ])}
-            <tr className="font-bold"><td className="px-3 py-2 sticky left-0 bg-white border-t-2 border-primary-200">Business profit / (loss)</td>
-              {MONTHS.map((_, i) => { const p = monthTotals(data, i).bizProfit; return <td key={i} className={`px-1.5 py-2 text-right tabular-nums border-t-2 border-primary-200 ${p < 0 ? 'text-red-600' : ''}`}>{p ? p.toLocaleString('en-LK') : ''}</td>; })}
+            <tr className="font-bold"><td className="px-3 py-2 sticky left-0 bg-white border-t-2 border-primary-200">Business profit / (loss){biz ? <span className="block text-[10px] font-normal text-gray-500">before work-use % &amp; capital allowance</span> : ''}</td>
+              {MONTHS.map((_, i) => { const p = monthTotals(data, i, biz).bizProfit; return <td key={i} className={`px-1.5 py-2 text-right tabular-nums border-t-2 border-primary-200 ${p < 0 ? 'text-red-600' : ''}`}>{p ? p.toLocaleString('en-LK') : ''}</td>; })}
               <td className={`px-3 py-2 text-right tabular-nums bg-primary-50 border-t-2 border-primary-200 ${t.bizProfit < 0 ? 'text-red-600' : 'text-primary-800'}`}>{t.bizProfit.toLocaleString('en-LK')}</td><td className="border-t-2 border-primary-200" /></tr>
           </tbody>
         </table>

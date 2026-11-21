@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wallet, Plus, Eye, EyeOff, Trash2, RotateCcw, CheckCircle2, FileSpreadsheet, ChevronDown, ChevronUp, MessageSquare, AlertTriangle, PencilLine } from 'lucide-react';
+import { Wallet, Plus, Eye, EyeOff, Trash2, RotateCcw, CheckCircle2, FileSpreadsheet, ChevronDown, ChevronUp, MessageSquare, AlertTriangle, PencilLine, Briefcase } from 'lucide-react';
+import BizWorkingPanel from './BizWorkingPanel';
+import { computeWorking, loadOffice, setBizMode } from '../lib/bizWorking';
 import IncomeSheetEditor from './IncomeSheetEditor';
 import { supabase, fmtDate } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { filingYear, alYears } from '../lib/assets';
-import { GROUPS, MONTHS, cell, rowTotal, monthTotals, sheetTotals, sheetToReturnInput, emptySheet, SHEET_STATUS } from '../lib/incomeSheet';
+import { groupsFor, MONTHS, cell, rowTotal, monthTotals, sheetTotals, sheetToReturnInput, emptySheet, SHEET_STATUS } from '../lib/incomeSheet';
 import { recipientsOf } from '../lib/contacts';
 import { FIRM } from '../lib/iitStatement';
 import MessageMenu from './MessageMenu';
@@ -20,8 +22,8 @@ function Pill({ s, enabled }) {
   return <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>;
 }
 
-function YearTable({ data }) {
-  const t = sheetTotals(data);
+function YearTable({ data, biz }) {
+  const t = sheetTotals(data, biz);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
@@ -31,7 +33,7 @@ function YearTable({ data }) {
           <th className="px-3 py-2 text-right bg-primary-50">Total</th>
         </tr></thead>
         <tbody>
-          {GROUPS.map(g => [
+          {groupsFor(biz, data).map(g => [
             <tr key={g.key} className="bg-gray-50/60"><td colSpan={14} className="px-3 py-1 font-bold text-gray-700">{g.en}</td></tr>,
             ...g.rows.map(r => (
               <tr key={r.key} className="border-t border-gray-100">
@@ -41,8 +43,8 @@ function YearTable({ data }) {
               </tr>
             )),
           ])}
-          <tr className="border-t-2 border-primary-200 font-bold"><td className="px-3 py-1.5">Business profit / (loss)</td>
-            {MONTHS.map((_, i) => { const p = monthTotals(data, i).bizProfit; return <td key={i} className={`px-2 py-1.5 text-right tabular-nums ${p < 0 ? 'text-red-600' : ''}`}>{p ? p.toLocaleString('en-LK') : ''}</td>; })}
+          <tr className="border-t-2 border-primary-200 font-bold"><td className="px-3 py-1.5">Business profit / (loss){biz ? ' — before work-use % & capital allowance' : ''}</td>
+            {MONTHS.map((_, i) => { const p = monthTotals(data, i, biz).bizProfit; return <td key={i} className={`px-2 py-1.5 text-right tabular-nums ${p < 0 ? 'text-red-600' : ''}`}>{p ? p.toLocaleString('en-LK') : ''}</td>; })}
             <td className={`px-3 py-1.5 text-right tabular-nums bg-primary-50 ${t.bizProfit < 0 ? 'text-red-600' : ''}`}>{t.bizProfit.toLocaleString('en-LK')}</td></tr>
         </tbody>
       </table>
@@ -59,6 +61,8 @@ export default function IncomeSheetsAdmin({ client }) {
   const [year, setYear] = useState(filingYear());
   const [openId, setOpenId] = useState(null);
   const [editId, setEditId] = useState(null);
+  const [bizId, setBizId] = useState(null);
+  const [newBiz, setNewBiz] = useState(false);
 
   const load = async () => {
     const { data, error } = await supabase.from('income_sheets').select('*').eq('client_id', client.id).order('year', { ascending: false });
@@ -70,7 +74,7 @@ export default function IncomeSheetsAdmin({ client }) {
 
   // forClient = the client fills it in the portal; otherwise TaxMate enters it (hidden from the client)
   const enable = async (forClient = true) => {
-    const { data: row, error } = await supabase.from('income_sheets').insert({ client_id: client.id, year, data: emptySheet(), enabled: forClient, created_by: user.id }).select().single();
+    const { data: row, error } = await supabase.from('income_sheets').insert({ client_id: client.id, year, data: emptySheet(), enabled: forClient, created_by: user.id, ...(newBiz ? { biz_mode: true } : {}) }).select().single();
     if (error) return toast.error(/duplicate|unique/i.test(error.message) ? `A Y/A ${year} sheet already exists` : error.message);
     toast.success(forClient ? (client.profile_id ? `Monthly income sheet enabled for Y/A ${year}` : `Y/A ${year} sheet enabled — ${client.full_name} will see it after they log in`) : `Y/A ${year} sheet ready — enter the figures`, { duration: 5000 });
     await load();
@@ -93,8 +97,19 @@ export default function IncomeSheetsAdmin({ client }) {
     if (error) return toast.error(error.message);
     toast.success('Deleted'); load();
   };
-  const toReturn = (s) => {
-    const { input, bizLoss } = sheetToReturnInput(s.data);
+  const toggleBiz = async (s) => {
+    const on = !s.biz_mode;
+    if (!on && !window.confirm('Switch off the Business & Freelance tool for this sheet? The figures and your working are kept.')) return;
+    try { await setBizMode(s.id, on); toast.success(on ? 'Business & Freelance tool on — the client now sees detailed expenses and the equipment list' : 'Business & Freelance tool off'); if (on) { setBizId(s.id); setOpenId(null); setEditId(null); } load(); }
+    catch (e) { toast.error(e.message); }
+  };
+  const toReturn = async (s, given) => {
+    let working = given || null;
+    if (!working && s.biz_mode) {
+      try { const o = await loadOffice(s.id); working = computeWorking(s.data, o.data || {}, s.year); } catch (e) { return toast.error(e.message); }
+      if (working.issues.length) toast(`Check the Business working first: ${working.issues[0]}`, { icon: '⚠️', duration: 6000 });
+    }
+    const { input, bizLoss } = sheetToReturnInput(s.data, working);
     if (bizLoss) toast(`Business shows a loss of ${rs(bizLoss)} — check before filing`, { icon: '⚠️' });
     navigate('/admin/calculator', { state: { newReturn: { client_id: client.id, year: s.year, label: `From income sheet ${s.year}`, input_data: { form: 'IIT_RETURN', ...input } } } });
   };
@@ -131,6 +146,7 @@ WhatsApp ${FIRM.whatsapp}`;
           </div>
           <button onClick={() => enable(true)} disabled={have.has(year)} title={client.profile_id ? '' : 'The sheet waits in their portal until they log in'} className="btn-primary text-sm"><Plus size={15} /> Enable for client · Y/A {year}</button>
           <button onClick={() => enable(false)} disabled={have.has(year)} className="btn-secondary text-sm"><PencilLine size={15} /> I'll enter it myself</button>
+          <label className="flex items-center gap-1.5 pb-2 text-xs text-gray-700" title="Freelance / business clients: detailed expenses, equipment and capital allowance"><input type="checkbox" checked={newBiz} onChange={e => setNewBiz(e.target.checked)} /> <Briefcase size={13} className="text-emerald-700" /> With Business &amp; Freelance tool</label>
         </div>
         <p className="text-xs text-gray-400">The client enters each month's salary, rent, interest, foreign income and business income &amp; expenses, then submits — or you enter / correct the figures yourself with <b>Edit</b> (e.g. from bank statements or a WhatsApp photo). Use <b>Open in IIT Return</b> to turn it into a computation.</p>
       </div>
@@ -139,20 +155,22 @@ WhatsApp ${FIRM.whatsapp}`;
       ) : (
         <div className="divide-y divide-gray-50 border-t border-gray-100">
           {list.map(s => {
-            const t = sheetTotals(s.data);
+            const t = sheetTotals(s.data, s.biz_mode);
             const isOpen = openId === s.id;
             return (
               <div key={s.id}>
                 <div className="px-5 py-3 flex flex-wrap items-center gap-3">
                   <div className="w-20 font-bold text-primary-700">Y/A {s.year}</div>
                   <div className="flex-1 min-w-[200px]">
-                    <Pill s={s.status} enabled={s.enabled} />
-                    <div className="text-xs text-gray-500 mt-0.5">{t.monthsFilled}/12 months · income {rs(t.income + t.fx)} · business {rs(t.bizProfit)}{s.submitted_at && ` · submitted ${fmtDate(s.submitted_at)}`}</div>
+                    <Pill s={s.status} enabled={s.enabled} />{s.biz_mode && <span className="ml-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">💼 Business &amp; Freelance</span>}
+                    <div className="text-xs text-gray-500 mt-0.5">{t.monthsFilled}/12 months · income {rs(t.income + t.fx)} · {s.biz_mode ? `business income ${rs(t.bizIncome)} · expenses ${rs(t.bizExpense)}` : `business ${rs(t.bizProfit)}`}{s.submitted_at && ` · submitted ${fmtDate(s.submitted_at)}`}</div>
                     {s.client_note && <div className="text-xs text-blue-800 mt-0.5 flex gap-1"><MessageSquare size={11} className="mt-0.5" /> {s.client_note}</div>}
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
-                    <button onClick={() => { setEditId(editId === s.id ? null : s.id); setOpenId(null); }} className={`text-xs py-1 px-2.5 ${editId === s.id ? 'btn-primary' : 'btn-secondary'}`}><PencilLine size={13} /> Edit</button>
-                    <button onClick={() => { setOpenId(isOpen ? null : s.id); setEditId(null); }} className="btn-secondary text-xs py-1 px-2.5">{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} View</button>
+                    <button onClick={() => toggleBiz(s)} title="Business & Freelance tool: detailed expenses, equipment, capital allowance" className={`text-xs py-1 px-2.5 ${s.biz_mode ? 'btn-secondary !text-emerald-700' : 'btn-secondary'}`}><Briefcase size={13} /> {s.biz_mode ? 'Business: on' : 'Business tool'}</button>
+                    {s.biz_mode && <button onClick={() => { setBizId(bizId === s.id ? null : s.id); setOpenId(null); setEditId(null); }} className={`text-xs py-1 px-2.5 ${bizId === s.id ? 'btn-primary bg-emerald-600 hover:bg-emerald-700' : 'btn-secondary !text-emerald-700'}`}><Briefcase size={13} /> Working</button>}
+                    <button onClick={() => { setEditId(editId === s.id ? null : s.id); setOpenId(null); setBizId(null); }} className={`text-xs py-1 px-2.5 ${editId === s.id ? 'btn-primary' : 'btn-secondary'}`}><PencilLine size={13} /> Edit</button>
+                    <button onClick={() => { setOpenId(isOpen ? null : s.id); setEditId(null); setBizId(null); }} className="btn-secondary text-xs py-1 px-2.5">{isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} View</button>
                     <button onClick={() => toReturn(s)} className="btn-primary text-xs py-1 px-2.5"><FileSpreadsheet size={13} /> Open in IIT Return</button>
                     {s.status === 'open' && <MessageMenu label="Send" phone={client.mobile} email={client.email} recipients={recipientsOf(client)} subject={`Monthly income Y/A ${s.year} — TaxMate`} getText={msg(s)} />}
                     {s.status === 'submitted' && <button onClick={() => patch(s, { status: 'reviewed', reviewed_at: new Date().toISOString() }, 'Marked reviewed')} className="btn-secondary text-xs py-1 px-2.5"><CheckCircle2 size={13} /> Reviewed</button>}
@@ -161,7 +179,8 @@ WhatsApp ${FIRM.whatsapp}`;
                     <button onClick={() => remove(s)} title="Delete" className="btn-secondary text-xs py-1 px-2 text-red-600"><Trash2 size={13} /></button>
                   </div>
                 </div>
-                {isOpen && <div className="px-2 pb-4"><YearTable data={s.data} /></div>}
+                {isOpen && <div className="px-2 pb-4"><YearTable data={s.data} biz={s.biz_mode} /></div>}
+                {bizId === s.id && s.biz_mode && <BizWorkingPanel sheet={s} client={client} onSheetChanged={load} onOpenReturn={(w) => toReturn(s, w)} />}
                 {editId === s.id && <IncomeSheetEditor key={s.id} sheet={s} client={client} onClose={() => setEditId(null)} onSaved={load} />}
               </div>
             );
