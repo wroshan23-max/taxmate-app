@@ -57,6 +57,7 @@ const ClientPlan = lazyPage(() => import('./pages/client/ClientPlan'));
 const ClientPayroll = lazyPage(() => import('./pages/client/ClientPayroll'));
 const ServiceRequests = lazyPage(() => import('./pages/admin/ServiceRequests'));
 const CallLog = lazyPage(() => import('./pages/admin/CallLog'));
+const DocChecklistBoard = lazyPage(() => import('./pages/admin/DocChecklistBoard'));
 const ClientServices = lazyPage(() => import('./pages/client/ClientServices'));
 const TaxCalendar = lazyPage(() => import('./pages/TaxCalendar'));
 const ClientDashboard = lazyPage(() => import('./pages/client/ClientDashboard'));
@@ -234,6 +235,7 @@ export default function App() {
         <Route path="subscriptions" element={<AdminSubscriptions />} />
         <Route path="service-requests" element={<ServiceRequests />} />
         <Route path="calls" element={<CallLog />} />
+        <Route path="doc-checklist" element={<DocChecklistBoard />} />
         <Route path="settings" element={<Settings />} />
       </Route>
 
