@@ -17,6 +17,8 @@ const SharedDocument = lazyPage(() => import('./pages/SharedDocument'));
 const SharedFiles = lazyPage(() => import('./pages/SharedFiles'));
 const SharedTaxNotice = lazyPage(() => import('./pages/SharedTaxNotice'));
 const SharedInvoice = lazyPage(() => import('./pages/SharedInvoice'));
+const SignEngagement = lazyPage(() => import('./pages/SignEngagement'));
+const ClientEngagement = lazyPage(() => import('./pages/client/ClientEngagement'));
 const VatWorkspace = lazyPage(() => import('./pages/VatWorkspace'));
 const ClientVat = lazyPage(() => import('./pages/client/ClientVat'));
 const VatInvoicing = lazyPage(() => import('./pages/admin/VatInvoicing'));
@@ -196,6 +198,7 @@ export default function App() {
       <Route path="/notice/:token" element={<SharedTaxNotice />} />
       {/* V64: customer page of a VAT invoice / note (secure, expiring link) */}
       <Route path="/i/:token" element={<SharedInvoice />} />
+      <Route path="/e/:token" element={<SignEngagement />} />
       {/* V64: VAT Invoice for team members of a business */}
       <Route path="/vat" element={<ProtectedUser><VatWorkspace /></ProtectedUser>} />
       {/* Public: create password from an invite / reset link */}
@@ -260,6 +263,7 @@ export default function App() {
         <Route path="calendar" element={<TaxCalendar role="client" />} />
         <Route path="invite" element={<ClientInvite />} />
         <Route path="documents" element={<ClientDocuments />} />
+        <Route path="engagement" element={<ClientEngagement />} />
         <Route path="invoices" element={<ClientInvoices />} />
         <Route path="profile" element={<ClientProfile />} />
         <Route path="updates" element={<ClientTaxUpdates />} />
