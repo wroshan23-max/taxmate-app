@@ -221,6 +221,7 @@ export default function App() {
       <Route path="/activity-codes" element={<PublicActivityCodes />} />
       <Route path="/verify/:ref" element={<VerifyLetter />} />
       <Route path="/tax-calculator" element={<PublicCalculator />} />
+      <Route path="/advanced-tax-calculator" element={<PublicCalculator />} />
 
       {/* Admin routes */}
       <Route path="/admin" element={
