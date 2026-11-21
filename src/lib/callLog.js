@@ -12,11 +12,11 @@ export const SERVICE = Object.fromEntries(SERVICES);
 
 export const SOURCES = [
   ['facebook', 'Facebook'], ['whatsapp', 'WhatsApp'], ['google', 'Google / website'], ['referral', 'Friend / referral'],
-  ['existing', 'Existing client'], ['tiktok', 'TikTok / YouTube'], ['flyer', 'Flyer / banner'], ['walk_in', 'Walk-in'], ['other', 'Other'],
+  ['existing', 'Existing client'], ['tiktok', 'TikTok / YouTube'], ['flyer', 'Flyer / banner'], ['walk_in', 'Walk-in'], ['calculator', 'Website tax calculator'], ['other', 'Other'],
 ];
 export const SOURCE = Object.fromEntries(SOURCES);
 
-export const CHANNELS = { incoming: ['📞', 'Incoming call'], outgoing: ['📲', 'Outgoing call'], missed: ['📵', 'Missed call'], whatsapp: ['💬', 'WhatsApp'], walk_in: ['🚶', 'Walk-in'] };
+export const CHANNELS = { incoming: ['📞', 'Incoming call'], outgoing: ['📲', 'Outgoing call'], missed: ['📵', 'Missed call'], whatsapp: ['💬', 'WhatsApp'], walk_in: ['🚶', 'Walk-in'], web: ['🌐', 'Website calculator'] };
 
 export const STATUS = {
   new:       { label: 'New enquiry',    cls: 'bg-blue-100 text-blue-800' },

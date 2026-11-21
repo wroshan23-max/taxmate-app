@@ -27,7 +27,9 @@ export const SLABS_2425 = [
 export const TAX_YEARS = {
   '2024/25': { pr: PR_2425, slabs: SLABS_2425, foreignBankExempt: true,  slabText: '6% · 12% · 18% · 24% · 30% · 36% (Rs.500,000 bands)' },
   '2025/26': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%' },
-  '2026/27': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%' },
+  // 2026/27: rates & relief unchanged; Inland Revenue (Amendment) Act No. 11 of 2026 — gains on investment assets
+  // realised by individuals from 3 June 2026 taxed at 15% (10% before); quarterly instalments based on the previous year's tax.
+  '2026/27': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%', gain15From: '2026-06-03' },
 };
 
 export const yearCfg = (year) => TAX_YEARS[year] ?? TAX_YEARS['2026/27'];
@@ -208,7 +210,9 @@ export function computeReturn(year, f = {}) {
   const prog    = graduatedTax(taxableLocal, cfg.slabs);
   const fx      = foreignStackTax(taxableLocal, taxableFx);
   const term    = terminalBenefitTax(n('termBen'));
-  const gainTax = Math.round(n('invGain') * 0.10);
+  // investment-asset gains: 10%; for 2026/27 gains realised from 3 June 2026 at 15% (Act No. 11 of 2026)
+  const gain15 = cfg.gain15From ? n('invGain15') : 0;
+  const gainTax = Math.round(n('invGain') * 0.10 + gain15 * 0.15);
   const cage170 = prog.tax + fx.tax + term.tax + gainTax;
 
   const credits = [
@@ -233,7 +237,7 @@ export function computeReturn(year, f = {}) {
     empLocal > 0 && 'Employment', bizLocal > 0 && 'Business', n('interest') > 0 && 'Interest',
     n('rentGross') > 0 && 'Rent', n('othInv') > 0 && 'Other investment', otherLocal > 0 && 'Other',
     (empFx + bizFxGross + forFx) > 0 && (fxExempt ? 'Foreign (exempt)' : 'Foreign currency (15% max)'),
-    n('termBen') > 0 && 'Terminal benefits', n('invGain') > 0 && 'Capital gains',
+    n('termBen') > 0 && 'Terminal benefits', (n('invGain') + (cfg.gain15From ? n('invGain15') : 0)) > 0 && 'Capital gains',
     n('forExempt') > 0 && 'Foreign (exempt)',
   ].filter(Boolean);
 

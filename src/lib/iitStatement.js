@@ -264,9 +264,10 @@ function returnBody(calc, client) {
     ${r.fx.bands.map(b => `<tr class="on"><td>${b.label}</td><td class="r">${pct(b.rate)}</td><td class="r">${m(b.taxed)}</td><td class="r">${m(b.tax)}</td></tr>`).join('')}
     <tr class="tot"><td colspan="3">Tax on foreign-currency income</td><td class="r">${m(r.fx.tax)}</td></tr></table>` : '';
 
-  const other = (r.term.tax > 0 || r.gainTax > 0 || f.termBen > 0 || f.invGain > 0) ? `<table class="st">
+  const g15 = String(calc.year || '') >= '2026/27' ? (Number(f.invGain15) || 0) : 0;
+  const other = (r.term.tax > 0 || r.gainTax > 0 || f.termBen > 0 || f.invGain > 0 || g15 > 0) ? `<table class="st">
     ${f.termBen > 0 ? row('130', `Terminal benefits Rs. ${m(f.termBen)} (0% / 6% / 12%)`, m(r.term.tax)) : ''}
-    ${f.invGain > 0 ? row('140', `Gains on investment assets Rs. ${m(f.invGain)} @ 10%`, m(r.gainTax)) : ''}</table>` : '';
+    ${f.invGain > 0 || g15 > 0 ? row('140', g15 > 0 ? `Gains on investment assets Rs. ${m(f.invGain || 0)} @ 10% + Rs. ${m(g15)} @ 15% (from 3 June 2026)` : `Gains on investment assets Rs. ${m(f.invGain)} @ 10%`, m(r.gainTax)) : ''}</table>` : '';
 
   const credits = r.credits.filter(x => x.amt > 0).map(x => row(x.cage, x.label, neg(x.amt))).join('') || row('', 'No tax credits', m(0));
   const exempt = r.cage210 > 0 ? `<table class="st">${row('210', 'Exempt income — declared, not taxed' + (r.fxExemptAmt > 0 ? ' (incl. foreign income remitted through a bank)' : ''), m(r.cage210), 'ex')}</table>` : '';
