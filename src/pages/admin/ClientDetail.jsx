@@ -23,6 +23,7 @@ import CalcCreditsAdmin from '../../components/CalcCreditsAdmin';
 import FamilyAdmin from '../../components/FamilyAdmin';
 import TaxPaymentsAdmin from '../../components/TaxPaymentsAdmin';
 import DocumentVault from '../../components/DocumentVault';
+import DocChecklistAdmin from '../../components/DocChecklistAdmin';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
 import RamisDraftAdmin from '../../components/RamisDraftAdmin';
@@ -72,6 +73,7 @@ export default function ClientDetail() {
   const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'overview');
 
   useEffect(() => { loadAll(); }, [id]);
+  const [docsTick, setDocsTick] = useState(0);   // V68: refresh the document checklist after uploads
   // V64.1: /admin/clients/:id?tab=overview#addons (from a VAT Invoice service request) → scroll to Add-on services
   const hasClient = !!client;
   useEffect(() => {
@@ -443,7 +445,8 @@ export default function ClientDetail() {
         <div className="space-y-3">
           {client.feature_overrides?.documents === false && (
             <div className="card p-3 text-sm bg-amber-50 border-amber-200 text-amber-800 flex items-center gap-2"><FolderLock size={15} /> Document vault is switched off for this client — they can't see or upload files. Turn it on in Overview → Portal features.</div>)}
-          <DocumentVault clientId={id} role="admin" userId={user?.id} onChange={countNewDocs} client={client} />
+          <DocChecklistAdmin key={`dc${docsTick}`} client={client} />
+          <DocumentVault clientId={id} role="admin" userId={user?.id} onChange={(...a) => { countNewDocs(...a); setDocsTick(t => t + 1); }} client={client} />
         </div>
       )}
 
