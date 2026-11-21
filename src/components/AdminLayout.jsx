@@ -10,7 +10,7 @@ import { loadPayFlag } from '../lib/share';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet, PhoneCall
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet, PhoneCall, ListChecks
 } from 'lucide-react';
 
 const nav = [
@@ -19,6 +19,7 @@ const nav = [
   { to: '/admin/calls', icon: PhoneCall, label: 'Call Log' },
   { to: '/admin/calculator', icon: Calculator, label: 'IIT Calculator' },
   { to: '/admin/tax-returns', icon: FileText, label: 'Tax Returns' },
+  { to: '/admin/doc-checklist', icon: ListChecks, label: 'Docs Checklist' },
   { to: '/admin/tax-payments', icon: Wallet, label: 'Tax Payments Due' },
   { to: '/admin/vat', icon: FileText, label: 'VAT Invoicing' },
   { to: '/admin/assets', icon: Landmark, label: 'Assets & Liabilities' },
