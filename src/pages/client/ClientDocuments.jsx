@@ -4,6 +4,7 @@ import { FolderLock, ShieldCheck, Loader2, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import DocumentVault from '../../components/DocumentVault';
+import ClientChecklist from '../../components/ClientChecklist';
 
 // What to send for an individual income tax return
 const CHECKLIST = [
@@ -21,6 +22,7 @@ export default function ClientDocuments() {
   const [clientId, setClientId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tips, setTips] = useState(false);
+  const [vaultKey, setVaultKey] = useState(0);   // V68: reload the vault after a checklist upload
 
   useEffect(() => {
     supabase.from('clients').select('id').eq('id', profile?.client_id).maybeSingle()
@@ -61,7 +63,10 @@ export default function ClientDocuments() {
 
       {loading ? <div className="card p-10 text-center text-gray-400"><Loader2 className="animate-spin mx-auto" /></div>
         : !clientId ? <div className="card p-8 text-center text-gray-500 text-sm">Your client profile is not linked yet. Please contact TaxMate.</div>
-        : <DocumentVault clientId={clientId} role="client" userId={user.id} />}
+        : <>
+          <ClientChecklist clientId={clientId} userId={user.id} onUploaded={() => setVaultKey(k => k + 1)} />
+          <DocumentVault key={vaultKey} clientId={clientId} role="client" userId={user.id} />
+        </>}
     </div>
   );
 }
