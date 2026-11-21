@@ -10,18 +10,19 @@ import { loadPayFlag } from '../lib/share';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet, PhoneCall, ListChecks
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet, PhoneCall, ListChecks, KanbanSquare
 } from 'lucide-react';
 
 const nav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/admin/clients', icon: Users, label: 'Clients' },
+  { to: '/admin/work', icon: KanbanSquare, label: 'Work Board' },
   { to: '/admin/calls', icon: PhoneCall, label: 'Call Log' },
   { to: '/admin/calculator', icon: Calculator, label: 'IIT Calculator' },
   { to: '/admin/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/admin/doc-checklist', icon: ListChecks, label: 'Docs Checklist' },
   { to: '/admin/tax-payments', icon: Wallet, label: 'Tax Payments Due' },
-  { to: '/admin/vat', icon: FileText, label: 'VAT Invoicing' },
+  { to: '/admin/vat', icon: FileText, label: 'VAT Invoicing', owner: true },
   { to: '/admin/assets', icon: Landmark, label: 'Assets & Liabilities' },
   { to: '/admin/calendar', icon: CalendarDays, label: 'Tax Calendar' },
   { to: '/admin/ird-codes', icon: Hash, label: 'IRD Payment Codes' },
@@ -29,12 +30,12 @@ const nav = [
   { to: '/admin/messages', icon: MessageCircle, label: 'Messages', badge: true },
   { to: '/admin/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
-  { to: '/admin/subscriptions', icon: Crown, label: 'Subscriptions' },
+  { to: '/admin/subscriptions', icon: Crown, label: 'Subscriptions', owner: true },
   { to: '/admin/service-requests', icon: CalendarCheck, label: 'Service Requests' },
   { to: '/admin/requests', icon: MessageSquarePlus, label: 'Update Requests' },
   { to: '/admin/updates', icon: Megaphone, label: 'Tax Updates' },
-  { to: '/admin/activity', icon: Activity, label: 'Activity & Users' },
-  { to: '/admin/settings', icon: Settings, label: 'Settings' },
+  { to: '/admin/activity', icon: Activity, label: 'Activity & Users', owner: true },
+  { to: '/admin/settings', icon: Settings, label: 'Settings', owner: true },
 ];
 
 export default function AdminLayout() {
@@ -67,7 +68,7 @@ export default function AdminLayout() {
 
       {/* Nav */}
       <nav className="flex-1 min-h-0 py-3 space-y-0.5 overflow-y-auto overscroll-contain px-2">
-        {nav.map(({ to, icon: Icon, label, end, badge }) => (
+        {nav.filter((n) => !n.owner || profile?.staff_level !== 'staff').map(({ to, icon: Icon, label, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -96,7 +97,7 @@ export default function AdminLayout() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-white text-xs font-semibold truncate">{profile?.full_name ?? 'Admin'}</div>
-            <div className="text-primary-400 text-xs">Administrator</div>
+            <div className="text-primary-400 text-xs">{profile?.staff_level === 'staff' ? 'Staff' : 'Administrator'}</div>
           </div>
         </div>
         <button

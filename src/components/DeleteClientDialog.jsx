@@ -4,6 +4,7 @@ import { X, Archive, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { callPortal } from '../lib/portal';
 import { purgeClientFiles } from '../lib/documents';
+import { useAuth } from '../contexts/AuthContext';
 
 const TABLES = [
   ['iit_calculations', 'tax calculations'], ['tax_returns', 'tax returns'], ['invoices', 'invoices'],
@@ -16,6 +17,8 @@ export default function DeleteClientDialog({ client, onClose, onDone }) {
   const [typed, setTyped] = useState('');
   const [removeLogin, setRemoveLogin] = useState(true);
   const [busy, setBusy] = useState(false);
+  const { profile } = useAuth();
+  const isStaff = profile?.staff_level === 'staff';   // V70: only full admins delete clients
 
   useEffect(() => {
     Promise.all(TABLES.map(([t]) => supabase.from(t).select('id', { count: 'exact', head: true }).eq('client_id', client.id)))
@@ -32,6 +35,7 @@ export default function DeleteClientDialog({ client, onClose, onDone }) {
   };
 
   const remove = async () => {
+    if (isStaff) return toast.error('Only a full admin can delete clients.');
     if (typed.trim().toLowerCase() !== client.full_name.trim().toLowerCase()) return toast.error('Type the client name exactly to confirm');
     setBusy(true);
     try {
@@ -61,6 +65,7 @@ export default function DeleteClientDialog({ client, onClose, onDone }) {
             <button onClick={archive} disabled={busy} className="btn-primary text-sm mt-3"><Archive size={14} /> Archive client</button>
           </div>
 
+          {isStaff ? <p className="text-xs text-gray-500">Only a full admin can delete a client permanently. Archive instead, or ask the owner.</p> : (
           <div className="rounded-xl border-2 border-red-100 p-4 space-y-3">
             <div className="font-semibold text-red-700 flex items-center gap-2"><Trash2 size={16} /> Delete permanently</div>
             {counts === null ? <div className="text-sm text-gray-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Checking records…</div> : (
@@ -89,6 +94,7 @@ export default function DeleteClientDialog({ client, onClose, onDone }) {
             </button>
             <p className="text-[11px] text-gray-400">This cannot be undone.</p>
           </div>
+          )}
         </div>
       </div>
     </div>
