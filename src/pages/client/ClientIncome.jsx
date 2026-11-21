@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import TopUpCalc from '../../components/TopUpCalc';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Wallet, Save, Send, Loader2, CheckCircle2, Clock, AlertTriangle, Copy, X, Table2, CalendarDays } from 'lucide-react';
+import { Wallet, Save, Send, Loader2, CheckCircle2, Clock, AlertTriangle, Copy, X, Table2, CalendarDays, Briefcase, Plus, Trash2, Laptop } from 'lucide-react';
 import { supabase, fmtDate } from '../../lib/supabase';
 import {
-  GROUPS, MONTHS, monthLabel, emptySheet, cell, rowTotal, monthTotals, sheetTotals, cleanSheet,
+  groupsFor, MONTHS, monthLabel, emptySheet, cell, rowTotal, monthTotals, sheetTotals, cleanSheet, MAX_ASSETS,
 } from '../../lib/incomeSheet';
 
 const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
@@ -21,6 +21,49 @@ function Money({ value, onChange, disabled }) {
       <input className="input pl-10 pr-8 text-right tabular-nums" inputMode="decimal" placeholder="0" value={shown} disabled={disabled}
         onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChange={e => onChange(e.target.value.replace(/[^\d.]/g, ''))} />
       <TopUpCalc value={value} onUse={onChange} disabled={disabled} />
+    </div>
+  );
+}
+
+// V72 — Business & Freelance tool: equipment bought for work (TaxMate works out the capital allowance)
+function Equipment({ assets, onChange, editable, year }) {
+  const ys = parseInt(year, 10);
+  const set = (id, p) => onChange(assets.map(a => (a.id === id ? { ...a, ...p } : a)));
+  const add = () => onChange([...assets, { id: Math.random().toString(36).slice(2, 10), item: '', date: '', cost: '', work: 'yes', disposed: false, disposedOn: '', proceeds: '', note: '' }]);
+  const del = (id) => { if (window.confirm('Remove this item?')) onChange(assets.filter(a => a.id !== id)); };
+  return (
+    <div className="card p-4 space-y-3">
+      <div className="flex items-start gap-2">
+        <Laptop size={18} className="text-emerald-700 mt-0.5" />
+        <div className="flex-1">
+          <div className="font-semibold text-gray-800 text-sm">Equipment used for work</div>
+          <div className="text-xs text-gray-500">Laptop, phone, printer, router, furniture, AC… bought this year (1 Apr {ys} – 31 Mar {ys + 1}) or earlier and still used for work. Do not add these to monthly expenses — TaxMate claims a yearly allowance.</div>
+          <div className="text-[11px] text-gray-400">වැඩ සඳහා භාවිතා කරන උපකරණ — මිලදී ගත් දිනය හා මිල ඇතුළත් කරන්න.</div>
+        </div>
+      </div>
+      {assets.length === 0 && <div className="text-sm text-gray-400 text-center py-2">No equipment added.</div>}
+      {assets.map((a, i) => (
+        <div key={a.id} className="rounded-xl border border-gray-200 p-3 space-y-2">
+          <div className="flex items-center gap-2"><span className="text-xs font-bold text-gray-400">{i + 1}</span>
+            <input className="input flex-1" maxLength={120} placeholder="Item — e.g. Laptop Dell Inspiron" value={a.item} disabled={!editable} onChange={e => set(a.id, { item: e.target.value })} />
+            {editable && <button type="button" onClick={() => del(a.id)} className="p-2 text-gray-300 hover:text-red-600" aria-label="Remove item"><Trash2 size={15} /></button>}</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <label className="text-xs font-semibold text-gray-600">Date bought<input type="date" className="input mt-1" value={a.date} disabled={!editable} onChange={e => set(a.id, { date: e.target.value })} /></label>
+            <label className="text-xs font-semibold text-gray-600">Cost (Rs.)<input className="input mt-1 text-right tabular-nums" inputMode="decimal" placeholder="0" value={a.cost} disabled={!editable} onChange={e => set(a.id, { cost: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+            <label className="text-xs font-semibold text-gray-600">Used for work?<select className="input mt-1" value={a.work} disabled={!editable} onChange={e => set(a.id, { work: e.target.value })}><option value="yes">Only for work</option><option value="partly">Partly (also personal)</option></select></label>
+            <label className="text-xs font-semibold text-gray-600 flex flex-col">Sold / given away?<span className="mt-2 flex items-center gap-2 font-normal"><input type="checkbox" checked={a.disposed} disabled={!editable} onChange={e => set(a.id, { disposed: e.target.checked })} /> Yes</span></label>
+          </div>
+          {a.disposed && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-xs font-semibold text-gray-600">Date sold<input type="date" className="input mt-1" value={a.disposedOn} disabled={!editable} onChange={e => set(a.id, { disposedOn: e.target.value })} /></label>
+              <label className="text-xs font-semibold text-gray-600">Sold for (Rs.)<input className="input mt-1 text-right" inputMode="decimal" value={a.proceeds} disabled={!editable} onChange={e => set(a.id, { proceeds: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+            </div>
+          )}
+          <input className="input text-xs" maxLength={200} placeholder="Note (optional)" value={a.note} disabled={!editable} onChange={e => set(a.id, { note: e.target.value })} />
+        </div>
+      ))}
+      {editable && assets.length < MAX_ASSETS && <button type="button" onClick={add} className="btn-secondary w-full justify-center text-sm"><Plus size={15} /> Add equipment</button>}
+      <p className="text-[11px] text-gray-400">Keep the bills — please upload them in My Documents.</p>
     </div>
   );
 }
@@ -116,9 +159,13 @@ export default function ClientIncome() {
     </div>
   );
 
-  const t = sheetTotals(data);
-  const mt = monthTotals(data, month);
-  const monthly = MONTHS.map((_, i) => { const x = monthTotals(data, i); return x.income + x.fx + Math.max(0, x.bizProfit); });
+  const biz = !!sel.biz_mode;
+  const GROUPS = groupsFor(biz, data);
+  const assets = data.assets ?? [];
+  const setAssets = (list) => { setData(d => ({ ...d, assets: list })); setDirty(true); schedule(); };
+  const t = sheetTotals(data, biz);
+  const mt = monthTotals(data, month, biz);
+  const monthly = MONTHS.map((_, i) => { const x = monthTotals(data, i, biz); return x.income + x.fx + Math.max(0, x.bizProfit); });
   const maxM = Math.max(1, ...monthly);
   const ys = parseInt(sel.year, 10);
 
@@ -147,10 +194,18 @@ export default function ClientIncome() {
 
       {/* Year summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[['Income (Sri Lanka)', t.income, 'text-green-700'], ['Foreign income', t.fx, 'text-blue-700'], ['Business profit', t.bizProfit, t.bizProfit < 0 ? 'text-red-600' : 'text-orange-600'], ['Tax already deducted', t.credit, 'text-teal-700']].map(([l, v, c]) => (
+        {(biz ? [['Business & freelance income', t.bizIncome, 'text-emerald-700'], ['Expenses entered (full bills)', t.bizExpense, 'text-orange-600'], ['Other income', t.income + t.fx, 'text-green-700'], ['Tax already deducted', t.credit, 'text-teal-700']]
+          : [['Income (Sri Lanka)', t.income, 'text-green-700'], ['Foreign income', t.fx, 'text-blue-700'], ['Business profit', t.bizProfit, t.bizProfit < 0 ? 'text-red-600' : 'text-orange-600'], ['Tax already deducted', t.credit, 'text-teal-700']]).map(([l, v, c]) => (
           <div key={l} className="card p-3"><div className={`text-lg font-black tabular-nums ${c}`}>{rs(v)}</div><div className="text-[11px] text-gray-500">{l} · year so far</div></div>
         ))}
       </div>
+
+      {biz && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 flex gap-2"><Briefcase size={16} className="flex-shrink-0 mt-0.5" />
+          <div><b>Business &amp; freelance:</b> enter each month's income and the <b>full amount</b> of each bill. If a bill is shared with home (electricity, mobile, internet), TaxMate claims only the work share — you don't need to work it out. Add laptops, phones and other equipment under <b>Equipment used for work</b> below.
+            <div className="text-xs text-emerald-800 mt-1">බිල්පත් වල සම්පූර්ණ මුදල ලියන්න — වැඩ සඳහා කොටස TaxMate විසින් ගණනය කරයි. පෞද්ගලික වියදම් (ආහාර, ඇඳුම්, පවුලේ වියදම්) ඇතුළත් නොකරන්න.</div></div>
+        </div>
+      )}
 
       {/* Month strip with mini bars */}
       <div className="card p-3">
@@ -195,7 +250,7 @@ export default function ClientIncome() {
               </div>
               {g.key === 'expenses' && (mt.bizIncome > 0 || mt.bizExpense > 0) && (
                 <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold flex justify-between ${mt.bizProfit < 0 ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-800'}`}>
-                  <span>Business {mt.bizProfit < 0 ? 'loss' : 'profit'} for {MONTHS[month]}</span><span className="tabular-nums">{rs(Math.abs(mt.bizProfit))}</span>
+                  <span>{biz ? `Income less expenses entered — ${MONTHS[month]}` : `Business ${mt.bizProfit < 0 ? 'loss' : 'profit'} for ${MONTHS[month]}`}</span><span className="tabular-nums">{rs(Math.abs(mt.bizProfit))}</span>
                 </div>
               )}
             </div>
@@ -226,14 +281,16 @@ export default function ClientIncome() {
                   </tr>
                 )),
               ])}
-              <tr className="border-t-2 border-primary-200 font-bold"><td className="px-3 py-2 sticky left-0 bg-white">Business profit / (loss)</td>
-                {MONTHS.map((_, i) => { const p = monthTotals(data, i).bizProfit; return <td key={i} className={`px-2 py-2 text-right tabular-nums ${p < 0 ? 'text-red-600' : ''}`}>{p ? p.toLocaleString('en-LK') : ''}</td>; })}
+              <tr className="border-t-2 border-primary-200 font-bold"><td className="px-3 py-2 sticky left-0 bg-white">{biz ? 'Income less expenses entered' : 'Business profit / (loss)'}</td>
+                {MONTHS.map((_, i) => { const p = monthTotals(data, i, biz).bizProfit; return <td key={i} className={`px-2 py-2 text-right tabular-nums ${p < 0 ? 'text-red-600' : ''}`}>{p ? p.toLocaleString('en-LK') : ''}</td>; })}
                 <td className={`px-3 py-2 text-right tabular-nums bg-primary-50 ${t.bizProfit < 0 ? 'text-red-600' : 'text-primary-800'}`}>{t.bizProfit.toLocaleString('en-LK')}</td></tr>
             </tbody>
           </table>
           <p className="text-[11px] text-gray-400 px-3 py-2">To change a figure, tap a month above.</p>
         </div>
       )}
+
+      {biz && <Equipment assets={assets} onChange={setAssets} editable={editable} year={sel.year} />}
 
       {(editable || note) && (
         <div className="card p-4">
@@ -260,7 +317,11 @@ export default function ClientIncome() {
             <div className="text-sm bg-gray-50 rounded-lg p-3 space-y-1">
               <div className="flex justify-between"><span>Income in Sri Lanka</span><b>{rs(t.income)}</b></div>
               <div className="flex justify-between"><span>Foreign income</span><b>{rs(t.fx)}</b></div>
-              <div className="flex justify-between"><span>Business profit / (loss)</span><b>{rs(t.bizProfit)}</b></div>
+              {biz ? <>
+                <div className="flex justify-between"><span>Business &amp; freelance income</span><b>{rs(t.bizIncome)}</b></div>
+                <div className="flex justify-between"><span>Expenses entered</span><b>{rs(t.bizExpense)}</b></div>
+                <div className="flex justify-between"><span>Equipment listed</span><b>{assets.length}</b></div>
+              </> : <div className="flex justify-between"><span>Business profit / (loss)</span><b>{rs(t.bizProfit)}</b></div>}
               <div className="flex justify-between"><span>Tax already deducted</span><b>{rs(t.credit)}</b></div>
               {t.monthsFilled < 12 && <div className="text-amber-700 text-xs pt-1">Only {t.monthsFilled} of 12 months have figures. Submit anyway if the other months had no income.</div>}
             </div>
