@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import TopUpCalc from '../../components/TopUpCalc';
 import { useOutletContext, Link } from 'react-router-dom';
 import {
-  Calculator, Globe2, MapPin, Shuffle, ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle2, MessageCircle, RotateCcw,
+  Calculator, Globe2, MapPin, Shuffle, ChevronDown, ChevronUp, Info, AlertTriangle, CheckCircle2, MessageCircle, RotateCcw, FileCheck2, Sparkles,
 } from 'lucide-react';
+import FileWithTaxMate from '../../components/FileWithTaxMate';
 import { computePersonal, apitTable1, TAX_YEARS } from '../../lib/iitCalc';
 import TaxSavingTips from '../../components/TaxSavingTips';
 import { FIRM } from '../../lib/iitStatement';
@@ -56,8 +57,10 @@ function Row({ l, v, cls = '', sub }) {
   );
 }
 
-export default function ClientTaxCalculator() {
+// publicMode (V73): the same calculator on the public website — free, no login, no credits; ends with "File my return with TaxMate"
+export default function ClientTaxCalculator({ publicMode = false }) {
   const [year, setYear] = useState('2025/26');
+  const [lead, setLead] = useState(false);
   const [period, setPeriod] = useState('monthly');   // monthly | annual
   const [mode, setMode] = useState('local');
   const [f, setF] = useState({
@@ -66,7 +69,8 @@ export default function ClientTaxCalculator() {
     residency: 'resident', solar: '', donCharity: '', donGovt: '', apitPaid: '', otherTaxPaid: '', whtInterestAuto: true,
   });
   const [more, setMore] = useState(false);
-  const features = useOutletContext() ?? { tax_calculator: true };
+  const outlet = useOutletContext();
+  const features = (publicMode ? null : outlet) ?? { tax_calculator: true };
   const set = (k) => (v) => setF(s => ({ ...s, [k]: v }));
   const mult = period === 'monthly' ? 12 : 1;
   const per = period === 'monthly' ? 'per month' : 'per year';
@@ -94,7 +98,7 @@ export default function ClientTaxCalculator() {
   const r = useMemo(() => computePersonal(year, px), [year, px]);
   // V53: each calculation uses a credit (unlimited on plans that include it)
   const figures = useMemo(() => ({ year, period, px }), [year, period, px]);
-  const gate = useCalcGate('advanced', figures, features.tax_calculator !== false);
+  const gate = useCalcGate('advanced', figures, !publicMode && features.tax_calculator !== false);
 
   const d = (n) => n / mult;    // show in the chosen period
   const hasIncome = r.totalAss > 0;
@@ -103,6 +107,13 @@ export default function ClientTaxCalculator() {
     && !toNum(f.business) && !toNum(f.rent) && !toNum(f.interest) && !toNum(f.otherLocal);
   const reset = () => setF(s => ({ ...s, salary: '', business: '', rent: '', interest: '', otherLocal: '', fxAmount: '', fxRate: '', foreignOther: '', solar: '', donCharity: '', donGovt: '', apitPaid: '', otherTaxPaid: '' }));
   const bands = [...r.local.detail.map(b => ({ ...b, kind: 'local' })), ...r.foreign.bands.map(b => ({ ...b, kind: 'foreign' }))];
+  const leadSummary = () => [
+    `Y/A ${year} · entered ${period === 'monthly' ? 'per month' : 'per year'} · ${MODES.find(m => m.key === mode)?.en}`,
+    px.salary && `Salary ${rs(px.salary)}`, px.business && `Business ${rs(px.business)}`, px.rent && `Rent ${rs(px.rent)}`, px.interest && `Interest ${rs(px.interest)}`,
+    px.otherLocal && `Other ${rs(px.otherLocal)}`, px.foreignFx && `Foreign via bank ${rs(px.foreignFx)}`, px.foreignOther && `Foreign (not via bank) ${rs(px.foreignOther)}`,
+    `Total income ${rs(r.totalAss)} a year · estimated tax ${rs(r.tax)} a year`,
+    period === 'annual' && r.credits > 0 && `${r.status === 'refund' ? 'Refund' : 'Balance'} ${rs(Math.abs(r.balance))}`,
+  ].filter(Boolean).join('\n');
   const maxBandTax = Math.max(1, ...bands.map(b => b.tax));
 
   if (features.loaded && !features.tax_calculator) return (
@@ -121,7 +132,7 @@ export default function ClientTaxCalculator() {
         <div className="flex items-start gap-3 flex-wrap">
           <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center"><Calculator size={22} /></div>
           <div className="flex-1 min-w-[200px]">
-            <h1 className="text-xl sm:text-2xl font-bold">Income Tax Calculator</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">{publicMode ? 'Advanced Income Tax Calculator' : 'Income Tax Calculator'}</h1>
             <p className="text-sm text-primary-200">ආදායම් බදු ගණකය · Estimate your Sri Lankan income tax in seconds</p>
           </div>
           <CreditPill gate={gate} tool="advanced" dark />
@@ -152,6 +163,15 @@ export default function ClientTaxCalculator() {
           </button>
         ))}
       </div>
+
+      {year === '2026/27' && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 flex gap-2"><Sparkles size={15} className="flex-shrink-0 mt-0.5" />
+          <div><b>New for Y/A 2026/27</b> (Inland Revenue (Amendment) Act No. 11 of 2026): personal relief Rs. 1,800,000, tax rates and the 15% maximum on foreign-currency income are unchanged.
+            Gains on investment assets realised from 3 June 2026 are taxed at 15% (was 10%). From 3 June 2026, 5% WHT applies to service fees over Rs. 100,000 a month paid to resident individuals — enter it under tax already paid.
+            Quarterly instalments are now based on your Y/A 2025/26 tax. Life-insurance payouts (death, maturity, surrender) are not taxable.
+            <span className="block mt-0.5 text-blue-800">2026/27: බදු අනුපාත හා සහන වෙනස් නැත. 2026 ජූනි 3 සිට ආයෝජන ලාභ මත 15% · සේවා ගාස්තු මත 5% WHT.</span></div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_380px] gap-5 items-start">
         {/* Inputs */}
@@ -317,6 +337,11 @@ export default function ClientTaxCalculator() {
             )
           )}
 
+          {publicMode && hasIncome && (
+            <button type="button" onClick={() => setLead(true)} className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary-700 hover:bg-primary-800 text-white font-semibold py-3">
+              <FileCheck2 size={17} /> File my Y/A {year} return with TaxMate
+            </button>
+          )}
           <a href={`https://wa.me/${waNumber(FIRM.whatsapp)}?text=${encodeURIComponent(`Hi TaxMate, I used the tax calculator for Y/A ${year}. Estimated tax: ${rs(r.tax)} a year. Can you help me file my return?`)}`}
             target="_blank" rel="noreferrer" className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold py-3">
             <MessageCircle size={17} /> Ask TaxMate to file it for you
@@ -325,7 +350,8 @@ export default function ClientTaxCalculator() {
         </div>
       </div>
 
-      {hasIncome && gate.unlocked && <TaxSavingTips year={year} x={px} mode="client" />}
+      {hasIncome && gate.unlocked && <TaxSavingTips year={year} x={px} mode={publicMode ? 'public' : 'client'} />}
+      {lead && <FileWithTaxMate year={year} summary={leadSummary()} onClose={() => setLead(false)} />}
 
       {gate.st && !gate.unlimited && <div className="card p-4 sm:p-5"><BuyPacks st={gate.st} reload={gate.reload} /></div>}
 
