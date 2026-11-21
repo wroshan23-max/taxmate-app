@@ -43,6 +43,7 @@ export default function Clients() {
   // V59: who installed the app (📱) and who gets phone notifications (🔔)
   const [apps, setApps] = useState({});   // { client_id: { platforms: [], last, push } }
   const [appFilter, setAppFilter] = useState('');   // '' | 'yes' | 'no'
+  const [portalFilter, setPortalFilter] = useState('');   // V70.2: '' | 'active' | 'none' (client portal login)
   useEffect(() => {
     Promise.all([
       supabase.from('app_installs').select('client_id, platform, last_open, installed_at, created_at').not('client_id', 'is', null).eq('is_admin', false),
@@ -83,6 +84,7 @@ export default function Clients() {
   const active = clients.filter(c => !c.archived_at);
   const subCount = active.filter(c => plans[c.id]).length;
   const appCount = active.filter(c => apps[c.id]?.platforms.length).length;
+  const portalCount = active.filter(c => c.profile_id).length;
   const nameOf = Object.fromEntries(clients.map(c => [c.id, c.full_name]));
   const restore = async (c) => {
     const { error } = await supabase.from('clients').update({ archived_at: null }).eq('id', c.id);
@@ -99,6 +101,7 @@ export default function Clients() {
     (!onlyNew || isNew(c)) &&
     (!onlySubs || !!plans[c.id]) &&
     (!appFilter || (appFilter === 'yes') === !!apps[c.id]?.platforms.length) &&
+    (!portalFilter || (portalFilter === 'active') === !!c.profile_id) &&
     [c.client_no, c.full_name, c.tin, c.email, c.mobile, c.nic, c.contact_name, c.contact_mobile].some(f => f?.toLowerCase().includes(search.toLowerCase()))
   ).sort((a, b) => {   // 📌 pinned first (latest pin on top), then A–Z as loaded
     const pa = flags[a.id]?.pinned_at ?? '', pb = flags[b.id]?.pinned_at ?? '';
@@ -131,6 +134,9 @@ export default function Clients() {
             <button onClick={() => setAppFilter(f => (f === '' ? 'yes' : f === 'yes' ? 'no' : ''))} title="Click: with the app → without the app → all"
               className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${appFilter === 'yes' ? 'bg-emerald-600 text-white' : appFilter === 'no' ? 'bg-gray-700 text-white' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>
               {appFilter === 'no' ? `📵 ${active.length - appCount} without the app ✕` : `📱 ${appCount} with the app${appFilter === 'yes' ? ' ✕' : ''}`}</button>
+            <button onClick={() => setPortalFilter(f => (f === '' ? 'active' : f === 'active' ? 'none' : ''))} title="Click: portal active → no portal login → all"
+              className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${portalFilter === 'active' ? 'bg-green-600 text-white' : portalFilter === 'none' ? 'bg-gray-700 text-white' : 'bg-green-50 text-green-800 border border-green-200'}`}>
+              {portalFilter === 'none' ? `🔒 ${active.length - portalCount} no portal login ✕` : `🔑 ${portalCount} portal active${portalFilter === 'active' ? ' ✕' : ''}`}</button>
             {newCount > 0 && <button onClick={() => setOnlyNew(v => !v)} className={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${onlyNew ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-800'}`}>{newCount} new registration{newCount > 1 ? 's' : ''}{onlyNew ? ' ✕' : ''}</button>}
           </p>
         </div>
