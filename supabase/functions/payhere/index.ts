@@ -2,6 +2,8 @@
 //  TaxMate — PayHere online payments for invoices
 //  POST JSON  { action: 'status' }                      → is PayHere set up? (any signed-in user)
 //  POST JSON  { action: 'checkout', invoice_id }        → form fields for PayHere checkout (signed-in client)
+//  POST JSON  { action: 'link_info', token, order_id? } → V67: pay-from-link info for a shared invoice (no login)
+//  POST JSON  { action: 'checkout_link', token }        → V67: PayHere checkout from the shared invoice link (no login)
 //  POST form  (from PayHere servers, notify_url)        → verifies md5sig, marks the invoice paid
 //  Secrets (Supabase → Edge Functions → Secrets):
 //    PAYHERE_MERCHANT_ID, PAYHERE_MERCHANT_SECRET, PAYHERE_SANDBOX ("true" for testing)
@@ -68,9 +70,57 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ── 2. App calls (JSON, signed-in user) ──
+  // ── 2. App calls (JSON) ──
   try {
     const body = await req.json();
+
+    // ── 2a. V67: pay from the invoice link (/share/<token>) — no login; the secret link is the key ──
+    if (body?.action === 'link_info' || body?.action === 'checkout_link') {
+      const token = String(body.token ?? '');
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)) return json({ error: 'This link is not available.' });
+      const { data: inv } = await admin.from('invoices').select('id, invoice_no, total_amount, status, client_id').eq('share_token', token).maybeSingle();
+      if (!inv) return json({ error: 'This link is not available.' });
+      const { data: s } = await admin.from('app_settings').select('value').eq('key', 'payments').maybeSingle();
+      const online = !!(MID && SECRET && s?.value?.payhere);
+      const payable = ['unpaid', 'overdue'].includes(inv.status) && Number(inv.total_amount) > 0;
+
+      if (body.action === 'link_info') {
+        let payment = null;
+        const oid = String(body.order_id ?? '').slice(0, 80);
+        if (oid) {
+          const { data: p } = await admin.from('payments').select('status, amount, card, updated_at').eq('order_id', oid).eq('invoice_id', inv.id).maybeSingle();
+          if (p) payment = { status: p.status, amount: p.amount, card: p.card };
+        }
+        return json({ online, sandbox: SANDBOX, status: inv.status, payable, amount: inv.total_amount, payment });
+      }
+
+      if (!online) return json({ error: 'Online payment is not available right now. Please use bank transfer.' });
+      if (!payable) return json({ error: inv.status === 'paid' ? 'This invoice is already paid. Thank you!' : 'This invoice cannot be paid online.' });
+      // a link can't be used to flood the payments table
+      const { count } = await admin.from('payments').select('id', { count: 'exact', head: true })
+        .eq('invoice_id', inv.id).eq('method', 'payhere').eq('status', 'pending').gte('created_at', new Date(Date.now() - 3600e3).toISOString());
+      if ((count ?? 0) >= 8) return json({ error: 'Too many payment attempts for this invoice. Please try again in an hour or contact us.' });
+
+      const { data: c } = await admin.from('clients').select('full_name, email, mobile, address').eq('id', inv.client_id).single();
+      const [first, ...rest] = String(c?.full_name || 'TaxMate Client').trim().split(/\s+/);
+      const orderId = `${inv.invoice_no || 'INV'}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`.replace(/[^A-Za-z0-9-]/g, '');
+      const amt = money(Number(inv.total_amount));
+      const { error: insErr } = await admin.from('payments').insert({
+        invoice_id: inv.id, client_id: inv.client_id, method: 'payhere', amount: Number(amt), status: 'pending', order_id: orderId, note: 'Paid from the invoice link',
+      });
+      if (insErr) return json({ error: insErr.message });
+      const back = `${appUrlFor(req)}/share/${token}?payment=${encodeURIComponent(orderId)}`;
+      const fields: Record<string, string> = {
+        merchant_id: MID, return_url: back, cancel_url: `${back}&cancelled=1`, notify_url: `${URL_}/functions/v1/payhere`,
+        order_id: orderId, items: `TaxMate invoice ${inv.invoice_no ?? ''}`.trim(), currency: 'LKR', amount: amt,
+        first_name: first || 'Client', last_name: rest.join(' ') || '-', email: c?.email || 'client@taxmate.lk', phone: c?.mobile || '0000000000',
+        address: c?.address || 'Sri Lanka', city: 'Sri Lanka', country: 'Sri Lanka', custom_1: inv.id,
+      };
+      fields.hash = MD5U(MID + orderId + amt + 'LKR' + MD5U(SECRET));
+      return json({ ok: true, action_url: SANDBOX ? 'https://sandbox.payhere.lk/pay/checkout' : 'https://www.payhere.lk/pay/checkout', fields });
+    }
+
+    // ── 2b. Signed-in user ──
     const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
     const { data: who } = await admin.auth.getUser(jwt);
     if (!who?.user) return json({ error: 'Please sign in again.' });
