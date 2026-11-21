@@ -6,8 +6,9 @@ import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { periodLabel } from '../../lib/taxPayments';
 import {
   Users, FileText, Receipt, Calculator, Clock, AlertCircle, ArrowRight, MessageSquareWarning,
-  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark, Sparkles, FolderLock, MessageCircle, Fingerprint, CreditCard, CalendarCheck, FileBadge2, Crown, TrendingDown, PhoneCall, ListChecks, FileSignature,
+  CheckCircle2, Wallet, TrendingUp, AlertTriangle, Settings, Globe, PencilLine, Landmark, Sparkles, FolderLock, MessageCircle, Fingerprint, CreditCard, CalendarCheck, FileBadge2, Crown, TrendingDown, PhoneCall, ListChecks, FileSignature, KanbanSquare,
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const monthKey = (d) => (d || '').slice(0, 7);
@@ -29,10 +30,11 @@ function Kpi({ icon: Icon, label, value, sub, color, to }) {
 
 export default function Dashboard() {
   const [d, setD] = useState(null);
+  const { user, profile } = useAuth();
 
   useEffect(() => {
     (async () => {
-      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird, pays, srs, lets, subReq, revReq, adReq, calcPaid, taxChk, taxLate, calls, docsDone, letters] = await Promise.all([
+      const [cl, rt, inv, calc, req, invites, al, sh, docs, msgs, ird, pays, srs, lets, subReq, revReq, adReq, calcPaid, taxChk, taxLate, calls, docsDone, letters, work] = await Promise.all([
         supabase.from('clients').select('id, full_name, tin, email, created_at, profile_id, source, reviewed_at, registered_at, contact_name, contact_relation, registration').is('archived_at', null).order('created_at', { ascending: false }),
         supabase.from('tax_returns').select('id, year, status, due_date, client_id, clients(full_name)').order('due_date'),
         supabase.from('invoices').select('id, invoice_no, status, total_amount, issue_date, due_date, paid_date, client_snapshot, clients(full_name)'),
@@ -60,10 +62,12 @@ export default function Dashboard() {
         supabase.from('doc_checklists').select('id, client_id, year, completed_at, clients(full_name)').not('completed_at', 'is', null).gte('completed_at', new Date(Date.now() - 14 * 86400e3).toISOString()).order('completed_at', { ascending: false }).limit(50),
         // V69: engagement letters signed (7 days) / waiting more than 5 days
         supabase.from('engagement_letters').select('id, client_id, letter_no, status, sent_at, signed_at, signer_name, decline_reason, declined_at, clients(full_name)').in('status', ['sent', 'signed', 'declined']).gte('sent_at', new Date(Date.now() - 60 * 86400e3).toISOString()).limit(200),
+        // V70: work-board tasks due by today (mine or unassigned are shown)
+        supabase.from('work_items').select('id, title, due_date, assignee, priority, clients(full_name)').neq('stage', 'done').lte('due_date', new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10)).order('due_date').limit(200),
       ]);
       setD({
         clients: cl.data ?? [], returns: rt.data ?? [], invoices: inv.data ?? [], calcs: calc.data ?? [],
-        requests: req.data ?? [], pays: pays.data ?? [], srs: srs.data ?? [], lets: lets.data ?? [], subReq: subReq.data ?? [], revReq: revReq.data ?? [], adReq: adReq.data ?? [], calcPaid: calcPaid.data ?? [], taxChk: taxChk.data ?? [], taxLate: taxLate.data ?? [], calls: calls.data ?? [], docsDone: docsDone.data ?? [], letters: letters.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
+        requests: req.data ?? [], pays: pays.data ?? [], srs: srs.data ?? [], lets: lets.data ?? [], subReq: subReq.data ?? [], revReq: revReq.data ?? [], adReq: adReq.data ?? [], calcPaid: calcPaid.data ?? [], taxChk: taxChk.data ?? [], taxLate: taxLate.data ?? [], calls: calls.data ?? [], docsDone: docsDone.data ?? [], letters: letters.data ?? [], work: work.data ?? [], ird: Array.isArray(ird.data) ? ird.data : [], docs: docs.data ?? [], msgs: msgs.data ?? [], assets: al.data ?? [], sheets: sh.data ?? [], invites: (invites.data ?? []).filter(i => new Date(i.expires_at) > new Date()),
       });
     })();
   }, []);
@@ -91,7 +95,10 @@ export default function Dashboard() {
     const lateGroups = Object.values(d.taxLate.reduce((m, x) => { (m[x.client_id] ??= { client_id: x.client_id, name: x.clients?.full_name ?? 'Client', items: [] }).items.push(x); return m; }, {}))
       .filter(g => !g.items.some(x => x.reminded_at && x.reminded_at > weekAgo));
     const svcName = { iit: 'IIT', tin: 'TIN', company: 'Company tax', vat: 'VAT', apit: 'APIT', ramis: 'RAMIS', bookkeeping: 'Bookkeeping', fs: 'Financial statements', payroll: 'Payroll', consult: 'Consultation', digital: 'Digital bookkeeping', other: 'Other' };
+    const colomboToday = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
     const attention = [
+      ...d.work.filter(x => !x.assignee || x.assignee === user?.id).map(x => ({ key: `wk${x.id}`, icon: KanbanSquare, tone: x.due_date < colomboToday ? 'red' : 'amber', to: `/admin/work?task=${x.id}`, when: x.due_date,
+        text: `${x.assignee ? 'Your task' : 'Unassigned task'}${x.due_date < colomboToday ? ` overdue since ${fmtDate(x.due_date)}` : ' due today'}: ${x.title}${x.clients?.full_name ? ` — ${x.clients.full_name}` : ''}${x.priority === 'high' ? ' 🔴' : ''}` })),
       ...d.letters.filter(x => (x.status === 'signed' && x.signed_at > new Date(Date.now() - 7 * 86400e3).toISOString()) || (x.status === 'declined' && x.declined_at > new Date(Date.now() - 14 * 86400e3).toISOString()) || (x.status === 'sent' && x.sent_at < new Date(Date.now() - 5 * 86400e3).toISOString()))
         .map(x => ({ key: `el${x.id}`, icon: FileSignature, tone: x.status === 'signed' ? 'green' : x.status === 'declined' ? 'red' : 'amber', to: `/admin/clients/${x.client_id}`, when: x.signed_at || x.declined_at || x.sent_at,
           text: x.status === 'signed' ? `${x.clients?.full_name ?? 'Client'} signed the engagement letter ${x.letter_no}` : x.status === 'declined' ? `${x.clients?.full_name ?? 'Client'} declined engagement letter ${x.letter_no}` : `${x.clients?.full_name ?? 'Client'} hasn't signed engagement letter ${x.letter_no} (sent ${fmtDate(x.sent_at)}) — send a reminder`, note: x.status === 'declined' ? x.decline_reason : undefined })),
@@ -146,7 +153,8 @@ export default function Dashboard() {
           <Link to="/admin/clients" className="btn-secondary text-sm py-1.5"><Users size={14} /> Add Client</Link>
           <Link to="/admin/calculator" className="btn-secondary text-sm py-1.5"><Calculator size={14} /> New Calculation</Link>
           <Link to="/admin/invoices" className="btn-secondary text-sm py-1.5"><Receipt size={14} /> New Invoice</Link>
-          <Link to="/admin/settings" className="btn-secondary text-sm py-1.5"><Settings size={14} /> Settings</Link>
+          <Link to="/admin/work" className="btn-secondary text-sm py-1.5"><KanbanSquare size={14} /> Work Board</Link>
+          {profile?.staff_level !== 'staff' && <Link to="/admin/settings" className="btn-secondary text-sm py-1.5"><Settings size={14} /> Settings</Link>}
         </div>
       </div>
 

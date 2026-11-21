@@ -25,6 +25,7 @@ import TaxPaymentsAdmin from '../../components/TaxPaymentsAdmin';
 import DocumentVault from '../../components/DocumentVault';
 import DocChecklistAdmin from '../../components/DocChecklistAdmin';
 import EngagementAdmin from '../../components/EngagementAdmin';
+import ClientWorkCard from '../../components/ClientWorkCard';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
 import RamisDraftAdmin from '../../components/RamisDraftAdmin';
@@ -311,6 +312,7 @@ export default function ClientDetail() {
         </div>
       )}
       {tab === 'overview' && <FamilyAdmin client={client} userId={user?.id} />}
+      {tab === 'overview' && <ClientWorkCard client={client} />}
       {tab === 'overview' && <EngagementAdmin client={client} />}
       {tab === 'overview' && <SubscriptionAdmin client={client} userId={user?.id} />}
       {tab === 'overview' && <AddonsAdmin client={client} userId={user?.id} onChange={() => setPayrollKey(k => k + 1)} />}

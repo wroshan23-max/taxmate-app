@@ -629,7 +629,7 @@ export function InvoiceSettings({ banks, firmSig, reload }) {
         cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
         const dataUrl = cv.toDataURL('image/png');
         const { error } = await supabase.from('app_settings').upsert({ key: 'firm_signature', value: { image: dataUrl }, updated_at: new Date().toISOString() });
-        if (error) return toast.error(error.message);
+        if (error) return toast.error(/row-level security|42501/.test(`${error.code} ${error.message}`) ? 'Only a full admin can change the saved signature.' : error.message);
         toast.success('Signature image saved — choose "Use Saved Image" on invoices');
         reload();
       };

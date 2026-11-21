@@ -226,11 +226,18 @@ function UsersTab() {
 
   const setRole = async (u, role) => {
     const warn = role === 'admin'
-      ? `Make ${u.email} an ADMIN? They will see and change ALL clients, calculations, invoices and settings.`
+      ? `Make ${u.email} a TaxMate team member? They start as STAFF: they see all clients, calculations and invoices but cannot change Settings. You can give full admin access afterwards.`
       : `Change ${u.email} to a normal client login? They lose admin access.`;
     if (!window.confirm(warn)) return;
     try { await callPortal('set_role', { user_id: u.id, role }); toast.success('Role updated'); load(); }
     catch (e) { toast.error(e.message); }
+  };
+  // V70: full admin ↔ staff (limited)
+  const setStaffLevel = async (u, staffOn) => {
+    if (!window.confirm(staffOn ? `Make ${u.email} STAFF? They keep working with clients, returns, documents, invoices and tasks, but cannot change Settings, delete clients or manage logins.` : `Give ${u.email} FULL ADMIN access? They can change Settings, delete clients and manage other logins.`)) return;
+    const { error } = await supabase.rpc('admin_set_staff', { p_user: u.id, p_staff: staffOn });
+    if (error) return toast.error(error.message.replace(/^.*?ERROR:\s*/, ''));
+    toast.success(staffOn ? 'Now staff (limited access)' : 'Now a full admin'); load();
   };
   const remove = async (u) => {
     if (!window.confirm(`Delete the login ${u.email}? They can no longer sign in. Client records stay.`)) return;
@@ -278,7 +285,7 @@ function UsersTab() {
         ))}
       </div>
 
-      <UserTable title="Admins" icon={Shield} rows={admins} onRole={setRole} onRemove={remove} resetText={resetText} />
+      <UserTable title="Admins & staff" icon={Shield} rows={admins} onRole={setRole} onRemove={remove} resetText={resetText} onStaff={setStaffLevel} />
       <UserTable title="Client portal logins" icon={Users} rows={clientsU} onRole={setRole} onRemove={remove} resetText={resetText} />
 
       <div className="card overflow-hidden">
@@ -301,8 +308,8 @@ function UsersTab() {
       </div>
 
       <div className="card p-5 space-y-3 max-w-2xl">
-        <h3 className="font-semibold text-primary-800 flex items-center gap-2"><ShieldCheck size={16} /> Invite a staff member as admin</h3>
-        <p className="text-xs text-gray-500">Admins can see and change everything. Only invite people you fully trust. To give a <strong>client</strong> access, open the client's page instead.</p>
+        <h3 className="font-semibold text-primary-800 flex items-center gap-2"><ShieldCheck size={16} /> Invite a staff member</h3>
+        <p className="text-xs text-gray-500">New team logins start as <strong>Staff</strong>: they work with clients, returns, documents, invoices and the Work Board, but cannot change Settings, delete clients or manage logins. Use “Give full admin” below only for people you fully trust. To give a <strong>client</strong> access, open the client's page instead.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <input className="input" placeholder="Name" value={staff.name} onChange={e => setStaff({ ...staff, name: e.target.value })} />
           <input className="input" placeholder="Email (their sign-in name)" value={staff.email} onChange={e => setStaff({ ...staff, email: e.target.value })} />
@@ -313,7 +320,7 @@ function UsersTab() {
   );
 }
 
-function UserTable({ title, icon: Icon, rows, onRole, onRemove, resetText }) {
+function UserTable({ title, icon: Icon, rows, onRole, onRemove, resetText, onStaff }) {
   return (
     <div className="card overflow-hidden">
       <div className="card-header"><Icon size={16} /> {title} <span className="text-xs text-gray-400 font-normal">{rows.length}</span></div>
@@ -326,7 +333,7 @@ function UserTable({ title, icon: Icon, rows, onRole, onRemove, resetText }) {
             <tbody className="divide-y divide-gray-50">
               {rows.map(u => (
                 <tr key={u.id}>
-                  <td className="table-td"><div className="text-sm font-semibold">{u.full_name || u.email}{u.is_me && <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-primary-100 text-primary-700">you</span>}</div><div className="text-xs text-gray-400">{u.email}</div></td>
+                  <td className="table-td"><div className="text-sm font-semibold">{u.full_name || u.email}{u.is_me && <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-primary-100 text-primary-700">you</span>}{u.role === 'admin' && <span className={`ml-1 text-[11px] px-1.5 py-0.5 rounded ${u.staff ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-700'}`}>{u.staff ? 'Staff' : 'Full admin'}</span>}</div><div className="text-xs text-gray-400">{u.email}</div></td>
                   <td className="table-td text-sm">{u.client_name ? <a href={`/admin/clients/${u.client_id}`} className="text-primary-600 hover:underline">{u.client_name}</a> : <span className="text-gray-300">—</span>}{u.client_tin && <div className="text-xs text-gray-400">TIN {u.client_tin}</div>}</td>
                   <td className="table-td text-xs text-gray-500">{fmtDate(u.created_at)}</td>
                   <td className="table-td text-xs text-gray-500">{u.last_sign_in_at ? fmtDate(u.last_sign_in_at) : 'Never'}</td>
@@ -334,6 +341,7 @@ function UserTable({ title, icon: Icon, rows, onRole, onRemove, resetText }) {
                     {u.is_me ? <div className="text-right text-xs text-gray-400">Change your password in My Account</div> : (
                       <div className="flex gap-1.5 justify-end flex-wrap">
                         <MessageMenu label="Reset link" phone={u.client_mobile} email={u.email} subject="Reset your TaxMate portal password" getText={resetText(u)} />
+                        {u.role === 'admin' && onStaff && <button onClick={() => onStaff(u, !u.staff)} className="btn-secondary text-xs py-1.5">{u.staff ? 'Give full admin' : 'Make staff'}</button>}
                         {u.role === 'admin'
                           ? <button onClick={() => onRole(u, 'client')} className="btn-secondary text-xs py-1.5">Remove admin</button>
                           : <button onClick={() => onRole(u, 'admin')} className="btn-secondary text-xs py-1.5">Make admin</button>}

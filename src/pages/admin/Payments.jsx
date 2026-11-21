@@ -4,10 +4,12 @@ import toast from 'react-hot-toast';
 import { CreditCard, Landmark, Eye, Check, X, Loader2, Settings as Cog, Search } from 'lucide-react';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { PAY_STATUS, slipUrl } from '../../lib/payments';
+import { useAuth } from '../../contexts/AuthContext';
 
 const FILTERS = [['review', '🔎 To confirm'], ['paid', '✅ Paid'], ['payhere', '💳 PayHere'], ['bank', '🏦 Bank'], ['all', 'All']];
 
 export default function Payments() {
+  const { profile } = useAuth();
   const [rows, setRows] = useState(null);
   const [filter, setFilter] = useState('review');
   const [q, setQ] = useState('');
@@ -50,7 +52,7 @@ export default function Payments() {
           <h1 className="text-2xl font-bold text-primary-800">💳 Payments</h1>
           <p className="text-sm text-gray-500">Online (PayHere) and bank-slip payments from clients · received this month <b className="text-emerald-700">{fmtRs(received)}</b></p>
         </div>
-        <Link to="/admin/settings?tab=payments" className="ml-auto btn-secondary text-sm"><Cog size={15} /> Payment settings</Link>
+        {profile?.staff_level !== 'staff' && <Link to="/admin/settings?tab=payments" className="ml-auto btn-secondary text-sm"><Cog size={15} /> Payment settings</Link>}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
