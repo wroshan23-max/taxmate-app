@@ -10,6 +10,8 @@ import DueDatesWidget from '../../components/DueDatesWidget';
 import { ReturnStepper } from '../../components/ReturnTracker';
 import InstallAppCard from '../../components/InstallAppCard';
 import TaxPaymentsDue from '../../components/TaxPaymentsDue';
+import { summarizeCalc } from '../../lib/iitCalc';
+import { loadBalancePayments } from '../../lib/taxBalance';
 
 // V69: engagement letter / missing documents waiting for the client
 function PendingLetters({ clientId }) {
@@ -51,6 +53,38 @@ const PAGE_NAMES = {
   plan: 'My Plan', documents: 'My Documents', 'tax-returns': 'Tax Returns', assets: 'Assets & Liabilities', invoices: 'Invoices',
   updates: 'Tax Updates', profile: 'My Profile', security: 'Security',
 };
+
+// V71: final computation says "tax payable" and no payment is recorded yet → remind on the dashboard
+function UnpaidTax({ clientId }) {
+  const [rows, setRows] = useState([]);
+  useEffect(() => {
+    if (!clientId) return;
+    Promise.all([
+      supabase.from('iit_calculations').select('*').eq('client_id', clientId).eq('shared_with_client', true).eq('status', 'final').order('created_at', { ascending: false }).limit(20),
+      loadBalancePayments(clientId).catch(() => null),
+    ]).then(([{ data }, paid]) => {
+      if (!paid) return;
+      const seen = new Set(), out = [];
+      for (const c of data ?? []) {
+        if (seen.has(c.year)) continue; seen.add(c.year);
+        try { const sm = summarizeCalc(c); if (sm.kind !== 'quarterly' && sm.status === 'payable' && !paid[`${clientId}|${c.year}`]) out.push({ id: c.id, year: c.year, amount: Math.abs(sm.amount) }); } catch { /* skip */ }
+      }
+      setRows(out);
+    }, () => {});
+  }, [clientId]);
+  if (!rows.length) return null;
+  return (
+    <div className="space-y-2">
+      {rows.map(r => (
+        <Link key={r.id} to="/client/calculations" className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 hover:shadow-sm">
+          <span className="text-2xl">💰</span>
+          <span className="flex-1"><b className="block text-red-900">Y/A {r.year} income tax payable: {fmtRs(r.amount)}</b><span className="text-xs text-red-800">Paid already? Tap “I've paid” and attach the receipt · ගෙවූ පසු “I've paid” ඔබන්න</span></span>
+          <ChevronRight size={18} className="text-red-700" />
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 export default function ClientDashboard() {
   const { user, profile } = useAuth();
@@ -133,6 +167,7 @@ export default function ClientDashboard() {
       )}
 
       <PendingLetters clientId={profile?.client_id} />
+      <UnpaidTax clientId={profile?.client_id} />
       <TaxPaymentsDue clientId={profile?.client_id} />
 
       {data.sheets.map(sh => (

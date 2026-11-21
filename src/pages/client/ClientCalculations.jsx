@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { Calculator, ChevronDown, ChevronUp, Printer, CheckCircle2, PencilLine } from 'lucide-react';
 import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
 import { buildStatementHtml, openStatement } from '../../lib/iitStatement';
+import TaxBalancePayment from '../../components/TaxBalancePayment';
+import { loadBalancePayments } from '../../lib/taxBalance';
 
 const AMT_LABEL = { payable: 'tax payable', refund: 'refund', nil: 'nil tax', instalment: 'per quarter' };
 
@@ -14,12 +16,15 @@ export default function ClientCalculations() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [client, setClient] = useState(null);
+  const [paid, setPaid] = useState({});   // V71: tax payments per Y/A
+  const loadPaid = (cid) => loadBalancePayments(cid).then(setPaid).catch(() => {});
 
   useEffect(() => {
     const load = async () => {
       const { data: cl } = await supabase.from('clients').select('id, full_name, tin, nic, address, employer, resident_status').eq('id', profile?.client_id).single();
       if (!cl) { setLoading(false); return; }
       setClient(cl);
+      loadPaid(cl.id);
       const { data } = await supabase
         .from('iit_calculations')
         .select('*')
@@ -84,6 +89,11 @@ export default function ClientCalculations() {
                   {expanded === calc.id ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />}
                 </div>
 
+                {isFinal && sm.status === 'payable' && sm.kind !== 'quarterly' && (
+                  <div className="px-4 pb-3">
+                    <TaxBalancePayment role="client" calc={calc} clientId={calc.client_id} amountDue={Math.abs(sm.amount)} payment={paid[`${calc.client_id}|${calc.year}`]} onChange={() => loadPaid(calc.client_id)} />
+                  </div>
+                )}
                 {expanded === calc.id && (
                   <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-3">
                     {!isFinal && <Review calc={calc} onDone={(p) => patch(calc.id, p)} />}
