@@ -10,6 +10,36 @@ import DueDatesWidget from '../../components/DueDatesWidget';
 import { ReturnStepper } from '../../components/ReturnTracker';
 import InstallAppCard from '../../components/InstallAppCard';
 import TaxPaymentsDue from '../../components/TaxPaymentsDue';
+
+// V69: engagement letter / missing documents waiting for the client
+function PendingLetters({ clientId }) {
+  const [l, setL] = useState([]);
+  const [miss, setMiss] = useState(0);
+  useEffect(() => {
+    if (!clientId) return;
+    supabase.from('engagement_letters').select('id, letter_no, title, share_token').eq('status', 'sent').then(({ data }) => setL(data ?? []), () => {});
+    supabase.from('doc_checklist_items').select('id', { count: 'exact', head: true }).eq('status', 'needed').then(({ count }) => setMiss(count ?? 0), () => {});
+  }, [clientId]);
+  if (!l.length && !miss) return null;
+  return (
+    <div className="space-y-2">
+      {l.map(x => (
+        <Link key={x.id} to={`/e/${x.share_token}`} className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 hover:shadow-sm">
+          <span className="text-2xl">✍️</span>
+          <span className="flex-1"><b className="block text-amber-900">Please sign your engagement letter</b><span className="text-xs text-amber-800">{x.letter_no} · services, fees &amp; terms · කරුණාකර අත්සන් කරන්න</span></span>
+          <ChevronRight size={18} className="text-amber-700" />
+        </Link>
+      ))}
+      {miss > 0 && (
+        <Link to="/client/documents" className="flex items-center gap-3 rounded-2xl border border-primary-200 bg-primary-50 p-4 hover:shadow-sm">
+          <span className="text-2xl">📋</span>
+          <span className="flex-1"><b className="block text-primary-900">{miss} document{miss > 1 ? 's' : ''} needed for your tax return</b><span className="text-xs text-primary-800">Tap to see the list and upload · අවශ්‍ය ලේඛන upload කරන්න</span></span>
+          <ChevronRight size={18} className="text-primary-700" />
+        </Link>
+      )}
+    </div>
+  );
+}
 import { PushPrompt } from '../../components/PushNotifications';
 import { myPlans, rsPlan } from '../../lib/plans';
 import { FolderLock, UploadCloud, MessageCircle, Zap, CalendarCheck, FileBadge2 } from 'lucide-react';
@@ -102,6 +132,7 @@ export default function ClientDashboard() {
         </Link>
       )}
 
+      <PendingLetters clientId={profile?.client_id} />
       <TaxPaymentsDue clientId={profile?.client_id} />
 
       {data.sheets.map(sh => (
