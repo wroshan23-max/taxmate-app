@@ -1,10 +1,10 @@
 import { waNumber } from '../lib/share';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { buildStatementHtml, openStatement, FIRM } from '../lib/iitStatement';
 import { buildInvoiceHtml, openInvoice } from '../lib/invoice';
-import { Printer, CheckCircle2, PencilLine, Loader2 } from 'lucide-react';
+import { Printer, CheckCircle2, PencilLine, Loader2, CreditCard, ShieldCheck, XCircle, Clock } from 'lucide-react';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DOC_WIDTH = 820;
@@ -67,6 +67,8 @@ export default function SharedDocument() {
           <button onClick={download} className="btn-primary ml-auto"><Printer size={15} /> Download / Print PDF</button>
         </div>
 
+        {!isCalc && <PayPanel token={token} invoice={doc.invoice} onPaid={() => setDoc(d => ({ ...d, invoice: { ...d.invoice, status: 'paid' } }))} />}
+
         {isCalc && doc.calc.status !== 'final' && <ReviewPanel token={token} calc={doc.calc} onDone={(r) => setDoc(d => ({ ...d, calc: { ...d.calc, ...r } }))} />}
 
         <div ref={wrapRef} className="card overflow-hidden" style={{ height: frameH * scale + 2 }}>
@@ -81,6 +83,78 @@ export default function SharedDocument() {
         <p className="text-center text-xs text-gray-400">Shared securely by {FIRM.name} · {FIRM.phone} · {FIRM.email}</p>
       </div>
     </Shell>
+  );
+}
+
+// V67 — pay the invoice by card / eZ Cash / mCash / internet banking straight from the link (PayHere)
+const rsAmt = (v) => `Rs. ${Number(v || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+async function payCall(body) {
+  const { data, error } = await supabase.functions.invoke('payhere', { body });
+  if (error) throw new Error('Could not reach the payment service. Please try again.');
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+function PayPanel({ token, invoice, onPaid }) {
+  const [sp] = useSearchParams();
+  const order = sp.get('payment'), cancelled = sp.get('cancelled');
+  const [info, setInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    let stop = false, timer;
+    const look = async (n) => {
+      try {
+        const i = await payCall({ action: 'link_info', token, order_id: order || undefined });
+        if (stop) return;
+        setInfo(i); setTries(n);
+        if (i.payment?.status === 'paid' || i.status === 'paid') { onPaid(); return; }
+        // just came back from PayHere: the confirmation can take a few seconds
+        if (order && !cancelled && i.payment?.status === 'pending' && n < 12) timer = setTimeout(() => look(n + 1), 2500);
+      } catch { if (!stop) setInfo({ online: false }); }
+    };
+    look(0);
+    return () => { stop = true; clearTimeout(timer); };
+  }, [token, order, cancelled]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pay = async () => {
+    setBusy(true); setErr('');
+    try {
+      const d = await payCall({ action: 'checkout_link', token });
+      const form = document.createElement('form');
+      form.method = 'POST'; form.action = d.action_url;
+      for (const [k, v] of Object.entries(d.fields)) { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; form.appendChild(i); }
+      document.body.appendChild(form); form.submit();
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  if (!info) return null;
+  const st = info.payment?.status;
+  if (invoice.status === 'paid' || info.status === 'paid' || st === 'paid') return (
+    <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+      <CheckCircle2 size={16} className="mr-1 inline" /> <b>Paid — thank you!</b>{st === 'paid' ? ` We received ${rsAmt(info.payment.amount)}${info.payment.card ? ` (${info.payment.card})` : ''}. Your receipt is the paid invoice above.` : ' This invoice is settled.'}
+    </div>
+  );
+  if (!info.payable) return null;
+  return (
+    <div className="space-y-2">
+      {order && cancelled && <div className="rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-700"><XCircle size={15} className="mr-1 inline text-gray-500" /> The payment was cancelled — nothing was charged. You can try again below.</div>}
+      {order && !cancelled && st === 'pending' && (tries < 12
+        ? <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800"><Loader2 size={15} className="mr-1 inline animate-spin" /> Confirming your payment with the bank…</div>
+        : <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"><Clock size={15} className="mr-1 inline" /> Your payment is still being confirmed. If money was taken from your account, it will show as paid here shortly — no need to pay again.</div>)}
+      {order && !cancelled && (st === 'failed' || st === 'cancelled') && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"><XCircle size={15} className="mr-1 inline" /> The payment did not go through. Please try again or use bank transfer.</div>}
+      {info.online && !(order && !cancelled && st === 'pending') && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-primary-200 bg-white p-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-xs text-gray-500">Amount due</div>
+            <div className="text-xl font-black text-primary-800">{rsAmt(info.amount)}</div>
+            <div className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-500"><ShieldCheck size={12} className="text-green-600" /> Secure payment by PayHere — Visa, Mastercard, AMEX, eZ Cash, mCash, internet banking{info.sandbox ? ' · TEST MODE' : ''}</div>
+          </div>
+          <button type="button" onClick={pay} disabled={busy} className="btn-primary px-5 py-2.5 text-base">{busy ? <Loader2 size={17} className="animate-spin" /> : <CreditCard size={17} />} Pay now</button>
+          {err && <div className="w-full text-sm text-red-600">{err}</div>}
+        </div>
+      )}
+    </div>
   );
 }
 
