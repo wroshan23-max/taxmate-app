@@ -60,6 +60,7 @@ const ClientPayroll = lazyPage(() => import('./pages/client/ClientPayroll'));
 const ServiceRequests = lazyPage(() => import('./pages/admin/ServiceRequests'));
 const CallLog = lazyPage(() => import('./pages/admin/CallLog'));
 const DocChecklistBoard = lazyPage(() => import('./pages/admin/DocChecklistBoard'));
+const WorkBoard = lazyPage(() => import('./pages/admin/WorkBoard'));
 const ClientServices = lazyPage(() => import('./pages/client/ClientServices'));
 const TaxCalendar = lazyPage(() => import('./pages/TaxCalendar'));
 const ClientDashboard = lazyPage(() => import('./pages/client/ClientDashboard'));
@@ -107,6 +108,13 @@ function ProtectedAdmin({ children }) {
   if (VIEW_AS && profile?.viewAsError) return <ViewAsProblem msg={profile.viewAsError} />;
   if (!isAdmin) return <Navigate to="/client" replace />;
   if (!has2fa) return <MfaSetupScreen />;          // admins must use two-step login
+  return children;
+}
+
+// V70: pages only a full admin (owner) can open — staff are sent to the dashboard
+function OwnerOnly({ children }) {
+  const { profile } = useAuth();
+  if (profile?.staff_level === 'staff') return <Navigate to="/admin" replace />;
   return children;
 }
 
@@ -224,7 +232,7 @@ export default function App() {
         <Route path="calculator" element={<Calculator />} />
         <Route path="tax-returns" element={<TaxReturns />} />
         <Route path="tax-payments" element={<TaxPaymentsDuePage />} />
-        <Route path="vat" element={<VatInvoicing />} />
+        <Route path="vat" element={<OwnerOnly><VatInvoicing /></OwnerOnly>} />
         <Route path="assets" element={<AssetStatements />} />
         <Route path="calendar" element={<TaxCalendar role="admin" />} />
         <Route path="ird-codes" element={<IrdCodes />} />
@@ -233,13 +241,14 @@ export default function App() {
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
         <Route path="messages" element={<AdminMessages />} />
-        <Route path="activity" element={<Activity />} />
+        <Route path="activity" element={<OwnerOnly><Activity /></OwnerOnly>} />
         <Route path="payments" element={<AdminPayments />} />
-        <Route path="subscriptions" element={<AdminSubscriptions />} />
+        <Route path="subscriptions" element={<OwnerOnly><AdminSubscriptions /></OwnerOnly>} />
         <Route path="service-requests" element={<ServiceRequests />} />
         <Route path="calls" element={<CallLog />} />
         <Route path="doc-checklist" element={<DocChecklistBoard />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="settings" element={<OwnerOnly><Settings /></OwnerOnly>} />
+        <Route path="work" element={<WorkBoard />} />
       </Route>
 
       {/* Client routes */}
