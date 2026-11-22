@@ -8,6 +8,7 @@ import { calcMessage } from '../lib/share';
 import SendMenu from './SendMenu';
 import { recipientsOf } from '../lib/contacts';
 import TaxBalancePayment from './TaxBalancePayment';
+import { packageFit, adminSetPackage } from '../lib/packages';
 import { loadBalancePayments } from '../lib/taxBalance';
 
 const AMT_STYLE = { payable: 'text-red-700', refund: 'text-green-700', nil: 'text-gray-500', instalment: 'text-primary-700' };
@@ -104,6 +105,15 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
     patchRow(r.id, { status: 'final', finalized_at: now });
     await syncTaxReturn(r);
     toast.success('Marked as FINAL — tax return figures updated');
+    // V74: a "Nil return" package with income tax in the final computation → move it to the suitable package
+    try {
+      const { data: pk } = await supabase.from('client_packages').select('package_key').eq('client_id', r.client_id).eq('year', r.year).maybeSingle();
+      const fit = pk?.package_key === 'nil' ? packageFit({ ...r, status: 'final' }, r.clients || {}) : null;
+      if (fit?.liable) {
+        await adminSetPackage(r.client_id, r.year, fit.suggested, `Computation shows income tax of Rs. ${fit.tax.toLocaleString('en-LK')} (${fit.why}) — a Nil return is not suitable.`, true);
+        toast(`Package moved from Nil return to the suitable package (${fit.why}) — the client was told`, { icon: '🔁', duration: 6000 });
+      }
+    } catch { /* packages not set up yet */ }
   };
 
   const reopen = async (r) => {
