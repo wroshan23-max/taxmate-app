@@ -19,6 +19,7 @@ const SharedTaxNotice = lazyPage(() => import('./pages/SharedTaxNotice'));
 const SharedInvoice = lazyPage(() => import('./pages/SharedInvoice'));
 const SignEngagement = lazyPage(() => import('./pages/SignEngagement'));
 const ClientEngagement = lazyPage(() => import('./pages/client/ClientEngagement'));
+const ClientPackages = lazyPage(() => import('./pages/client/ClientPackages'));
 const VatWorkspace = lazyPage(() => import('./pages/VatWorkspace'));
 const ClientVat = lazyPage(() => import('./pages/client/ClientVat'));
 const VatInvoicing = lazyPage(() => import('./pages/admin/VatInvoicing'));
@@ -274,6 +275,7 @@ export default function App() {
         <Route path="invite" element={<ClientInvite />} />
         <Route path="documents" element={<ClientDocuments />} />
         <Route path="engagement" element={<ClientEngagement />} />
+        <Route path="packages" element={<ClientPackages />} />
         <Route path="invoices" element={<ClientInvoices />} />
         <Route path="profile" element={<ClientProfile />} />
         <Route path="updates" element={<ClientTaxUpdates />} />
