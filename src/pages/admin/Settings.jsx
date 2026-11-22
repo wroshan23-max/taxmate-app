@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { payhereStatus } from '../../lib/payments';
 import { TwoFactorCard, PinCard } from '../../components/TwoFactor';
 import toast from 'react-hot-toast';
-import { Crown, Cloud } from 'lucide-react';
+import { Crown, Cloud, Package } from 'lucide-react';
 import { loadPlans, savePlans, DEFAULT_PLANS, planStyle, loadAddons, saveAddons, addonEmoji } from '../../lib/plans';
 import { DEFAULT_CALC_SETTINGS } from '../../lib/calcCredits';
 import { Building2, Receipt, Landmark, Users, UserCog, Save, Plus, Trash2, ArrowUp, ArrowDown, RotateCcw, ShieldCheck, Shield, UserX, XCircle, RefreshCw, AlertTriangle, MonitorSmartphone, Calculator as CalcIcon, CreditCard, ExternalLink, Mail, Send, Play } from 'lucide-react';
@@ -18,6 +18,7 @@ import MessageMenu from '../../components/MessageMenu';
 import ChangePassword from '../../components/ChangePassword';
 import StorageSettings from '../../components/StorageSettings';
 import { PushSettingsCard } from '../../components/PushNotifications';
+import PackagesSettings from '../../components/PackagesSettings';
 
 const TABS = [
   ['firm', Building2, 'Firm Profile'],
@@ -27,6 +28,7 @@ const TABS = [
   ['portal', MonitorSmartphone, 'Client Portal'],
   ['payments', CreditCard, 'Payments'],
   ['plans', Crown, 'Plans'],
+  ['packages', Package, 'Packages'],
   ['storage', Cloud, 'File storage'],
   ['email', Mail, 'Email reminders'],
   ['me', UserCog, 'My Account'],
@@ -56,6 +58,7 @@ export default function Settings() {
       {tab === 'portal' && <PortalTab />}
       {tab === 'payments' && <PaymentsTab />}
       {tab === 'plans' && <PlansTab />}
+      {tab === 'packages' && <PackagesSettings />}
       {tab === 'storage' && <StorageSettings />}
       {tab === 'email' && <EmailTab />}
       {tab === 'me' && <MyAccountTab />}
@@ -640,6 +643,7 @@ export const PORTAL_FEATURES = [
   ['summary_letters', '📄', 'Income & Tax summary letters', 'Clients request a letter for visa / bank loans; you issue it (free or with a fee).'],
   ['tax_reviews', '📈', 'Annual Tax Review', 'Clients request a yearly review report (this year vs last, how to save); you set the fee when issuing.'],
   ['plans', '👑', 'Monthly plans', 'Clients see the Basic / Standard / Premium plans and can request one.'],
+  ['packages', '📦', 'Tax packages', 'Clients choose a yearly Tax & Accounting package (prices in Settings → Packages).'],
   ['referrals', '🎁', 'Invite friends', 'Each client gets a personal invite link; friends who register are linked to them.'],
 ];
 

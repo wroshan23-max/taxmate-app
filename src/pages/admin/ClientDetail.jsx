@@ -26,6 +26,7 @@ import DocumentVault from '../../components/DocumentVault';
 import DocChecklistAdmin from '../../components/DocChecklistAdmin';
 import EngagementAdmin from '../../components/EngagementAdmin';
 import ClientWorkCard from '../../components/ClientWorkCard';
+import ClientPackageAdmin from '../../components/ClientPackageAdmin';
 import IrdDetailsAdmin from '../../components/IrdDetailsAdmin';
 import SummaryLettersAdmin from '../../components/SummaryLettersAdmin';
 import RamisDraftAdmin from '../../components/RamisDraftAdmin';
@@ -312,6 +313,7 @@ export default function ClientDetail() {
         </div>
       )}
       {tab === 'overview' && <FamilyAdmin client={client} userId={user?.id} />}
+      {tab === 'overview' && <ClientPackageAdmin client={client} />}
       {tab === 'overview' && <ClientWorkCard client={client} />}
       {tab === 'overview' && <EngagementAdmin client={client} />}
       {tab === 'overview' && <SubscriptionAdmin client={client} userId={user?.id} />}
