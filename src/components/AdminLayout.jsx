@@ -10,14 +10,14 @@ import { loadPayFlag } from '../lib/share';
 import {
   LayoutDashboard, Users, Calculator, FileText, Receipt,
   Bell, Settings, LogOut, Menu, X, ChevronRight,
-  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet, PhoneCall, ListChecks, KanbanSquare
+  MessageSquarePlus, Megaphone, Landmark, CalendarDays, MessageCircle, Activity, CreditCard, CalendarCheck, Crown, Hash, ListTree, Wallet, ListChecks, KanbanSquare, BookUser
 } from 'lucide-react';
 
 const nav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/admin/clients', icon: Users, label: 'Clients' },
   { to: '/admin/work', icon: KanbanSquare, label: 'Work Board' },
-  { to: '/admin/calls', icon: PhoneCall, label: 'Call Log' },
+  { to: '/admin/contacts', icon: BookUser, label: 'Contacts', badge: true },
   { to: '/admin/calculator', icon: Calculator, label: 'IIT Calculator' },
   { to: '/admin/tax-returns', icon: FileText, label: 'Tax Returns' },
   { to: '/admin/doc-checklist', icon: ListChecks, label: 'Docs Checklist' },
@@ -27,7 +27,6 @@ const nav = [
   { to: '/admin/calendar', icon: CalendarDays, label: 'Tax Calendar' },
   { to: '/admin/ird-codes', icon: Hash, label: 'IRD Payment Codes' },
   { to: '/admin/activity-codes', icon: ListTree, label: 'RAMIS Activity Codes' },
-  { to: '/admin/messages', icon: MessageCircle, label: 'Messages', badge: true },
   { to: '/admin/invoices', icon: Receipt, label: 'Invoices' },
   { to: '/admin/payments', icon: CreditCard, label: 'Payments' },
   { to: '/admin/subscriptions', icon: Crown, label: 'Subscriptions', owner: true },
