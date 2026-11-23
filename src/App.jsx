@@ -24,7 +24,6 @@ const VatWorkspace = lazyPage(() => import('./pages/VatWorkspace'));
 const ClientVat = lazyPage(() => import('./pages/client/ClientVat'));
 const VatInvoicing = lazyPage(() => import('./pages/admin/VatInvoicing'));
 const Register = lazyPage(() => import('./pages/Register'));
-const AdminMessages = lazyPage(() => import('./pages/admin/Messages'));
 const Activity = lazyPage(() => import('./pages/admin/Activity'));
 const ClientMessages = lazyPage(() => import('./pages/client/ClientMessages'));
 const ClientSecurity = lazyPage(() => import('./pages/client/ClientSecurity'));
@@ -59,7 +58,7 @@ const AdminSubscriptions = lazyPage(() => import('./pages/admin/Subscriptions'))
 const ClientPlan = lazyPage(() => import('./pages/client/ClientPlan'));
 const ClientPayroll = lazyPage(() => import('./pages/client/ClientPayroll'));
 const ServiceRequests = lazyPage(() => import('./pages/admin/ServiceRequests'));
-const CallLog = lazyPage(() => import('./pages/admin/CallLog'));
+const ContactsHub = lazyPage(() => import('./pages/admin/ContactsHub'));   // V75: phone book + groups + broadcast + Call Log + Messages
 const DocChecklistBoard = lazyPage(() => import('./pages/admin/DocChecklistBoard'));
 const WorkBoard = lazyPage(() => import('./pages/admin/WorkBoard'));
 const ClientServices = lazyPage(() => import('./pages/client/ClientServices'));
@@ -72,6 +71,13 @@ const ClientProfile = lazyPage(() => import('./pages/client/ClientProfile'));
 const ClientTaxUpdates = lazyPage(() => import('./pages/client/ClientTaxUpdates'));
 const InvitePage = lazyPage(() => import('./pages/AccountLinks').then(m => ({ default: m.InvitePage })));
 const ResetPasswordPage = lazyPage(() => import('./pages/AccountLinks').then(m => ({ default: m.ResetPasswordPage })));
+
+// V75 — old addresses (/admin/calls, /admin/messages, push links) → the Contacts hub, keeping ?client= / ?tab= / ?new=
+function HubRedirect({ view }) {
+  const loc = useLocation();
+  const p = new URLSearchParams(loc.search); p.set('view', view);
+  return <Navigate replace to={`/admin/contacts?${p.toString()}`} />;
+}
 
 function LoadingScreen() {
   return (
@@ -242,12 +248,13 @@ export default function App() {
         <Route path="invoices" element={<Invoices />} />
         <Route path="requests" element={<UpdateRequests />} />
         <Route path="updates" element={<TaxUpdates />} />
-        <Route path="messages" element={<AdminMessages />} />
+        <Route path="messages" element={<HubRedirect view="messages" />} />
         <Route path="activity" element={<OwnerOnly><Activity /></OwnerOnly>} />
         <Route path="payments" element={<AdminPayments />} />
         <Route path="subscriptions" element={<OwnerOnly><AdminSubscriptions /></OwnerOnly>} />
         <Route path="service-requests" element={<ServiceRequests />} />
-        <Route path="calls" element={<CallLog />} />
+        <Route path="calls" element={<HubRedirect view="calls" />} />
+        <Route path="contacts" element={<ContactsHub />} />
         <Route path="doc-checklist" element={<DocChecklistBoard />} />
         <Route path="settings" element={<OwnerOnly><Settings /></OwnerOnly>} />
         <Route path="work" element={<WorkBoard />} />
