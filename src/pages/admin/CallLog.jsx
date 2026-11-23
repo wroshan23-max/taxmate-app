@@ -334,7 +334,7 @@ function Reports({ rows, label }) {
 }
 
 // ─── Page ─────────────────────────────────────────────────
-export default function CallLog() {
+export default function CallLog({ embedded = false }) {
   const [sp, setSp] = useSearchParams();
   const tab = sp.get('tab') || 'today';
   const [period, setPeriod] = useState('month');
@@ -344,7 +344,7 @@ export default function CallLog() {
   const [q, setQ] = useState('');
   const [fStatus, setFStatus] = useState('');
   const [fSvc, setFSvc] = useState('');
-  const [form, setForm] = useState(sp.get('new') ? {} : null);
+  const [form, setForm] = useState(sp.get('new') ? { ...(sp.get('phone') ? { phone: sp.get('phone'), channel: 'outgoing' } : {}), ...(sp.get('name') ? { name: sp.get('name') } : {}) } : null);
   const [conv, setConv] = useState(null);
 
   const range = useMemo(() => periodRange(tab === 'today' ? 'today' : period), [tab, period]);
@@ -354,7 +354,7 @@ export default function CallLog() {
       .catch((e) => setErr(/call_logs|relation|schema cache/i.test(e.message) ? 'The Call Log database is not set up yet — run the V66 migration in Supabase.' : e.message));
   }, [range]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (sp.get('new')) { const n = new URLSearchParams(sp); n.delete('new'); setSp(n, { replace: true }); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (sp.get('new')) { const n = new URLSearchParams(sp); ['new', 'phone', 'name'].forEach((k) => n.delete(k)); setSp(n, { replace: true }); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTab = (t) => { const n = new URLSearchParams(sp); n.set('tab', t); setSp(n, { replace: true }); };
   const upsert = (row) => {
@@ -379,8 +379,9 @@ export default function CallLog() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-1">
+          {embedded ? <p className="text-sm text-gray-500">Every call and enquiry — who called, what they need, and when to call back.</p> : <>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-primary-800"><PhoneCall size={22} className="text-gold-500" /> Call Log</h1>
-          <p className="text-sm text-gray-500">Every call and enquiry — who called, what they need, and when to call back.</p>
+          <p className="text-sm text-gray-500">Every call and enquiry — who called, what they need, and when to call back.</p></>}
         </div>
         <button type="button" onClick={() => setForm({})} className="btn-primary px-4 py-2.5 text-base shadow-md"><Plus size={18} /> Log a call</button>
       </div>

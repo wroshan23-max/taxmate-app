@@ -328,7 +328,7 @@ export default function ClientDetail() {
             <div className="text-sm font-semibold text-gray-800">Two-step login (PIN / authenticator app)</div>
             <div className="text-xs text-gray-500">If the client forgot their PIN or lost their phone, reset it here. They sign in with their password and set it up again.</div>
           </div>
-          <Link to={`/admin/messages?client=${id}`} className="btn-secondary text-xs py-1.5"><MessageCircle size={13} /> Message</Link>
+          <Link to={`/admin/contacts?view=messages&client=${id}`} className="btn-secondary text-xs py-1.5"><MessageCircle size={13} /> Message</Link>
           <button className="btn-secondary text-xs py-1.5" onClick={async () => {
             if (!window.confirm(`Reset two-step login for ${client.full_name}?`)) return;
             const { data, error } = await supabase.rpc('admin_reset_mfa', { p_client: id });

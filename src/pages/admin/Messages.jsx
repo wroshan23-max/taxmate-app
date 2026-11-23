@@ -18,7 +18,7 @@ const Avatar = ({ c, size = 'w-10 h-10 text-sm' }) => (
   <div className={`${size} rounded-full bg-gradient-to-br ${tone(c?.id)} text-white font-bold flex items-center justify-center flex-shrink-0`}>{initials(c?.full_name)}</div>
 );
 
-export default function Messages() {
+export default function Messages({ embedded = false }) {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [tab, setTab] = useState(params.get('tab') === 'announcements' ? 'announcements' : 'chats');
@@ -28,6 +28,7 @@ export default function Messages() {
   const [picker, setPicker] = useState(false);
   const [globalOff, setGlobalOff] = useState(false);
   const sel = params.get('client');
+  const keep = embedded ? { view: 'messages' } : {};   // V75: stay on the Contacts hub's Messages tab
 
   const load = useCallback(async () => {
     const [{ data: cl }, { data: m }, { data: st }] = await Promise.all([
@@ -52,19 +53,19 @@ export default function Messages() {
       .filter(t => !q || `${byId[t.client_id].full_name} ${byId[t.client_id].mobile ?? ''}`.toLowerCase().includes(q.toLowerCase()));
   }, [msgs, byId, q]);
   const unreadTotal = msgs.filter(x => x.sender_role === 'client' && !x.read_at).length;
-  const open = (id) => { setParams(id ? { client: id } : {}); setPicker(false); };
+  const open = (id) => { setParams(id ? { ...keep, client: id } : keep); setPicker(false); };
   const current = sel ? byId[sel] : null;
 
   return (
     <div className="space-y-4">
       <div className="flex items-end gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-primary-800">💬 Messages</h1>
+          {!embedded && <h1 className="text-2xl font-bold text-primary-800">💬 Messages</h1>}
           <p className="text-sm text-gray-500">Private chats with clients and announcements to everyone</p>
         </div>
         <div className="ml-auto flex gap-1 bg-gray-100 p-1 rounded-xl">
           {[['chats', MessageCircle, 'Chats', unreadTotal], ['announcements', Megaphone, 'Announcements', 0]].map(([k, Icon, label, n]) => (
-            <button key={k} onClick={() => { setTab(k); setParams(k === 'announcements' ? { tab: k } : {}); }}
+            <button key={k} onClick={() => { setTab(k); setParams(k === 'announcements' ? { ...keep, tab: k } : keep); }}
               className={`px-3.5 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1.5 transition-all ${tab === k ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               <Icon size={15} /> {label}{n > 0 && <span className="text-[10px] font-black bg-red-500 text-white rounded-full px-1.5 min-w-[18px]">{n}</span>}
             </button>
