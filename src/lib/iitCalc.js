@@ -24,12 +24,16 @@ export const SLABS_2425 = [
   { limit: Infinity, rate: 0.36 },
 ];
 
+// Y/A 2023/24 — Inland Revenue (Amendment) Act No. 45 of 2022: First Schedule para 1(1C) (from 1 April 2023) —
+// same Rs.500,000 bands; Fifth Schedule para 2(a)(iv) personal relief Rs.1,200,000. Foreign-currency income
+// remitted through a bank exempt (Third Schedule para (u), until 31 March 2025). AIT on interest 5%.
 export const TAX_YEARS = {
-  '2024/25': { pr: PR_2425, slabs: SLABS_2425, foreignBankExempt: true,  slabText: '6% · 12% · 18% · 24% · 30% · 36% (Rs.500,000 bands)' },
-  '2025/26': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%' },
+  '2023/24': { pr: PR_2425, slabs: SLABS_2425, foreignBankExempt: true,  slabText: '6% · 12% · 18% · 24% · 30% · 36% (Rs.500,000 bands)', interestWht: 0.05, law: 'Act No. 45 of 2022' },
+  '2024/25': { pr: PR_2425, slabs: SLABS_2425, foreignBankExempt: true,  slabText: '6% · 12% · 18% · 24% · 30% · 36% (Rs.500,000 bands)', interestWht: 0.05, law: 'Act No. 45 of 2022' },
+  '2025/26': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%', interestWht: 0.10, law: 'Act No. 02 of 2025' },
   // 2026/27: rates & relief unchanged; Inland Revenue (Amendment) Act No. 11 of 2026 — gains on investment assets
   // realised by individuals from 3 June 2026 taxed at 15% (10% before); quarterly instalments based on the previous year's tax.
-  '2026/27': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%', gain15From: '2026-06-03' },
+  '2026/27': { pr: PR,      slabs: SLABS,      foreignBankExempt: false, slabText: '6% (first Rs.1M) · 18% · 24% · 30% · 36%', gain15From: '2026-06-03', interestWht: 0.10, law: 'Act No. 11 of 2026' },
 };
 
 export const yearCfg = (year) => TAX_YEARS[year] ?? TAX_YEARS['2026/27'];
@@ -143,14 +147,14 @@ export function computeQuarterly(raw = {}) {
   return { quarter, A, C, B, instalment: Math.max(0, Math.round((A - C) / B)) };
 }
 
-// ─── IIT Return (cage-wise, mixed income) — Y/A 2024/25, 2025/26, 2026/27 ────
+// ─── IIT Return (cage-wise, mixed income) — Y/A 2023/24, 2024/25, 2025/26, 2026/27 ────
 // Sources: IRD guides Asmt_IIT_004_2024_2025 & Asmt_IIT_004_2025_2026; Inland Revenue
 // (Amendment) Act No. 02 of 2025 (rates, Rs.1.8M relief, 15% max on foreign-currency income).
 // Foreign-currency income remitted through a bank ("Fx"):
-//   2024/25  → exempt (Cage 210)
+//   2023/24, 2024/25 → exempt (Cage 210)
 //   2025/26+ → declared under its own schedule (employment / business / other) but taxed at a
 //              maximum of 15%, stacked on top of local taxable income (Cage 809B).
-export const RETURN_YEARS = ['2024/25', '2025/26', '2026/27'];
+export const RETURN_YEARS = ['2023/24', '2024/25', '2025/26', '2026/27'];
 // Income fields that are monthly amounts when the return is entered "per month" (×12)
 export const RETURN_MONTHLY_KEYS = ['empPrimary', 'empSecondary', 'empBenefits', 'empFx', 'bizProfit', 'bizPartner', 'bizFx',
   'interest', 'rentGross', 'othInv', 'othInc', 'forTaxable', 'forFx'];
@@ -220,6 +224,8 @@ export function computeReturn(year, f = {}) {
     { cage: '903', label: 'APIT — primary employment', amt: n('apitPrimary') },
     { cage: '904', label: 'APIT — secondary employment', amt: n('apitSecondary') },
     { cage: '905', label: 'Tax deducted on terminal benefits', amt: n('termTaxDed') },
+    { cage: '906', label: "Partner's share of partnership tax", amt: 0 },
+    { cage: '907', label: 'AIT from the partnership', amt: n('ptnAit') },
     { cage: '908', label: 'AIT/WHT deducted (interest, rent, fees, other)', amt: n('whtInterest') + n('whtRent') + n('whtService') + n('whtOther') },
     { cage: '909/910', label: 'Investment gain tax paid', amt: n('gainTaxPaid') },
     { cage: '911', label: 'Self-assessment instalments paid', amt: n('instalments') },
@@ -230,6 +236,13 @@ export function computeReturn(year, f = {}) {
     const forShare = localAss > 0 ? prog.tax * (n('forTaxable') / localAss) : 0;
     credits[0].amt = Math.min(credits[0].amt, Math.round(fx.tax + forShare));
   }
+  // Cage 906 (Schedule 9B): partner's share of partnership tax — IRA s.55(4): treated as paid by the partner,
+  // no refund, the unused part is carried forward to the next year. So it only reduces tax still payable.
+  const ptnAvail = n('ptnTax') + n('ptnTaxBF');
+  const otherCredits = credits.reduce((s, x) => s + x.amt, 0);
+  const ptnUsed = Math.min(ptnAvail, Math.max(0, cage170 - otherCredits));
+  credits.find(x => x.cage === '906').amt = ptnUsed;
+  const ptnCF = ptnAvail - ptnUsed;
   const cage180 = credits.reduce((s, x) => s + x.amt, 0);
   const balance = cage170 - cage180;
 
@@ -246,7 +259,7 @@ export function computeReturn(year, f = {}) {
     f: Object.fromEntries(Object.keys(f).filter(k => k !== 'form' && k !== 'period').map(k => [k, n(k)])),
     empLocal, empFx, bizLocal, bizFx, forFx, fxTotal, fxExemptAmt, localAss,
     cage10, cage20, bizGross, bizLossUsed, cage30, cage40, cage50, rentRelief, prUsed, solarUsed, reliefs,
-    donUsed, donCap, cage100, cage120, taxableLocal, taxableFx, prog, fx, term, gainTax, cage170, credits, cage180, balance,
+    donUsed, donCap, cage100, cage120, taxableLocal, taxableFx, prog, fx, term, gainTax, cage170, credits, cage180, balance, ptnAvail, ptnUsed, ptnCF,
     cage210: n('forExempt') + n('othExempt') + fxExemptAmt, sources,
     effRate: cage50 > 0 ? (cage170 / cage50 * 100).toFixed(2) : '0.00',
     taxStatus: balance > 0.5 ? 'payable' : balance < -0.5 ? 'refund' : 'nil',
@@ -327,7 +340,9 @@ export function computePersonal(year, x = {}) {
   const foreignTaxable = residency !== 'nonresident';               // non-residents: only Sri Lankan-source income
 
   const salary = n('salary'), business = n('business'), rent = n('rent'), interest = n('interest'), otherLocal = n('otherLocal');
-  const foreignFx = foreignTaxable ? n('foreignFx') : 0;
+  // Y/A 2023/24 & 2024/25: foreign-currency income remitted through a bank is exempt (declared only)
+  const fxExempt = cfg.foreignBankExempt ? (foreignTaxable ? n('foreignFx') : 0) : 0;
+  const foreignFx = foreignTaxable && !cfg.foreignBankExempt ? n('foreignFx') : 0;
   const foreignOther = foreignTaxable ? n('foreignOther') : 0;
 
   const localAss = salary + business + rent + interest + otherLocal + foreignOther;   // normal progressive rates
@@ -355,15 +370,16 @@ export function computePersonal(year, x = {}) {
   const foreign = foreignStackTax(taxableLocal, taxableForeign);
   const tax = local.tax + foreign.tax;
 
-  const whtInterest = x.whtInterestAuto ? Math.round(interest * INTEREST_WHT) : 0;
+  const whtRate = cfg.interestWht ?? INTEREST_WHT;
+  const whtInterest = x.whtInterestAuto ? Math.round(interest * whtRate) : 0;
   const credits = n('apitPaid') + whtInterest + n('otherTaxPaid');
   const balance = tax - credits;
 
   return {
-    year, cfg, residency, salary, business, rent, interest, otherLocal, foreignFx, foreignOther,
+    year, cfg, residency, salary, business, rent, interest, otherLocal, foreignFx, foreignOther, fxExempt, whtRate,
     localAss, totalAss, rentRelief, prUsed, solarUsed, reliefs, donUsed: Math.round(donUsed), qp, deductions,
     taxableLocal, taxableForeign, taxable, local, foreign, tax, whtInterest, credits, balance,
-    afterTax: totalAss - tax,
+    afterTax: totalAss + fxExempt - tax,
     effRate: totalAss > 0 ? (tax / totalAss) * 100 : 0,
     marginal: Math.max(0, ...local.detail.map(b => b.rate), ...foreign.bands.map(b => b.rate)),
     mustFile: totalAss > cfg.pr,

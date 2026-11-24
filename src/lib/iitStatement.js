@@ -218,7 +218,7 @@ function annualBody(calc, client) {
     + footer(`ird.gov.lk — Y/A ${calc.year}: Personal Relief Rs. ${cfg.pr.toLocaleString('en-LK')}, rates ${cfg.slabText}`);
 }
 
-// ─── IIT Return computation (cage-wise) — Y/A 2024/25, 2025/26, 2026/27 ──
+// ─── IIT Return computation (cage-wise) — Y/A 2023/24, 2024/25, 2025/26, 2026/27 ──
 function returnBody(calc, client) {
   const year = calc.year || '2024/25';
   const r = computeReturn(year, calc.input_data);
@@ -269,7 +269,8 @@ function returnBody(calc, client) {
     ${f.termBen > 0 ? row('130', `Terminal benefits Rs. ${m(f.termBen)} (0% / 6% / 12%)`, m(r.term.tax)) : ''}
     ${f.invGain > 0 || g15 > 0 ? row('140', g15 > 0 ? `Gains on investment assets Rs. ${m(f.invGain || 0)} @ 10% + Rs. ${m(g15)} @ 15% (from 3 June 2026)` : `Gains on investment assets Rs. ${m(f.invGain)} @ 10%`, m(r.gainTax)) : ''}</table>` : '';
 
-  const credits = r.credits.filter(x => x.amt > 0).map(x => row(x.cage, x.label, neg(x.amt))).join('') || row('', 'No tax credits', m(0));
+  const credits = (r.credits.filter(x => x.amt > 0).map(x => row(x.cage, x.label, neg(x.amt))).join('') || row('', 'No tax credits', m(0)))
+    + (r.ptnCF > 0 ? row('', `Partnership tax not used this year — carried forward, not refunded (s.55(4))`, `<span style="color:#999">${m(r.ptnCF)}</span>`, 'det') : '');
   const exempt = r.cage210 > 0 ? `<table class="st">${row('210', 'Exempt income — declared, not taxed' + (r.fxExemptAmt > 0 ? ' (incl. foreign income remitted through a bank)' : ''), m(r.cage210), 'ex')}</table>` : '';
   const ystart = parseInt(year, 10);
 

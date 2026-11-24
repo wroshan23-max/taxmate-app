@@ -48,12 +48,14 @@ export const SECTIONS = [
     cols: [
       { key: 'type', en: 'Type', si: 'වර්ගය', type: 'select', required: true, options: ['Land', 'House & land', 'House', 'Apartment / Condominium', 'Building', 'Estate / Plantation', 'Other'] },
       { key: 'situated', en: 'Situated', si: 'පිහිටා ඇත්තේ', type: 'select', options: ['Sri Lanka', 'Outside Sri Lanka'], default: 'Sri Lanka' },
-      { key: 'location', en: 'Location / address', si: 'පිහිටීම / ලිපිනය', type: 'text', required: true, wide: true, placeholder: 'No. 12, Temple Rd, Nugegoda' },
+      { key: 'location', en: 'Situation of property (address)', si: 'දේපලේ පිහිටීම (ලිපිනය)', type: 'text', required: true, wide: true, placeholder: 'No. 12, Temple Rd, Nugegoda', cage: '1001' },
       { key: 'extent', en: 'Extent (perches / acres)', si: 'ප්‍රමාණය', type: 'text', placeholder: '10 perches' },
       { key: 'deed', en: 'Deed / Reg. No.', si: 'ඔප්පු අංකය', type: 'text', placeholder: 'B 4521' },
       { key: 'ownership', en: 'Ownership %', si: 'හිමිකම %', type: 'text', default: '100%' },
-      { key: 'acquired', en: 'Date acquired', si: 'අත්පත් කරගත් දිනය', type: 'date' },
-      VALUE,
+      { key: 'acquired', en: 'Date of acquisition', si: 'අත්පත් කරගත් දිනය', type: 'date', cage: '1002' },
+      // V76: RAMIS asks cost (1003) and market value (1004) separately
+      { key: 'value', en: 'Cost (Rs.)', si: 'පිරිවැය (රු.)', type: 'money', required: true, cage: '1003' },
+      { key: 'market', en: 'Market value (Rs.)', si: 'වෙළඳපොළ වටිනාකම (රු.)', type: 'money', cage: '1004', hint: 'Estimated value on 31 March. Leave blank if about the same as the cost.' },
     ],
   },
   {
@@ -73,15 +75,18 @@ export const SECTIONS = [
   },
   {
     key: 'deposits', part: 1, group: 'asset', code: 'B2',
-    en: 'Bank & Financial Institution Deposits', si: 'බැංකු හා මූල්‍ය ආයතන තැන්පතු',
-    help: 'Savings, current, fixed and foreign-currency accounts — balance on 31 March.',
-    helpSi: 'ඉතිරි කිරීම්, ජංගම, ස්ථාවර හා විදේශ මුදල් ගිණුම් — මාර්තු 31 ශේෂය.',
+    en: 'Bank Balances incl. Term Deposits', si: 'බැංකු ශේෂ හා කාලීන තැන්පතු',
+    help: 'Savings, current, fixed / term deposits and foreign-currency accounts — amount invested, interest for the year and balance on 31 March.',
+    helpSi: 'ඉතිරි කිරීම්, ජංගම, ස්ථාවර හා විදේශ මුදල් ගිණුම් — ආයෝජිත මුදල, වර්ෂයේ පොලිය හා මාර්තු 31 ශේෂය.',
     add: 'Add account', title: (r) => [r.bank, r.type, r.acno && `A/C ${r.acno}`].filter(Boolean).join(' · '),
     cols: [
-      { key: 'bank', en: 'Bank / institution', si: 'බැංකුව / ආයතනය', type: 'text', required: true, placeholder: 'Bank of Ceylon' },
+      { key: 'bank', en: 'Name of bank / financial institution', si: 'බැංකුව / මූල්‍ය ආයතනය', type: 'text', required: true, placeholder: 'Bank of Ceylon', cage: '1009' },
       { key: 'type', en: 'Account type', si: 'ගිණුම් වර්ගය', type: 'select', required: true, options: ['Savings', 'Current', 'Fixed deposit', 'Foreign currency', 'Other'] },
-      { key: 'acno', en: 'Account number', si: 'ගිණුම් අංකය', type: 'text', placeholder: 'e.g. 100234567890', maxLength: 40 },
-      { ...VALUE, en: 'Balance on 31 March (Rs.)', si: 'මාර්තු 31 ශේෂය (රු.)' },
+      { key: 'acno', en: 'Account number', si: 'ගිණුම් අංකය', type: 'text', placeholder: 'e.g. 100234567890', maxLength: 40, cage: '1010' },
+      // V76: RAMIS 1011 amount invested · 1012 interest · 1013 balance
+      { key: 'invested', en: 'Amount invested (Rs.)', si: 'ආයෝජිත මුදල (රු.)', type: 'money', cage: '1011', hint: 'Fixed / term deposit: the amount deposited. Savings or current: leave blank.' },
+      { key: 'interest', en: 'Interest for the year (Rs.)', si: 'වර්ෂයේ පොලිය (රු.)', type: 'money', cage: '1012', hint: 'Gross interest earned on this account during the year (before WHT / AIT).' },
+      { key: 'value', en: 'Balance on 31 March (Rs.)', si: 'මාර්තු 31 ශේෂය (රු.)', type: 'money', required: true, cage: '1013' },
     ],
   },
   {
@@ -248,6 +253,7 @@ export function carryForward(prevData, prevYear) {
       const prev = {};
       for (const c of moneyCols(s)) prev[c.key] = num(r[c.key]);
       const copy = { ...r, _id: rid(), _cf: prevYear, _prev: prev };
+      if (s.key === 'deposits') copy.interest = '';    // V76: interest is for one year only
       return copy;
     });
   }
@@ -349,12 +355,13 @@ function sectionTable(s, data, clean = false) {
   const textCols = s.cols.filter(c => c.type !== 'money');
   const total = s.key === 'business' ? t.business : t[s.key];
   const head = `<div class="ph"><span>${esc(s.code)}. ${esc(s.en)}</span>${clean ? '' : `<i>${esc(s.si)}</i>`}</div>`;
-  const th = `<tr><th class="n">#</th>${textCols.map(c => `<th>${esc(c.en)}</th>`).join('')}${money.map(c => `<th class="r">${esc(c.en)}</th>`).join('')}</tr>`;
+  const cg = (c) => (c.cage ? ` <span class="cf">[${esc(c.cage)}]</span>` : '');
+  const th = `<tr><th class="n">#</th>${textCols.map(c => `<th>${esc(c.en)}${cg(c)}</th>`).join('')}${money.map(c => `<th class="r">${esc(c.en)}${cg(c)}</th>`).join('')}</tr>`;
   if (!rows.length) return `${head}<table class="d">${th}<tr class="nil"><td class="n"></td><td colspan="${textCols.length + money.length}">Nil</td></tr></table>`;
   const body = rows.map((r, i) => `<tr><td class="n">${i + 1}</td>${textCols.map(c => cell(c, r)).join('')}${money.map(c => cell(c, r)).join('')}</tr>`).join('');
-  const totRow = s.key === 'business'
-    ? `<tr class="tot"><td></td><td colspan="${textCols.length}">Total</td><td class="r">${fmtMoney(t.business_capital)}</td><td class="r">${fmtMoney(t.business_current)}</td></tr>`
-    : `<tr class="tot"><td></td><td colspan="${textCols.length}">Total</td><td class="r">${fmtMoney(total)}</td></tr>`;
+  // one total per money column (deposits: invested · interest · balance; property: cost · market value)
+  const colSum = (c) => (c.key === 'value' ? total : rows.reduce((a, r) => a + num(r[c.key]), 0));
+  const totRow = `<tr class="tot"><td></td><td colspan="${textCols.length}">Total</td>${money.map(c => `<td class="r">${fmtMoney(colSum(c))}</td>`).join('')}</tr>`;
   return `${head}<table class="d">${th}${body}${totRow}</table>`;
 }
 
