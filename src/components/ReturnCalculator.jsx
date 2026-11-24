@@ -11,6 +11,7 @@ import { openStatement } from '../lib/iitStatement';
 import { sheetToReturnInput } from '../lib/incomeSheet';
 import { computeWorking, loadOffice } from '../lib/bizWorking';
 import { paidTotals } from '../lib/taxPayments';
+import { businessForReturn } from '../lib/bizAccounts';
 
 const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
 const pct = (r) => `${Math.round(r * 100)}%`;
@@ -49,6 +50,8 @@ const SECTIONS = [
     ['whtService', 'WHT / AIT on service fees — incl. 5% WHT from 3 Jun 2026 (908)', { annual: true }], ['whtOther', 'Other WHT (908)', { annual: true }],
     ['instalments', 'Quarterly instalments paid (911)', { annual: true }], ['ftc', 'Foreign tax credit (901)', { annual: true }],
     ['termTaxDed', 'Tax deducted on terminal benefits (905)', { annual: true }], ['gainTaxPaid', 'Investment gain tax paid (909/910)', { annual: true }],
+    ['ptnTax', "Partner's share of partnership tax — this year (906)", { annual: true }], ['ptnTaxBF', 'Partnership tax credit brought forward (906 / 922)', { annual: true }],
+    ['ptnAit', 'AIT from the partnership (907)', { annual: true }],
   ] },
   { key: 'ex', icon: ShieldOff, color: 'text-gray-500', en: 'Exempt income (declared only)', si: 'නිදහස් ආදායම', cage: 'Cage 210', fields: [
     ['forExempt', 'Exempt foreign income', { annual: true }], ['othExempt', 'Other exempt income', { annual: true }],
@@ -179,6 +182,7 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
       ...r.credits.filter(x => x.amt > 0).map(x => `         ${x.cage} ${x.label}: ${rs(x.amt)}`),
       r.balance >= 0 ? `Cage 190 Balance tax payable: ${rs(r.balance)}` : `Cage 200 Refund: ${rs(-r.balance)}`,
       `Cage 210 Exempt income: ${rs(r.cage210)}`,
+      ...(r.ptnCF > 0 ? [`         Partnership tax carried forward (no refund): ${rs(r.ptnCF)}`] : []),
     ];
     try { await navigator.clipboard.writeText(L.join('\n')); toast.success('Cage summary copied'); } catch { toast.error('Could not copy'); }
   };
@@ -203,6 +207,27 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
     toast.success(`Imported ${data.status === 'open' ? 'draft ' : ''}sheet${bizLoss ? ` — note: business shows a loss of ${rs(bizLoss)}` : ''}`);
   };
 
+  // V76: sole proprietor / partnership business computations (FINAL) → Schedule 2 + credits 906 / 907
+  const importBusiness = async () => {
+    if (!clientId) return toast.error('Select a client first');
+    let found;
+    try { found = await businessForReturn(clientId, year); } catch (e) { return toast.error(e.message); }
+    if (!found.items.length) return toast.error(`No FINAL business computation for Y/A ${year}. Finalise it on the client's Business tab.`);
+    const x = found.input;
+    if (['bizProfit', 'bizPartner', 'ptnTax', 'ptnAit'].some(k => toNum(f[k])) && !window.confirm('Replace the business income and partnership credit figures with the business computations?')) return;
+    setPeriod('annual');
+    setF(p => {
+      const n = { ...p, bizProfit: x.bizProfit ? String(x.bizProfit) : '', bizPartner: x.bizPartner ? String(x.bizPartner) : '', ptnTax: x.ptnTax ? String(x.ptnTax) : '', ptnAit: x.ptnAit ? String(x.ptnAit) : '' };
+      if (x.bizLossBF && !toNum(p.bizLossBF)) n.bizLossBF = String(x.bizLossBF);
+      for (const k of ['interest', 'rentGross', 'othInv']) if (x[k] && !toNum(p[k])) n[k] = String(x[k]);
+      return n;
+    });
+    const inv = ['interest', 'rentGross', 'othInv'].filter(k => x[k] && toNum(f[k]));
+    if (inv.length) toast(`The business accounts also show ${inv.map(k => `${{ interest: 'interest', rentGross: 'rent', othInv: 'other investment income' }[k]} ${rs(x[k])}`).join(', ')} — add it to Schedule 3 if not already included.`, { icon: '⚠️', duration: 8000 });
+    setOpen(o => ({ ...o, biz: true, cr: true, inv: o.inv || !!(x.interest || x.rentGross || x.othInv) }));
+    toast.success(`Imported ${found.items.map(i => i.label).join(' · ')}`, { duration: 6000 });
+  };
+
   const status = r.taxStatus;
   const bands = [...r.prog.detail.filter(b => b.taxed > 0).map(b => ({ ...b, k: 'l' })), ...r.fx.bands.map(b => ({ ...b, k: 'f' }))];
   const maxTax = Math.max(1, ...bands.map(b => b.tax));
@@ -225,6 +250,9 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
           </div>
           <button onClick={importSheet} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-semibold flex items-center gap-1.5" title="Fill from the client's Monthly Income & Business sheet">
             <FileDown size={15} /> Import client's income sheet
+          </button>
+          <button onClick={importBusiness} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-semibold flex items-center gap-1.5" title="Fill Schedule 2 from the client's FINAL sole proprietor / partnership computations">
+            <Store size={15} /> Import business computation
           </button>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -284,7 +312,7 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
                         <div key={k} className={o.fx ? 'sm:col-span-2' : ''}>
                           <label className="block text-xs font-semibold text-gray-600 mb-1">
                             {lbl}
-                            {o.fx && <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded ${r.fxExempt ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>{r.fxExempt ? 'EXEMPT 2024/25' : '15% MAX'}</span>}
+                            {o.fx && <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded ${r.fxExempt ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>{r.fxExempt ? `EXEMPT ${year}` : '15% MAX'}</span>}
                             <span className="ml-1 font-normal text-gray-400">{perMonth ? '/ month' : monthly ? '/ year' : ''}</span>
                           </label>
                           <Money value={f[k] ?? ''} onChange={set(k)} />
@@ -332,6 +360,7 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
             {r.cage180 > 0 && (
               <div className="px-4 pb-4 text-xs space-y-0.5 border-t border-gray-100 pt-2">
                 {r.credits.filter(x => x.amt > 0).map(x => <div key={x.cage} className="flex justify-between text-gray-600"><span>{x.cage} {x.label}</span><span className="tabular-nums">− {rs(x.amt)}</span></div>)}
+                {r.ptnCF > 0 && <div className="text-[11px] text-amber-700 pt-1">Partnership tax not used this year: {rs(r.ptnCF)} — no refund; carry it forward to Y/A {ystart + 1}/{String(ystart + 2).slice(2)} (s.55(4)).</div>}
               </div>
             )}
           </div>

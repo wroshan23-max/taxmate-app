@@ -34,6 +34,7 @@ function MoneyInput({ value, onChange, negative, disabled, invalid }) {
 function Field({ col, value, onChange, readOnly, invalid }) {
   const label = (
     <label className="block text-[11px] font-semibold text-gray-600 mb-1 leading-tight">
+      {col.cage && <span className="mr-1 inline-block rounded border border-gray-200 bg-gray-50 px-1 font-mono text-[10px] font-normal text-gray-500" title="RAMIS cage number">{col.cage}</span>}
       {col.en}{col.required && <span className="text-red-500"> *</span>}
       <span className="block font-normal text-gray-400">{col.si}</span>
     </label>
@@ -58,7 +59,7 @@ function Field({ col, value, onChange, readOnly, invalid }) {
     input = <input className={`input ${bad}`} placeholder={col.placeholder} maxLength={col.maxLength ?? 200} value={value ?? ''} disabled={readOnly}
       onChange={e => onChange(col.upper ? e.target.value.toUpperCase() : e.target.value)} />;
   }
-  return <div className={col.wide ? 'sm:col-span-2' : ''}>{label}{input}</div>;
+  return <div className={col.wide ? 'sm:col-span-2' : ''}>{label}{input}{col.hint && !readOnly && <div className="mt-0.5 text-[10px] leading-snug text-gray-400">{col.hint}</div>}</div>;
 }
 
 function RowCard({ section, row, index, readOnly, errors, onChange, onRemove, onDispose }) {

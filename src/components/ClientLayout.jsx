@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   LayoutDashboard, Calculator, FileText, Receipt,
   LogOut, Menu, X, User, Bell, Megaphone, Landmark, Percent, Wallet, CalendarDays, Gift, FolderLock, MessageCircle, ShieldCheck,
-  Zap, CalendarCheck, Globe, Crown, Hash, Users, Eye, ListTree, UsersRound, Package,
+  Zap, CalendarCheck, Globe, Crown, Hash, Users, Eye, ListTree, UsersRound, Package, Store,
 } from 'lucide-react';
 import { websiteUrl } from '../lib/firm';
 import NotificationBell from './NotificationBell';
@@ -23,6 +23,7 @@ const nav = [
   { to: '/client/quick-tax', icon: Zap, label: 'Quick Tax Check', feature: 'quick_tax' },
   { to: '/client/tax-calculator', icon: Percent, label: 'Tax Calculator', feature: 'tax_calculator' },
   { to: '/client/income', icon: Wallet, label: 'Monthly Income', feature: 'income_sheets' },
+  { to: '/client/business', icon: Store, label: 'Business Accounts', feature: 'business_accounts' },
   { to: '/client/calendar', icon: CalendarDays, label: 'Tax Calendar', feature: 'tax_calendar' },
   { to: '/client/ird-codes', icon: Hash, label: 'IRD Payment Codes', feature: 'ird_codes' },
   { to: '/client/activity-codes', icon: ListTree, label: 'Activity Codes', feature: 'activity_codes' },
