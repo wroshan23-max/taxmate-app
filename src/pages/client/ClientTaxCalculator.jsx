@@ -11,7 +11,7 @@ import { FIRM } from '../../lib/iitStatement';
 import { waNumber } from '../../lib/share';
 import { useCalcGate, CreditPill, CalcGateCard, BuyPacks } from '../../components/CalcCredits';
 
-const YEARS = ['2025/26', '2026/27'];
+const YEARS = ['2023/24', '2024/25', '2025/26', '2026/27'];   // V76: late returns for 2023/24 & 2024/25
 const CURRENCIES = ['LKR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'AED', 'SAR', 'QAR', 'KWD', 'JPY', 'SGD', 'NZD', 'INR'];
 const MODES = [
   { key: 'local', icon: MapPin, en: 'Local income', si: 'දේශීය ආදායම', hint: 'Salary, business, rent, interest in Sri Lanka' },
@@ -22,6 +22,8 @@ const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
 const pct = (r) => `${Math.round(r * 100)}%`;
 const toNum = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? Math.max(0, n) : 0; };
 const filingDeadline = (year) => `30 November ${parseInt(year, 10) + 1}`;
+// the return date has passed (late return)
+const isLate = (year) => new Date() > new Date(`${parseInt(year, 10) + 1}-11-30T23:59:59+05:30`);
 
 function Money({ value, onChange, placeholder = '0', suffix }) {
   const [focus, setFocus] = useState(false);
@@ -101,8 +103,8 @@ export default function ClientTaxCalculator({ publicMode = false }) {
   const gate = useCalcGate('advanced', figures, !publicMode && features.tax_calculator !== false);
 
   const d = (n) => n / mult;    // show in the chosen period
-  const hasIncome = r.totalAss > 0;
-  const takeHomePct = hasIncome ? Math.max(0, Math.min(100, (r.afterTax / r.totalAss) * 100)) : 100;
+  const hasIncome = r.totalAss + r.fxExempt > 0;
+  const takeHomePct = hasIncome ? Math.max(0, Math.min(100, (r.afterTax / (r.totalAss + r.fxExempt)) * 100)) : 100;
   const salaryOnly = period === 'monthly' && mode === 'local' && toNum(f.salary) > 0
     && !toNum(f.business) && !toNum(f.rent) && !toNum(f.interest) && !toNum(f.otherLocal);
   const reset = () => setF(s => ({ ...s, salary: '', business: '', rent: '', interest: '', otherLocal: '', fxAmount: '', fxRate: '', foreignOther: '', solar: '', donCharity: '', donGovt: '', apitPaid: '', otherTaxPaid: '' }));
@@ -138,7 +140,7 @@ export default function ClientTaxCalculator({ publicMode = false }) {
           <CreditPill gate={gate} tool="advanced" dark />
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
-          <div className="flex bg-white/10 rounded-xl p-1">
+          <div className="flex flex-wrap bg-white/10 rounded-xl p-1">
             {YEARS.map(y => (
               <button key={y} onClick={() => setYear(y)} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${year === y ? 'bg-white text-primary-800' : 'text-primary-100 hover:bg-white/10'}`}>Y/A {y}</button>
             ))}
@@ -164,6 +166,14 @@ export default function ClientTaxCalculator({ publicMode = false }) {
         ))}
       </div>
 
+      {r.cfg.foreignBankExempt && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex gap-2"><Info size={15} className="flex-shrink-0 mt-0.5" />
+          <div><b>Y/A {year} rules</b> (Inland Revenue (Amendment) Act No. 45 of 2022): personal relief Rs. 1,200,000; rates 6% · 12% · 18% · 24% · 30% · 36% on each Rs. 500,000; foreign-currency income sent to Sri Lanka through a bank is <b>exempt</b> (declared only); bank interest AIT 5%.
+            {isLate(year) && <> The return was due on <b>{filingDeadline(year)}</b> — file it as soon as possible; IRD may charge a penalty and interest on unpaid tax.</>}
+            <span className="block mt-0.5 text-amber-800">{year}: පුද්ගලික සහනය රු. 1,200,000 · බැංකුව හරහා ලැබුණු විදේශ මුදල් ආදායම බදු නිදහස්.{isLate(year) ? ' ප්‍රමාද වූ බදු ප්‍රකාශය — ඉක්මනින් ගොනු කරන්න.' : ''}</span></div>
+        </div>
+      )}
+
       {year === '2026/27' && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900 flex gap-2"><Sparkles size={15} className="flex-shrink-0 mt-0.5" />
           <div><b>New for Y/A 2026/27</b> (Inland Revenue (Amendment) Act No. 11 of 2026): personal relief Rs. 1,800,000, tax rates and the 15% maximum on foreign-currency income are unchanged.
@@ -184,7 +194,7 @@ export default function ClientTaxCalculator({ publicMode = false }) {
                 <Field label="Salary & allowances" si="වැටුප හා දීමනා" hint="Gross, before APIT/EPF. Include bonus spread over the year."><Money value={f.salary} onChange={set('salary')} /></Field>
                 <Field label="Business / professional profit" si="ව්‍යාපාරික / වෘත්තීය ලාභය" hint="Net profit after business expenses."><Money value={f.business} onChange={set('business')} /></Field>
                 <Field label="Rent received" si="ලැබෙන කුලිය" hint="Gross rent — 25% rent relief is applied automatically."><Money value={f.rent} onChange={set('rent')} /></Field>
-                <Field label="Bank interest" si="බැංකු පොලිය" hint="Gross interest (before 10% WHT)."><Money value={f.interest} onChange={set('interest')} /></Field>
+                <Field label="Bank interest" si="බැංකු පොලිය" hint={`Gross interest (before ${Math.round((r.cfg.interestWht ?? 0.1) * 100)}% WHT).`}><Money value={f.interest} onChange={set('interest')} /></Field>
                 <Field label="Other income" si="වෙනත් ආදායම්"><Money value={f.otherLocal} onChange={set('otherLocal')} /></Field>
               </div>
             </div>
@@ -195,7 +205,7 @@ export default function ClientTaxCalculator({ publicMode = false }) {
               <div className="flex items-center gap-2"><Globe2 size={17} className="text-blue-600" />
                 <h2 className="font-bold text-gray-800">Foreign income <span className="font-normal text-gray-400 text-sm">· {per} / {perSi}</span></h2></div>
               <Field label="Paid in foreign currency & sent to Sri Lanka through a bank" si="විදේශ මුදලින් ලැබී බැංකුවක් හරහා ශ්‍රී ලංකාවට එවූ ආදායම"
-                hint="Remote job for a foreign employer, freelancing, IT/BPO services, consulting for foreign clients, foreign-source income. Taxed at a maximum of 15%.">
+                hint={r.cfg.foreignBankExempt ? `Remote job for a foreign employer, freelancing, IT/BPO services, consulting for foreign clients. EXEMPT for Y/A ${year} — declared in the return, not taxed.` : 'Remote job for a foreign employer, freelancing, IT/BPO services, consulting for foreign clients, foreign-source income. Taxed at a maximum of 15%.'}>
                 <div className="flex gap-2">
                   <select className="input w-24 flex-shrink-0" value={f.fxCur} onChange={e => set('fxCur')(e.target.value)}>
                     {CURRENCIES.map(c => <option key={c}>{c}</option>)}
@@ -241,7 +251,7 @@ export default function ClientTaxCalculator({ publicMode = false }) {
                     <Field label="Other tax already paid (WHT / instalments)" si="දැනටමත් ගෙවූ බදු"><Money value={f.otherTaxPaid} onChange={set('otherTaxPaid')} /></Field>
                     <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-700">
                       <input type="checkbox" checked={f.whtInterestAuto} onChange={e => set('whtInterestAuto')(e.target.checked)} />
-                      My bank already deducted 10% WHT from the interest (credit it automatically)
+                      My bank already deducted {Math.round(r.whtRate * 100)}% WHT/AIT from the interest (credit it automatically)
                     </label>
                   </>
                 ) : (
@@ -283,6 +293,7 @@ export default function ClientTaxCalculator({ publicMode = false }) {
 
               <div className="text-sm border-t border-gray-100 pt-2">
                 <Row l="Total income" v={rs(d(r.totalAss))} />
+                {r.fxExempt > 0 && <Row l="Foreign income via bank (exempt)" sub={`Y/A ${year} — declared, not taxed`} v={rs(d(r.fxExempt))} cls="text-gray-500" />}
                 {r.prUsed > 0 && <Row l="Personal relief" sub={`Rs. ${(r.cfg.pr).toLocaleString('en-LK')} a year, tax-free`} v={`− ${rs(d(r.prUsed))}`} cls="text-green-700" />}
                 {r.rentRelief > 0 && <Row l="Rent relief (25%)" v={`− ${rs(d(r.rentRelief))}`} cls="text-green-700" />}
                 {r.solarUsed > 0 && <Row l="Solar panel relief" v={`− ${rs(d(r.solarUsed))}`} cls="text-green-700" />}
@@ -327,12 +338,12 @@ export default function ClientTaxCalculator({ publicMode = false }) {
             r.mustFile ? (
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex gap-2">
                 <AlertTriangle size={17} className="flex-shrink-0 mt-0.5" />
-                <div>Your income is above Rs. 1,800,000 a year — you must file an Income Tax Return for Y/A {year} by <b>{filingDeadline(year)}</b>.
-                  <div className="text-xs mt-0.5">ඔබගේ වාර්ෂික ආදායම රු. 1,800,000 ඉක්මවන නිසා {filingDeadline(year)}ට පෙර ආදායම් බදු ප්‍රකාශය ඉදිරිපත් කළ යුතුයි.</div></div>
+                <div>Your income is above Rs. {r.cfg.pr.toLocaleString('en-LK')} a year — you must file an Income Tax Return for Y/A {year}{isLate(year) ? <> — it was due on <b>{filingDeadline(year)}</b>, so file it as soon as possible</> : <> by <b>{filingDeadline(year)}</b></>}.
+                  <div className="text-xs mt-0.5">ඔබගේ වාර්ෂික ආදායම රු. {r.cfg.pr.toLocaleString('en-LK')} ඉක්මවන නිසා Y/A {year} ආදායම් බදු ප්‍රකාශය {isLate(year) ? 'ඉක්මනින්' : `${filingDeadline(year)}ට පෙර`} ඉදිරිපත් කළ යුතුයි.</div></div>
               </div>
             ) : (
               <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900 flex gap-2">
-                <CheckCircle2 size={17} className="flex-shrink-0 mt-0.5" /> Your income is within the Rs. 1,800,000 tax-free relief — no income tax.
+                <CheckCircle2 size={17} className="flex-shrink-0 mt-0.5" /> Your income is within the Rs. {r.cfg.pr.toLocaleString('en-LK')} tax-free relief — no income tax.
               </div>
             )
           )}
@@ -350,7 +361,7 @@ export default function ClientTaxCalculator({ publicMode = false }) {
         </div>
       </div>
 
-      {hasIncome && gate.unlocked && <TaxSavingTips year={year} x={px} mode={publicMode ? 'public' : 'client'} />}
+      {hasIncome && gate.unlocked && !isLate(year) && year >= '2025/26' && <TaxSavingTips year={year} x={px} mode={publicMode ? 'public' : 'client'} />}
       {lead && <FileWithTaxMate year={year} summary={leadSummary()} onClose={() => setLead(false)} />}
 
       {gate.st && !gate.unlimited && <div className="card p-4 sm:p-5"><BuyPacks st={gate.st} reload={gate.reload} /></div>}
@@ -376,8 +387,8 @@ export default function ClientTaxCalculator({ publicMode = false }) {
       <div className="text-[11px] text-gray-500 flex gap-1.5 leading-relaxed pb-16 lg:pb-0">
         <Info size={13} className="flex-shrink-0 mt-0.5" />
         <span>
-          Estimate for Y/A {year} under the Inland Revenue Act No. 24 of 2017 as amended by Act No. 02 of 2025: personal relief Rs. {TAX_YEARS[year].pr.toLocaleString('en-LK')}; rates {TAX_YEARS[year].slabText};
-          foreign-currency income remitted through a bank taxed at a maximum of 15% (6% only on any part of the first Rs. 1,000,000 band not used by local income).
+          Estimate for Y/A {year} under the Inland Revenue Act No. 24 of 2017 as amended by {TAX_YEARS[year].law}: personal relief Rs. {TAX_YEARS[year].pr.toLocaleString('en-LK')}; rates {TAX_YEARS[year].slabText};
+          {TAX_YEARS[year].foreignBankExempt ? ' foreign-currency income remitted through a bank exempt (Third Schedule).' : ' foreign-currency income remitted through a bank taxed at a maximum of 15% (6% only on any part of the first Rs. 1,000,000 band not used by local income).'}
           Monthly figures assume the same income every month — your employer's APIT (cumulative tables) may differ month to month. Not included: gains on investment assets, terminal benefits, dividends (15% final WHT), betting/gaming.
           This is a guide, not tax advice — TaxMate will confirm your exact tax before filing.
         </span>
