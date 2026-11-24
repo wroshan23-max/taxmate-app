@@ -17,7 +17,7 @@ import {
 const EMPTY_CLIENT = { name: '', tin: '', nic: '', phone: '', email: '', address: '' };
 const blankForm = () => ({
   issue_date: todayISO(), due_date: addDaysISO(todayISO(), INVOICE_CFG.dueDays), client_id: '', client: { ...EMPTY_CLIENT },
-  items: [], discount_pct: '0', notes: '', bank_account_id: '', sigMode: 'draw', signature: '',
+  items: [], discount_pct: '0', discount_mode: 'pct', discount_value: '', notes: '', bank_account_id: '', sigMode: 'draw', signature: '',
 });
 
 const STATUS_CLS = { draft: 'bg-gray-100 text-gray-600', unpaid: 'bg-blue-100 text-blue-700', overdue: 'bg-blue-100 text-blue-700', paid: 'bg-green-100 text-green-700' };
@@ -77,7 +77,8 @@ export default function Invoices() {
 
   const set = (patch) => setForm(f => ({ ...f, ...patch }));
   const setClient = (patch) => setForm(f => ({ ...f, client: { ...f.client, ...patch } }));
-  const totals = computeTotals(form.items, form.discount_pct);
+  const amtMode = form.discount_mode === 'amt';
+  const totals = computeTotals(form.items, amtMode ? form.discount_value : form.discount_pct, amtMode ? 'amt' : 'pct');
   const displayNo = editing ? editing.invoice_no : nextInvoiceNo(invoices.map(i => i.invoice_no), form.issue_date);
   const bankById = (id) => banks.find(b => b.id === id) ?? null;
 
@@ -119,6 +120,9 @@ export default function Invoices() {
       items: [...(inv.invoice_items ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         .map(it => ({ description: it.description, quantity: String(it.quantity ?? 1), unit_price: String(it.unit_price ?? 0), discount_pct: String(it.discount_pct ?? 0) })),
       discount_pct: String(inv.discount_pct ?? 0), notes: inv.notes ?? '', bank_account_id: inv.bank_account_id ?? '',
+      // V77: a saved fixed-amount discount has discount_pct 0 and discount_amt > 0
+      discount_mode: !(Number(inv.discount_pct) > 0) && Number(inv.discount_amt) > 0 ? 'amt' : 'pct',
+      discount_value: !(Number(inv.discount_pct) > 0) && Number(inv.discount_amt) > 0 ? String(inv.discount_amt) : '',
       sigMode: inv.signature && inv.signature === firmSig ? 'image' : 'draw', signature: inv.signature ?? '',
     });
     setFormKey(k => k + 1);
@@ -130,7 +134,7 @@ export default function Invoices() {
 
   const formAsInvoice = (invoice_no) => ({
     invoice_no, issue_date: form.issue_date, due_date: form.due_date || null, client_id: form.client_id || null,
-    client_snapshot: { ...form.client }, subtotal: totals.subtotal, discount_pct: parseFloat(form.discount_pct) || 0,
+    client_snapshot: { ...form.client }, subtotal: totals.subtotal, discount_pct: amtMode ? 0 : Math.min(100, parseFloat(form.discount_pct) || 0),
     discount_amt: totals.discount_amt, total_amount: totals.total, notes: form.notes.trim() || null,
     bank_account_id: form.bank_account_id || null, signature: currentSignature(),
   });
@@ -399,11 +403,21 @@ export default function Invoices() {
               </div>
               <button type="button" onClick={() => addItem()} className="mt-2 text-sm text-primary-600 hover:underline">＋ Add Custom Item / Service</button>
 
-              <div className="mt-4 ml-auto max-w-xs space-y-1.5 text-sm">
+              <div className="mt-4 ml-auto max-w-sm space-y-1.5 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Subtotal (after item discounts)</span><span className="font-semibold">{fmtRs(totals.subtotal)}</span></div>
                 <div className="flex justify-between items-center gap-2">
                   <span className="text-gray-500">Additional Discount</span>
-                  <span className="flex items-center gap-1"><input type="number" min="0" max="100" className="input py-1 w-16 text-center" value={form.discount_pct} onChange={e => set({ discount_pct: e.target.value })} />%</span>
+                  <span className="flex items-center gap-1">
+                    {amtMode
+                      ? <input type="number" min="0" step="any" className="input py-1 w-24 text-right" placeholder="0" value={form.discount_value} onChange={e => set({ discount_value: e.target.value })} aria-label="Discount amount (Rs.)" />
+                      : <input type="number" min="0" max="100" className="input py-1 w-16 text-center" value={form.discount_pct} onChange={e => set({ discount_pct: e.target.value })} aria-label="Discount %" />}
+                    <span className="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-semibold">
+                      {[['pct', '%'], ['amt', 'Rs.']].map(([k, l]) => (
+                        <button key={k} type="button" onClick={() => set(k === 'amt' ? { discount_mode: 'amt', discount_value: form.discount_value || (totals.discount_amt ? String(Math.round(totals.discount_amt)) : '') } : { discount_mode: 'pct' })}
+                          className={`px-2 py-1 ${form.discount_mode === k || (k === 'pct' && !amtMode) ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>{l}</button>
+                      ))}
+                    </span>
+                  </span>
                   <span className="text-green-700 w-24 text-right">{totals.discount_amt > 0 ? `− ${fmtRs(totals.discount_amt)}` : '—'}</span>
                 </div>
                 <div className="flex justify-between border-t border-gray-200 pt-2 text-base font-black text-primary-800"><span>💰 Total Amount</span><span>{fmtRs(totals.total)}</span></div>
