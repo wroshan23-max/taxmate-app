@@ -15,7 +15,7 @@ export default function PublicCalculator() {
   const pick = (adv) => setParams(adv ? { type: 'advanced' } : {}, { replace: true });
   useEffect(() => {
     const t = document.title;
-    document.title = advanced ? 'Advanced Income Tax Calculator Sri Lanka 2025/26 & 2026/27 · TaxMate Solutions' : 'Sri Lanka Income Tax Calculator 2025/26 · TaxMate Solutions';
+    document.title = advanced ? 'Advanced Income Tax Calculator Sri Lanka 2023/24 – 2026/27 · TaxMate Solutions' : 'Sri Lanka Income Tax Calculator 2025/26 · TaxMate Solutions';
     return () => { document.title = t; };
   }, [advanced]);
 
