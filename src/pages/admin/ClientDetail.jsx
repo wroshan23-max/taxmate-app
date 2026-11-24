@@ -13,6 +13,7 @@ import SendMenu from '../../components/SendMenu';
 import PortalAccess from '../../components/PortalAccess';
 import AssetStatementsAdmin from '../../components/AssetStatementsAdmin';
 import IncomeSheetsAdmin from '../../components/IncomeSheetsAdmin';
+import BizAccountsAdmin from '../../components/business/BizAccountsAdmin';
 import { PORTAL_FEATURES } from './Settings';
 import { invoiceMessage } from '../../lib/share';
 import ContactPersonFields, { contactPatch } from '../../components/ContactPersonFields';
@@ -212,7 +213,7 @@ export default function ClientDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto">
-        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['assets', 'Assets & Liabilities'], ['documents', 'Documents'], ['payroll', 'Payroll'], ['vat', 'VAT Invoices'], ['invoices', 'Invoices']].map(([t, label]) => (
+        {[['overview', 'Overview'], ['calculations', 'Calculations'], ['returns', 'Returns'], ['income', 'Monthly Income'], ['business', 'Business'], ['assets', 'Assets & Liabilities'], ['documents', 'Documents'], ['payroll', 'Payroll'], ['vat', 'VAT Invoices'], ['invoices', 'Invoices']].map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -442,6 +443,7 @@ export default function ClientDetail() {
       {tab === 'returns' && <SummaryLettersAdmin client={client} calculations={calculations} returns={returns} userId={user?.id} />}
 
       {tab === 'income' && <IncomeSheetsAdmin client={client} />}
+      {tab === 'business' && <BizAccountsAdmin client={client} />}
 
       {/* Assets & Liabilities Tab */}
       {tab === 'assets' && <AssetStatementsAdmin client={client} />}

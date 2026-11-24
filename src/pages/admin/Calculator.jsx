@@ -14,7 +14,7 @@ import AllocateTaxPayment from '../../components/AllocateTaxPayment';
 const v = (s) => parseFloat(s) || 0;
 
 const TABS = [
-  { id: 'return', icon: FileSpreadsheet, label: 'IIT Return', sub: 'Y/A 2024/25 · 2025/26 · 2026/27' },
+  { id: 'return', icon: FileSpreadsheet, label: 'IIT Return', sub: 'Y/A 2023/24 · 2024/25 · 2025/26 · 2026/27' },
   { id: 'saved', icon: FolderOpen, label: 'Saved calculations', sub: 'Drafts, finals, send to client' },
   { id: 'apit', icon: Wallet, label: 'Monthly APIT', sub: 'Employer deduction (Table 01)' },
   { id: 'quarterly', icon: CalendarClock, label: 'Quarterly instalment', sub: '(A − C) ÷ B' },
@@ -59,7 +59,7 @@ export default function Calculator() {
         <div className="w-11 h-11 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center"><CalcIcon size={22} /></div>
         <div>
           <h1 className="text-2xl font-bold text-primary-800">Tax Calculator</h1>
-          <p className="text-sm text-gray-500">IRD Sri Lanka · Y/A 2024/25 (relief Rs. 1,200,000) · 2025/26 &amp; 2026/27 (relief Rs. 1,800,000, foreign currency 15% max)</p>
+          <p className="text-sm text-gray-500">IRD Sri Lanka · Y/A 2023/24 &amp; 2024/25 (relief Rs. 1,200,000) · 2025/26 &amp; 2026/27 (relief Rs. 1,800,000, foreign currency 15% max)</p>
         </div>
       </div>
 
