@@ -13,9 +13,11 @@ export const STATUS_LABEL = { draft: '📝 Draft', unpaid: '📤 Sent', overdue:
 const n = (x) => parseFloat(x) || 0;
 export const itemAmount = (it) => (n(it.quantity) || 1) * n(it.unit_price) * (1 - n(it.discount_pct) / 100);
 
-export function computeTotals(items, discountPct) {
+// Additional discount: a % of the subtotal, or (V77) a fixed rupee amount — never more than the subtotal
+export function computeTotals(items, discount, mode = 'pct') {
   const subtotal = items.reduce((s, it) => s + itemAmount(it), 0);
-  const discount_amt = subtotal * n(discountPct) / 100;
+  const raw = mode === 'amt' ? n(discount) : subtotal * Math.min(100, n(discount)) / 100;
+  const discount_amt = Math.round(Math.max(0, Math.min(subtotal, raw)) * 100) / 100;
   return { subtotal, discount_amt, total: subtotal - discount_amt };
 }
 
@@ -73,8 +75,8 @@ export function buildInvoiceHtml(inv, items = [], bank = null, { autoPrint = fal
       <td style="${td};text-align:center">${n(it.discount_pct) > 0 ? n(it.discount_pct) + '%' : '&mdash;'}</td>
       <td style="${td};text-align:right;font-weight:700;color:#1a3c6e">${rs(it.amount ?? itemAmount(it))}</td></tr>`).join('');
 
-  const discRow = discPct > 0
-    ? `<tr><td colspan="5" style="text-align:right;padding:7px 12px;font-size:9pt;color:#1a7a4a">Discount (${discPct}%)</td><td style="text-align:right;padding:7px 12px;font-size:9pt;color:#1a7a4a;font-weight:700">&minus; ${rs(discAmt)}</td></tr>` : '';
+  const discRow = n(discAmt) > 0
+    ? `<tr><td colspan="5" style="text-align:right;padding:7px 12px;font-size:9pt;color:#1a7a4a">Discount${discPct > 0 ? ` (${discPct}%)` : ''}</td><td style="text-align:right;padding:7px 12px;font-size:9pt;color:#1a7a4a;font-weight:700">&minus; ${rs(discAmt)}</td></tr>` : '';
 
   const bankHtml = bank
     ? `<div style="margin-top:10px;padding:9px 14px;background:#f0f4fc;border-radius:6px;border-left:3px solid #1a3c6e;font-size:9pt;line-height:1.9">
