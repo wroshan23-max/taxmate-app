@@ -12,10 +12,13 @@ import { sheetToReturnInput } from '../lib/incomeSheet';
 import { computeWorking, loadOffice } from '../lib/bizWorking';
 import { paidTotals } from '../lib/taxPayments';
 import { businessForReturn } from '../lib/bizAccounts';
+import ExcelMenu from './ExcelMenu';
+import { parseAmount, typingAmount, amountNum } from '../lib/numParse';
+import { downloadReturn, importReturn } from '../lib/excelIO';
 
 const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
 const pct = (r) => `${Math.round(r * 100)}%`;
-const toNum = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? Math.max(0, n) : 0; };
+const toNum = (v) => Math.max(0, amountNum(v));
 
 // Field groups (cage-wise). fx: foreign-currency income remitted through a bank.
 const SECTIONS = [
@@ -58,6 +61,8 @@ const SECTIONS = [
   ] },
 ];
 const ALL_KEYS = SECTIONS.flatMap(s => s.fields.map(f => f[0]));
+// V78: Excel export / template / import rows
+export const RETURN_FIELDS = SECTIONS.flatMap(s => s.fields.map(([key, label, o = {}]) => ({ key, label: o.from ? `${label} (from ${o.from})` : label, section: s.en, cage: s.cage })));
 
 function Money({ value, onChange }) {
   const [focus, setFocus] = useState(false);
@@ -66,7 +71,8 @@ function Money({ value, onChange }) {
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-gray-400">Rs.</span>
       <input className="input pl-10 pr-8 py-2 text-right tabular-nums" inputMode="decimal" placeholder="0" value={shown}
-        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChange={e => onChange(e.target.value.replace(/[^\d.]/g, ''))} />
+        onFocus={() => setFocus(true)} onBlur={() => { setFocus(false); const n = parseAmount(value, false); if (n !== String(value ?? '')) onChange(n); }}
+        onChange={e => onChange(typingAmount(e.target.value, false))} />
       <TopUpCalc value={value} onUse={onChange} />
     </div>
   );
@@ -254,6 +260,17 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
           <button onClick={importBusiness} className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-sm font-semibold flex items-center gap-1.5" title="Fill Schedule 2 from the client's FINAL sole proprietor / partnership computations">
             <Store size={15} /> Import business computation
           </button>
+          <ExcelMenu dark label="Excel"
+            onExport={() => downloadReturn({ year, f: input, r, fields: RETURN_FIELDS, client: client ?? {}, label })}
+            onTemplate={() => downloadReturn({ year, fields: RETURN_FIELDS, client: client ?? {}, template: true })}
+            onImport={(sheets) => {
+              const res = importReturn(sheets, RETURN_FIELDS);
+              if (Object.keys(f).some(k => toNum(f[k])) && !window.confirm('Replace the figures on screen with the ones in the file?')) return '';
+              setPeriod('annual'); setF(res.f);
+              if (res.year && RETURN_YEARS.includes(res.year)) setYear(res.year);
+              setOpen(o => ({ ...o, ...Object.fromEntries(SECTIONS.filter(sc => sc.fields.some(([k]) => res.f[k])).map(sc => [sc.key, true])) }));
+              return `Imported ${res.n} figure${res.n === 1 ? '' : 's'}${res.year ? ` · Y/A ${res.year}` : ''}`;
+            }} />
         </div>
         <div className="flex flex-wrap gap-3">
           <div className="flex bg-white/10 rounded-xl p-1">

@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import TopUpCalc from './TopUpCalc';
 import { ChevronDown, ChevronRight, Plus, Trash2, History, ArrowRightLeft, Info, AlertCircle } from 'lucide-react';
+import ExcelMenu from './ExcelMenu';
+import { downloadAL, importAL } from '../lib/excelIO';
+import { parseAmount, typingAmount } from '../lib/numParse';
 import {
   SECTIONS, SECTION, newRow, rowsOf, totals, yearInfo, fmtMoney, num, moneyCols, isRowEmpty,
 } from '../lib/assets';
@@ -19,12 +22,8 @@ function MoneyInput({ value, onChange, negative, disabled, invalid }) {
       <input
         className={`input pl-10 pr-8 text-right tabular-nums ${invalid ? 'border-red-400 bg-red-50' : ''}`}
         inputMode="decimal" disabled={disabled} value={show} placeholder="0"
-        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
-        onChange={e => {
-          let v = e.target.value.replace(/[^\d.,-]/g, '').replace(/,/g, '');
-          if (!negative) v = v.replace(/-/g, '');
-          onChange(v);
-        }}
+        onFocus={() => setFocus(true)} onBlur={() => { setFocus(false); const n = parseAmount(value, !!negative); if (n !== String(value ?? '')) onChange(n); }}
+        onChange={e => onChange(typingAmount(e.target.value, !!negative))}
       />
       <TopUpCalc value={value} onUse={onChange} disabled={disabled} allowNegative={negative} />
     </div>
@@ -203,7 +202,7 @@ export function AssetSummary({ data, year }) {
  * The full A&L form. data: statement JSON; onChange(next) when editable.
  * errors: [{ section, index, msg }] from validate()
  */
-export default function AssetStatementForm({ data, onChange, year, readOnly = false, errors = [] }) {
+export default function AssetStatementForm({ data, onChange, year, readOnly = false, errors = [], client = {} }) {
   const [open, setOpen] = useState(() => {
     // open sections that have entries (or errors) — or the first one if the form is empty
     const o = {};
@@ -233,6 +232,18 @@ export default function AssetStatementForm({ data, onChange, year, readOnly = fa
 
   return (
     <div className="space-y-3">
+      {/* V78: Excel export / template / import */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {!readOnly && <span className="text-[11px] text-gray-400">Prefer Excel? Download the template, fill it and import it.</span>}
+        <ExcelMenu onExport={() => downloadAL({ year, data, client })} onTemplate={() => downloadAL({ year, data, client, template: true })}
+          onImport={readOnly ? undefined : (sheets) => {
+            const res = importAL(sheets, data);
+            if (!window.confirm(`Replace ${res.sections} section${res.sections === 1 ? '' : 's'} with the ${res.rows} entr${res.rows === 1 ? 'y' : 'ies'} in the file?`)) return '';
+            onChange(res.data);
+            setOpen(o => ({ ...o, ...Object.fromEntries(SECTIONS.filter(sc => rowsOf(res.data, sc.key).length).map(sc => [sc.key, true])) }));
+            return `Imported ${res.rows} entries — check them and save`;
+          }} />
+      </div>
       {!readOnly && data?._meta?.prev_year && (
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 flex gap-2">
           <History size={16} className="flex-shrink-0 mt-0.5" />

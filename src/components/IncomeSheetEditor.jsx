@@ -3,20 +3,24 @@ import toast from 'react-hot-toast';
 import { Save, X, Loader2, ArrowRightToLine, Eraser, ClipboardPaste, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { groupsFor, MONTHS, monthLabel, cell, rowTotal, monthTotals, sheetTotals, cleanSheet, emptySheet } from '../lib/incomeSheet';
+import { parseAmount, typingAmount, outliers } from '../lib/numParse';
+import ExcelMenu from './ExcelMenu';
+import { downloadIncome, importIncome } from '../lib/excelIO';
 
 const toNum = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
 const fmt = (v) => (toNum(v) ? toNum(v).toLocaleString('en-LK') : '');
 const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
-const clean = (v) => String(v ?? '').replace(/[^\d.-]/g, '');
+const clean = (v) => parseAmount(v);
 
-/** One editable amount in the grid: shows 1,234,567 — plain digits while typing. */
-function Cell({ value, onChange, onPaste, onKey, id }) {
+/** One editable amount in the grid: shows 1,234,567 — plain digits while typing. V78: "139877,23" keeps its decimals. */
+function Cell({ value, onChange, onPaste, onKey, id, flag }) {
   const [focus, setFocus] = useState(false);
   return (
-    <input id={id} inputMode="decimal" value={focus ? value : fmt(value)} placeholder="·"
-      className="w-full min-w-[84px] bg-transparent px-1.5 py-1 text-right tabular-nums text-xs rounded focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-200 hover:bg-primary-50/60"
-      onFocus={(e) => { setFocus(true); requestAnimationFrame(() => e.target.select()); }} onBlur={() => setFocus(false)}
-      onChange={e => onChange(clean(e.target.value))} onPaste={onPaste} onKeyDown={onKey} />
+    <input id={id} inputMode="decimal" value={focus ? value : fmt(value)} placeholder="·" title={flag || undefined}
+      className={`w-full min-w-[84px] px-1.5 py-1 text-right tabular-nums text-xs rounded focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-400 placeholder:text-gray-200 ${flag ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-400' : 'bg-transparent hover:bg-primary-50/60'}`}
+      onFocus={(e) => { setFocus(true); requestAnimationFrame(() => e.target.select()); }}
+      onBlur={() => { setFocus(false); const n = parseAmount(value); if (n !== String(value ?? '')) onChange(n); }}
+      onChange={e => onChange(typingAmount(e.target.value))} onPaste={onPaste} onKeyDown={onKey} />
   );
 }
 
@@ -51,7 +55,7 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
   // Paste from Excel / Google Sheets: tabs = next month, new lines = next item
   const paste = (ri, mi) => (e) => {
     const text = e.clipboardData.getData('text');
-    if (!/[\t\n]/.test(text.trim())) return;   // a single value: normal paste
+    if (!/[\t\n]/.test(text.trim())) { e.preventDefault(); const r = ROWS[ri]; if (r) setCell(r.key, mi, parseAmount(text)); return; }   // a single value
     e.preventDefault();
     const lines = text.replace(/\r/g, '').split('\n').filter((l, i, a) => l !== '' || i < a.length - 1);
     const cells = [];   // [rowKey, month, value]
@@ -99,6 +103,9 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
   const close = () => { if (dirty && !window.confirm('Close without saving your changes?')) return; onClose?.(); };
 
   const t = sheetTotals(data, biz);
+  // V78: a month far above the rest of the row (e.g. decimal point lost: 13,987,723 instead of 139,877.23)
+  const odd = ROWS.flatMap(r => outliers(Array.from({ length: 12 }, (_, i) => cell(data, r.key, i))).map(o => ({ ...o, key: r.key, en: r.en })));
+  const oddAt = Object.fromEntries(odd.map(o => [`${o.key}-${o.i}`, o]));
   let ri = -1;
 
   return (
@@ -109,6 +116,13 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
           <div className="text-[11px] text-gray-500">Type in any month · Enter / arrows to move · paste a row or block straight from Excel · <ArrowRightToLine size={11} className="inline" /> fills empty months with the first figure</div>
         </div>
         <span className="text-xs text-gray-500">{busy ? 'Saving…' : dirty ? 'Unsaved changes' : 'Saved'}</span>
+        <ExcelMenu onExport={() => downloadIncome({ year: sheet.year, data, biz, client })} onTemplate={() => downloadIncome({ year: sheet.year, data, biz, client, template: true })}
+          onImport={(sheets) => {
+            const res = importIncome(sheets, data, { biz });
+            if (!window.confirm(`Replace ${res.rowsDone} line${res.rowsDone === 1 ? '' : 's'} with the figures in the file (${res.cells} amounts)?`)) return '';
+            setData(d => ({ ...d, rows: res.data.rows })); setDirty(true);
+            return `Imported ${res.cells} amounts — check and Save`;
+          }} />
         <button onClick={close} className="btn-secondary text-xs py-1.5"><X size={13} /> Close</button>
         <button onClick={() => save()} disabled={busy || !dirty} className="btn-primary text-xs py-1.5">{busy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>
         {sheet.status !== 'reviewed' && <button onClick={() => save({ status: 'reviewed', reviewed_at: new Date().toISOString() })} disabled={busy} className="btn-secondary text-xs py-1.5 !text-emerald-700"><CheckCircle2 size={13} /> Save &amp; mark reviewed</button>}
@@ -124,6 +138,17 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
           <div key={l} className="rounded-xl border border-gray-100 p-2.5"><div className={`font-black tabular-nums ${c}`}>{rs(v)}</div><div className="text-[11px] text-gray-500">{l} · {t.monthsFilled}/12 months</div></div>
         ))}
       </div>
+
+      {odd.length > 0 && (
+        <div className="mx-4 mt-3 space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+          {odd.map(o => (
+            <div key={`${o.key}-${o.i}`} className="flex flex-wrap items-center gap-2"><AlertTriangle size={13} className="flex-shrink-0" />
+              <span><b>{o.en} — {monthLabel(sheet.year, o.i)}</b>: {o.value.toLocaleString('en-LK')} is {Math.round(o.value / o.median)}× the other months — check the figure{o.suggest ? <> (decimal point missing? <b>{o.suggest.toLocaleString('en-LK')}</b>)</> : ''}.</span>
+              {o.suggest && <button onClick={() => setCell(o.key, o.i, String(o.suggest))} className="rounded bg-white px-2 py-0.5 font-semibold text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100">Use {o.suggest.toLocaleString('en-LK')}</button>}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="overflow-x-auto p-2 pb-4">
         <table className="w-full text-xs border-separate border-spacing-0">
@@ -143,7 +168,8 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
                     <td className="px-3 py-0.5 sticky left-0 z-10 bg-white border-t border-gray-100" title={r.hint || r.si}>{r.en}</td>
                     {MONTHS.map((_, i) => (
                       <td key={i} className="p-0.5 border-t border-gray-100">
-                        <Cell id={`isc-${rIdx}-${i}`} value={cell(data, r.key, i)} onChange={(v) => setCell(r.key, i, v)} onPaste={paste(rIdx, i)} onKey={key(rIdx, i)} />
+                        <Cell id={`isc-${rIdx}-${i}`} value={cell(data, r.key, i)} onChange={(v) => setCell(r.key, i, v)} onPaste={paste(rIdx, i)} onKey={key(rIdx, i)}
+                          flag={oddAt[`${r.key}-${i}`] ? 'Much higher than the other months — check this figure' : ''} />
                       </td>
                     ))}
                     <td className="px-3 py-0.5 text-right tabular-nums font-semibold bg-primary-50/50 border-t border-gray-100">{rowTotal(data, r.key) ? rowTotal(data, r.key).toLocaleString('en-LK') : '—'}</td>

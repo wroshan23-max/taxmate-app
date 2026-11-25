@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase, fmtRs, fmtDate } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, Printer, FileCheck2, Pencil, Trash2, Search, FolderOpen, Lock, Unlock, CheckCircle2, MessageSquareWarning, Link2, Globe } from 'lucide-react';
-import { summarizeCalc, KIND_LABEL, calcKind } from '../lib/iitCalc';
+import IrdCopyMenu from './IrdCopyMenu';
+import { FileSpreadsheet } from 'lucide-react';
+import { downloadReturn } from '../lib/excelIO';
+import { RETURN_FIELDS } from './ReturnCalculator';
+import { summarizeCalc, KIND_LABEL, calcKind, computeReturn, annualToReturnInput } from '../lib/iitCalc';
 import { buildStatementHtml, openStatement } from '../lib/iitStatement';
 import { calcMessage } from '../lib/share';
 import SendMenu from './SendMenu';
@@ -138,7 +142,13 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
     toast.success('Version deleted');
   };
 
-  const print = (r, clean = false) => { if (!openStatement(r, r.clients ?? {}, { clean })) toast.error('Pop-up blocked — allow pop-ups for this site to print'); };
+  // V78: computation → Excel (inputs sheet can be edited and imported back into the IIT Return)
+  const excel = (r) => {
+    const f = calcKind(r) === 'return' ? r.input_data || {} : annualToReturnInput(r.input_data || {});
+    const year = r.year || '2025/26';
+    downloadReturn({ year, f, r: computeReturn(year, f), fields: RETURN_FIELDS, client: r.clients ?? {}, label: r.label || (r.status === 'final' ? 'FINAL' : 'Draft') });
+  };
+  const print = (r, clean = false, sign = true) => { if (!openStatement(r, r.clients ?? {}, { clean, sign })) toast.error('Pop-up blocked — allow pop-ups for this site to print'); };
 
   return (
     <div className="space-y-3">
@@ -233,7 +243,8 @@ export default function SavedCalculations({ clientId, onOpen, compact = false })
                               {isOpen ? <EyeOff size={13} /> : <Eye size={13} />} {isOpen ? 'Hide' : 'View'}
                             </button>
                             <button onClick={() => print(r)} className="btn-secondary text-xs py-1 px-2.5" title="Print / save as PDF"><Printer size={13} /> PDF</button>
-                            <button onClick={() => print(r, true)} className="btn-secondary text-xs py-1 px-2.5" title="Unbranded PDF — no TaxMate header or details. Upload to IRD as a supporting document."><FileCheck2 size={13} /> IRD copy</button>
+                            <IrdCopyMenu onPick={(sign) => print(r, true, sign)} />
+                            {calcKind(r) !== 'quarterly' && <button onClick={() => excel(r)} className="btn-secondary text-xs py-1 px-2.5 !text-emerald-700" title="Download as Excel (inputs + computation)"><FileSpreadsheet size={13} /> Excel</button>}
                             {onOpen && <button onClick={() => onOpen(r)} className="btn-secondary text-xs py-1 px-2.5" title={isFinal ? 'Open (changes save as a new draft)' : 'Edit this draft'}><Pencil size={13} /> {isFinal ? 'Open' : 'Edit'}</button>}
                             <SendMenu
                               table="iit_calculations" row={r} phone={c.mobile} email={c.email} recipients={recipientsOf(c)}
