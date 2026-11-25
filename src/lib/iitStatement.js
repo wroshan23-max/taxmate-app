@@ -75,6 +75,7 @@ const yearInfo = (year) => {
 
 // Clean (unbranded) mode — for uploading to IRD as a supporting document. Set only while building.
 let CLEAN = false;
+let NOSIGN = false;   // V78: IRD copy without the declaration / signature block
 const CLEAN_CSS = `<style>
 .sh{display:none}
 .tb{background:#fff!important;color:#111;border:1.5px solid #111;border-radius:0}
@@ -142,8 +143,8 @@ function payNote(status, year) {
 }
 
 function footer(sourceNote) {
-  if (CLEAN) return `<div class="dc">Computed under the Inland Revenue Act No. 24 of 2017 (as amended) &mdash; ${sourceNote}.</div>
-  <div class="cl"><div>Date: ${today()}<div class="sg">Signature of Taxpayer</div></div><div style="text-align:right">I declare that the information given above is true and correct.</div></div>`;
+  if (CLEAN) return `<div class="dc">Computed under the Inland Revenue Act No. 24 of 2017 (as amended) &mdash; ${sourceNote}.</div>${NOSIGN ? '' : `
+  <div class="cl"><div>Date: ${today()}<div class="sg">Signature of Taxpayer</div></div><div style="text-align:right">I declare that the information given above is true and correct.</div></div>`}`;
   return `<div class="dc">&#9888;&#65039; This computation is prepared from information provided by the client and IRD guidelines (${sourceNote}).
     It is for guidance only and is not a formal IRD assessment. Final liability is as assessed by the Inland Revenue Department.</div>
   <div class="pr"><div><div>Prepared by: <strong>${FIRM.name}</strong></div>
@@ -314,12 +315,12 @@ function quarterlyBody(calc, client) {
 
 // Build the full statement HTML document for a saved (or unsaved) calculation.
 // calc: { year, calc_type, input_data }  client: { full_name, tin, nic, address, employer, resident_status }
-export function buildStatementHtml(calc, client = {}, { withToolbar = true, clean = false } = {}) {
+export function buildStatementHtml(calc, client = {}, { withToolbar = true, clean = false, sign = true } = {}) {
   const kind = calcKind(calc);
-  CLEAN = !!clean;
+  CLEAN = !!clean; NOSIGN = !!clean && !sign;
   let body;
   try { body = kind === 'return' ? returnBody(calc, client) : kind === 'quarterly' ? quarterlyBody(calc, client) : annualBody(calc, client); }
-  finally { CLEAN = false; }
+  finally { CLEAN = false; NOSIGN = false; }
   const who = (client.full_name || 'Client').trim().replace(/\s+/g, '_');
   const yr = String(calc.year || '').replace('/', '-');
   const title = clean ? `Income_Tax_Computation_${yr}_${who}` : `IIT_Computation_${yr}_${who}`;

@@ -25,10 +25,11 @@
 //  forward (s.55(4)); AIT deducted from the partnership's income → cage 907.
 // ═══════════════════════════════════════════════════════════════════════════
 import { supabase } from './supabase';
+import { amountNum } from './numParse';
 import { CA_CLASSES, classOf, guessClass, assetAllowance, yaStartOf } from './bizWorking';
 
 export { CA_CLASSES, classOf, guessClass };
-const num = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+const num = (v) => amountNum(v);   // V78: decimal comma safe
 export const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const rid = () => Math.random().toString(36).slice(2, 10);
 export const MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];

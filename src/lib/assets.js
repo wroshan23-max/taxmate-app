@@ -8,6 +8,7 @@
 //  Values are for disclosure to the IRD only — not used to compute tax.
 // ═══════════════════════════════════════════════════════════
 import { FIRM } from './iitStatement';
+import { amountNum } from './numParse';
 
 // ─── Years ───────────────────────────────────────────────
 // Y/A runs 1 April → 31 March. '2025/26' = 1 Apr 2025 – 31 Mar 2026.
@@ -196,11 +197,7 @@ export const SECTION = Object.fromEntries(SECTIONS.map(s => [s.key, s]));
 export const moneyCols = (s) => s.cols.filter(c => c.type === 'money');
 
 // ─── Numbers ─────────────────────────────────────────────
-export const num = (v) => {
-  if (v === null || v === undefined || v === '') return 0;
-  const n = Number(String(v).replace(/[,\s]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-};
+export const num = (v) => amountNum(v);   // V78: "139877,23" = 139,877.23
 export const fmtMoney = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ─── Rows ────────────────────────────────────────────────
@@ -383,7 +380,7 @@ table.d .tot td{border-top-color:#111;background:#f7f7f7}
 .pbt{background:#111}
 </style>`;
 
-export function buildAssetStatementHtml(stmt, client = {}, { withToolbar = true, clean = false } = {}) {
+export function buildAssetStatementHtml(stmt, client = {}, { withToolbar = true, clean = false, sign = true } = {}) {
   const data = stmt.data || {};
   const y = yearInfo(stmt.year);
   const t = totals(data);
@@ -429,8 +426,8 @@ export function buildAssetStatementHtml(stmt, client = {}, { withToolbar = true,
     <div class="pt">PART 2 — CHANGES DURING THE YEAR (${y.period.toUpperCase()})</div>${part2}
     ${note}
     <div class="dc">Values are cost or market value in Sri Lankan Rupees, as declared by the taxpayer, of assets held in or outside Sri Lanka. This statement is for disclosure with the Return of Income to the Inland Revenue Department and is not used to compute income tax.</div>
-    <div class="pr"><div><div class="sg">Signature of taxpayer &nbsp;·&nbsp; Date</div></div>
-    ${clean ? '' : `<div class="fb"><strong>${esc(FIRM.name)}</strong>${esc(FIRM.web)} · ${esc(FIRM.phone)}</div>`}</div>
+    ${clean && !sign ? '' : `<div class="pr"><div>${clean ? '<div style="font-size:9.5px;margin-bottom:-14px">I declare that the information given above is true and correct.</div>' : ''}<div class="sg">Signature of taxpayer &nbsp;·&nbsp; Date</div></div>
+    ${clean ? '' : `<div class="fb"><strong>${esc(FIRM.name)}</strong>${esc(FIRM.web)} · ${esc(FIRM.phone)}</div>`}</div>`}
     </body></html>`;
 }
 

@@ -3,6 +3,8 @@
 //  One sheet per client per Y/A. Months run April → March.
 // ═══════════════════════════════════════════════════════════
 
+import { parseAmount, amountNum } from './numParse';
+
 export const MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
 export const monthLabel = (year, i) => {
   const s = parseInt(year, 10) || new Date().getFullYear();
@@ -91,7 +93,7 @@ export function groupsFor(biz, data) {
   });
 }
 
-const num = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+const num = (v) => amountNum(v);   // V78: "139877,23" = 139,877.23 (not 13,987,723)
 export const emptySheet = () => ({ rows: Object.fromEntries(ROWS.map(r => [r.key, Array(12).fill('')])), note: '', assets: [] });
 export const cell = (data, key, i) => data?.rows?.[key]?.[i] ?? '';
 
@@ -143,18 +145,18 @@ export function cleanAssets(list) {
     id: str(a.id, 20) || Math.random().toString(36).slice(2, 10),
     item: str(a.item, 120),
     date: /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : '',
-    cost: String(a.cost ?? '').replace(/[^\d.]/g, '').slice(0, 15),
+    cost: parseAmount(a.cost, false).slice(0, 15),
     work: a.work === 'partly' ? 'partly' : 'yes',
     disposed: !!a.disposed,
     disposedOn: /^\d{4}-\d{2}-\d{2}$/.test(a.disposedOn || '') ? a.disposedOn : '',
-    proceeds: String(a.proceeds ?? '').replace(/[^\d.]/g, '').slice(0, 15),
+    proceeds: parseAmount(a.proceeds, false).slice(0, 15),
     note: str(a.note, 200),
   })).filter((a) => a.item || num(a.cost));
 }
 
 export function cleanSheet(data) {
   const rows = {};
-  for (const r of ROWS) rows[r.key] = Array.from({ length: 12 }, (_, i) => { const v = String(cell(data, r.key, i)).replace(/[^\d.-]/g, ''); return v === '' ? '' : v; });
+  for (const r of ROWS) rows[r.key] = Array.from({ length: 12 }, (_, i) => parseAmount(cell(data, r.key, i)));
   return { rows, note: String(data?.note ?? '').slice(0, 2000), assets: cleanAssets(data?.assets) };
 }
 
