@@ -6,19 +6,20 @@ import { downloadAL, importAL } from '../lib/excelIO';
 import { parseAmount, typingAmount } from '../lib/numParse';
 import {
   SECTIONS, SECTION, newRow, rowsOf, totals, yearInfo, fmtMoney, num, moneyCols, isRowEmpty,
+  CURRENCIES, fxAllowed, isFx, applyFx, fxNote,
 } from '../lib/assets';
 
 // Sections where an asset carried from last year can be moved to "disposed during the year"
 const DISPOSABLE = ['immovable', 'vehicles', 'shares', 'jewellery', 'other', 'business'];
 
-function MoneyInput({ value, onChange, negative, disabled, invalid }) {
+function MoneyInput({ value, onChange, negative, disabled, invalid, prefix = 'Rs.' }) {
   const [focus, setFocus] = useState(false);
   const show = focus || value === '' || value === null || value === undefined
     ? (value ?? '')
     : (Number.isFinite(Number(String(value).replace(/,/g, ''))) ? Number(String(value).replace(/,/g, '')).toLocaleString('en-LK', { maximumFractionDigits: 2 }) : value);
   return (
     <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Rs.</span>
+      <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-xs ${prefix === 'Rs.' ? 'text-gray-400' : 'font-bold text-blue-600'}`}>{prefix}</span>
       <input
         className={`input pl-10 pr-8 text-right tabular-nums ${invalid ? 'border-red-400 bg-red-50' : ''}`}
         inputMode="decimal" disabled={disabled} value={show} placeholder="0"
@@ -40,7 +41,7 @@ function Field({ col, value, onChange, readOnly, invalid }) {
   );
   const bad = invalid ? 'border-red-400 bg-red-50' : '';
   let input;
-  if (col.type === 'money') input = <MoneyInput value={value} onChange={onChange} negative={col.negative} disabled={readOnly} invalid={invalid} />;
+  if (col.type === 'money') input = <MoneyInput value={value} onChange={onChange} negative={col.negative} disabled={readOnly} invalid={invalid} prefix={col.prefix} />;
   else if (col.type === 'select') {
     const opts = col.options.includes(value) || !value ? col.options : [value, ...col.options];
     input = (
@@ -61,9 +62,28 @@ function Field({ col, value, onChange, readOnly, invalid }) {
   return <div className={col.wide ? 'sm:col-span-2' : ''}>{label}{input}{col.hint && !readOnly && <div className="mt-0.5 text-[10px] leading-snug text-gray-400">{col.hint}</div>}</div>;
 }
 
-function RowCard({ section, row, index, readOnly, errors, onChange, onRemove, onDispose }) {
+function RowCard({ section, row, index, readOnly, errors, onChange, onRemove, onDispose, asAt }) {
   const title = section.title(row) || `${section.en.split(' ')[0]} ${index + 1}`;
   const errFields = new Set(errors.map(e => e.col));
+  const fx = isFx(row);
+  const money = section.cols.filter(c => c.type === 'money');
+  // V79: switch the row's currency (amounts typed so far can be taken as that currency)
+  const setCur = (cur) => {
+    if (cur === (row.cur || 'LKR')) return;
+    if (cur === 'LKR') {
+      const next = { ...row, cur: '', rate: '' };
+      money.forEach(c => { delete next[`fx_${c.key}`]; });
+      return onChange(next);
+    }
+    const next = { ...row, cur };
+    if (!fx) {
+      const typed = money.filter(c => String(row[c.key] ?? '').trim() !== '');
+      const asForeign = typed.length > 0 && window.confirm(`Were the amounts already typed in ${cur}?\n\nOK = they are ${cur} amounts (they will be converted to rupees with the rate)\nCancel = they are rupees (type the ${cur} amounts again)`);
+      money.forEach(c => { next[`fx_${c.key}`] = asForeign ? row[c.key] ?? '' : ''; });
+    }
+    onChange(applyFx(section, next));
+  };
+  const rateLabel = section.part === 2 ? `on the date of the transaction` : `on ${asAt}`;
   return (
     <div className={`rounded-xl border p-3 sm:p-4 ${errors.length ? 'border-red-300 bg-red-50/40' : row._cf ? 'border-blue-100 bg-blue-50/30' : 'border-gray-200 bg-white'}`}>
       <div className="flex items-start gap-2 mb-3">
@@ -83,8 +103,34 @@ function RowCard({ section, row, index, readOnly, errors, onChange, onRemove, on
           </div>
         )}
       </div>
+      {fxAllowed(section) && (!readOnly || fx) && (
+        <div className={`mb-3 flex flex-wrap items-end gap-3 rounded-lg px-3 py-2 ${fx ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50'}`}>
+          <label className="block text-[11px] font-semibold text-gray-600">Currency · මුදල් වර්ගය
+            <select className="input mt-0.5 block w-32 py-1.5" value={row.cur || 'LKR'} disabled={readOnly} onChange={e => setCur(e.target.value)}>
+              {CURRENCIES.map(c => <option key={c} value={c}>{c === 'LKR' ? 'LKR (Rs.)' : c}</option>)}
+            </select></label>
+          {fx ? (
+            <>
+              <label className="block text-[11px] font-semibold text-gray-600">Exchange rate — Rs. per 1 {row.cur} {rateLabel}<span className="text-red-500"> *</span>
+                <input className={`input mt-0.5 block w-44 py-1.5 text-right tabular-nums ${errFields.has('rate') ? 'border-red-400 bg-red-50' : ''}`} inputMode="decimal" disabled={readOnly} placeholder="e.g. 299.50" value={row.rate ?? ''}
+                  onChange={e => onChange(applyFx(section, { ...row, rate: typingAmount(e.target.value, false) }))}
+                  onBlur={() => { const n = parseAmount(row.rate, false); if (n !== String(row.rate ?? '')) onChange(applyFx(section, { ...row, rate: n })); }} /></label>
+              <p className="min-w-[200px] flex-1 text-[11px] text-blue-800">Enter the amounts in {row.cur} — they are converted to rupees for the IRD statement. Use the Central Bank (CBSL) / your bank's buying rate {rateLabel}.
+                {row._rateOld && row._rateOld === row.rate && <b className="block text-amber-700">Last year's rate ({row._rateOld}) — update it to {asAt}.</b>}</p>
+            </>
+          ) : !readOnly && <p className="flex-1 text-[11px] text-gray-400">Foreign currency account or an asset abroad? Choose its currency.</p>}
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {section.cols.map(c => (
+        {section.cols.map(c => (fx && c.type === 'money') ? (
+          <div key={c.key}>
+            <Field col={{ ...c, wide: false, en: c.en.replace('(Rs.)', `(${row.cur})`), si: (c.si || '').replace('(රු.)', `(${row.cur})`), prefix: row.cur }} value={row[`fx_${c.key}`] ?? ''} readOnly={readOnly} invalid={errFields.has(c.key)}
+              onChange={v => onChange(applyFx(section, { ...row, [`fx_${c.key}`]: v }))} />
+            {String(row[`fx_${c.key}`] ?? '').trim() !== '' && (
+              <div className="text-[11px] mt-1 font-semibold text-blue-800">{num(row.rate) ? <>= Rs. {fmtMoney(num(row[c.key]))}</> : <span className="text-amber-700">Enter the exchange rate</span>}</div>
+            )}
+          </div>
+        ) : (
           <div key={c.key} className={c.wide ? 'sm:col-span-2' : ''}>
             <Field col={{ ...c, wide: false }} value={row[c.key]} readOnly={readOnly} invalid={errFields.has(c.key)}
               onChange={v => onChange({ ...row, [c.key]: v })} />
@@ -118,6 +164,7 @@ function ReadRows({ section, rows }) {
             <td className="px-2 py-1.5 text-gray-400">{i + 1}</td>
             {text.map(c => <td key={c.key} className="px-2 py-1.5">{r[c.key] || <span className="text-gray-300">—</span>}</td>)}
             {money.map(c => <td key={c.key} className="px-2 py-1.5 text-right tabular-nums font-medium whitespace-nowrap">{String(r[c.key] ?? '') === '' ? '—' : fmtMoney(num(r[c.key]))}
+              {fxNote(r, c.key) && <div className="text-[10px] text-blue-700 font-normal">{fxNote(r, c.key)}</div>}
               {r._prev?.[c.key] !== undefined && <div className="text-[10px] text-gray-400 font-normal">last yr {fmtMoney(r._prev[c.key])}</div>}</td>)}
           </tr>
         ))}</tbody>
@@ -126,7 +173,7 @@ function ReadRows({ section, rows }) {
   );
 }
 
-function Section({ section, data, setRows, readOnly, errors, open, toggle, onDispose }) {
+function Section({ section, data, setRows, readOnly, errors, open, toggle, onDispose, asAt }) {
   const rows = rowsOf(data, section.key);
   const t = totals(data);
   const total = section.key === 'business' ? t.business : t[section.key];
@@ -160,7 +207,7 @@ function Section({ section, data, setRows, readOnly, errors, open, toggle, onDis
           {readOnly
             ? (rows.length ? <ReadRows section={section} rows={rows} /> : <p className="text-sm text-gray-400 italic">Nil</p>)
             : rows.map((r, i) => (
-              <RowCard key={r._id ?? i} section={section} row={r} index={i} readOnly={readOnly}
+              <RowCard key={r._id ?? i} section={section} row={r} index={i} readOnly={readOnly} asAt={asAt}
                 errors={errors.filter(e => e.index === i)}
                 onChange={(nr) => update(i, nr)} onRemove={() => remove(i)} onDispose={() => onDispose(section, i)} />
             ))}
@@ -226,7 +273,7 @@ export default function AssetStatementForm({ data, onChange, year, readOnly = fa
   const isOpen = (k) => open[k] || errsFor(k).length > 0;
 
   const part = (n) => SECTIONS.filter(s => s.part === n).map(s => (
-    <Section key={s.key} section={s} data={data} setRows={setRows(s.key)} readOnly={readOnly}
+    <Section key={s.key} section={s} data={data} setRows={setRows(s.key)} readOnly={readOnly} asAt={y.asAt}
       errors={errsFor(s.key)} open={isOpen(s.key)} toggle={() => toggle(s.key)} onDispose={dispose} />
   ));
 
