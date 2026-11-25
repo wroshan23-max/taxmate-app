@@ -197,7 +197,7 @@ export default function ClientAssets() {
 
       <div className="grid lg:grid-cols-[1fr_300px] gap-4 items-start">
         <div className="space-y-3">
-          <AssetStatementForm key={sel.id} data={data} onChange={change} year={sel.year} readOnly={!editable} errors={errors} />
+          <AssetStatementForm key={sel.id} data={data} onChange={change} year={sel.year} readOnly={!editable} errors={errors} client={client || {}} />
           {(editable || note) && (
             <div className="card p-4">
               <label className="block text-sm font-semibold text-gray-700 mb-1">Anything else we should know? <span className="font-normal text-gray-400">(optional)</span></label>

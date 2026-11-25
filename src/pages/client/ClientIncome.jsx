@@ -7,9 +7,12 @@ import { supabase, fmtDate } from '../../lib/supabase';
 import {
   groupsFor, MONTHS, monthLabel, emptySheet, cell, rowTotal, monthTotals, sheetTotals, cleanSheet, MAX_ASSETS,
 } from '../../lib/incomeSheet';
+import { parseAmount, typingAmount, amountNum, outliers } from '../../lib/numParse';
+import ExcelMenu from '../../components/ExcelMenu';
+import { downloadIncome, importIncome } from '../../lib/excelIO';
 
 const rs = (n) => `Rs. ${Math.round(n || 0).toLocaleString('en-LK')}`;
-const toNum = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+const toNum = (v) => amountNum(v);
 const time = (d) => d.toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit' });
 
 function Money({ value, onChange, disabled }) {
@@ -19,7 +22,8 @@ function Money({ value, onChange, disabled }) {
     <div className="relative">
       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-gray-400">Rs.</span>
       <input className="input pl-10 pr-8 text-right tabular-nums" inputMode="decimal" placeholder="0" value={shown} disabled={disabled}
-        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChange={e => onChange(e.target.value.replace(/[^\d.]/g, ''))} />
+        onFocus={() => setFocus(true)} onBlur={() => { setFocus(false); const n = parseAmount(value, false); if (n !== String(value ?? '')) onChange(n); }}
+        onChange={e => onChange(typingAmount(e.target.value, false))} />
       <TopUpCalc value={value} onUse={onChange} disabled={disabled} />
     </div>
   );
@@ -49,14 +53,14 @@ function Equipment({ assets, onChange, editable, year }) {
             {editable && <button type="button" onClick={() => del(a.id)} className="p-2 text-gray-300 hover:text-red-600" aria-label="Remove item"><Trash2 size={15} /></button>}</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <label className="text-xs font-semibold text-gray-600">Date bought<input type="date" className="input mt-1" value={a.date} disabled={!editable} onChange={e => set(a.id, { date: e.target.value })} /></label>
-            <label className="text-xs font-semibold text-gray-600">Cost (Rs.)<input className="input mt-1 text-right tabular-nums" inputMode="decimal" placeholder="0" value={a.cost} disabled={!editable} onChange={e => set(a.id, { cost: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+            <label className="text-xs font-semibold text-gray-600">Cost (Rs.)<input className="input mt-1 text-right tabular-nums" inputMode="decimal" placeholder="0" value={a.cost} disabled={!editable} onChange={e => set(a.id, { cost: typingAmount(e.target.value, false) })} onBlur={() => set(a.id, { cost: parseAmount(a.cost, false) })} /></label>
             <label className="text-xs font-semibold text-gray-600">Used for work?<select className="input mt-1" value={a.work} disabled={!editable} onChange={e => set(a.id, { work: e.target.value })}><option value="yes">Only for work</option><option value="partly">Partly (also personal)</option></select></label>
             <label className="text-xs font-semibold text-gray-600 flex flex-col">Sold / given away?<span className="mt-2 flex items-center gap-2 font-normal"><input type="checkbox" checked={a.disposed} disabled={!editable} onChange={e => set(a.id, { disposed: e.target.checked })} /> Yes</span></label>
           </div>
           {a.disposed && (
             <div className="grid grid-cols-2 gap-2">
               <label className="text-xs font-semibold text-gray-600">Date sold<input type="date" className="input mt-1" value={a.disposedOn} disabled={!editable} onChange={e => set(a.id, { disposedOn: e.target.value })} /></label>
-              <label className="text-xs font-semibold text-gray-600">Sold for (Rs.)<input className="input mt-1 text-right" inputMode="decimal" value={a.proceeds} disabled={!editable} onChange={e => set(a.id, { proceeds: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+              <label className="text-xs font-semibold text-gray-600">Sold for (Rs.)<input className="input mt-1 text-right" inputMode="decimal" value={a.proceeds} disabled={!editable} onChange={e => set(a.id, { proceeds: typingAmount(e.target.value, false) })} onBlur={() => set(a.id, { proceeds: parseAmount(a.proceeds, false) })} /></label>
             </div>
           )}
           <input className="input text-xs" maxLength={200} placeholder="Note (optional)" value={a.note} disabled={!editable} onChange={e => set(a.id, { note: e.target.value })} />
@@ -168,6 +172,8 @@ export default function ClientIncome() {
   const monthly = MONTHS.map((_, i) => { const x = monthTotals(data, i, biz); return x.income + x.fx + Math.max(0, x.bizProfit); });
   const maxM = Math.max(1, ...monthly);
   const ys = parseInt(sel.year, 10);
+  // V78: a month far above the rest (decimal point lost, extra zero …)
+  const odd = GROUPS.flatMap(g => g.rows).flatMap(r => outliers(Array.from({ length: 12 }, (_, i) => cell(data, r.key, i))).map(o => ({ ...o, key: r.key, en: r.en })));
 
   return (
     <div className="space-y-4 pb-24">
@@ -176,6 +182,16 @@ export default function ClientIncome() {
           <h1 className="text-2xl font-bold text-primary-800 flex items-center gap-2"><Wallet size={22} /> Monthly Income &amp; Business</h1>
           <p className="text-sm text-gray-500">Y/A {sel.year} · 1 April {ys} – 31 March {ys + 1} · මාසික ආදායම හා ව්‍යාපාරික විස්තර</p>
         </div>
+        <ExcelMenu onExport={() => downloadIncome({ year: sel.year, data, biz })} onTemplate={() => downloadIncome({ year: sel.year, data, biz, template: true })}
+          importHint="Fill the template in Excel, then import it here"
+          onImport={editable ? (sheets) => {
+            const res = importIncome(sheets, data, { biz });
+            if (!window.confirm(`Replace ${res.rowsDone} line${res.rowsDone === 1 ? '' : 's'} with the figures in the file?`)) return '';
+            setData(d => ({ ...d, rows: res.data.rows, note: res.data.note || d.note, assets: biz ? res.data.assets : d.assets }));
+            if (res.data.note) setNote(res.data.note);
+            setDirty(true); schedule();
+            return `Imported ${res.cells} amounts ✓`;
+          } : undefined} />
         {list.length > 1 && (
           <div className="flex gap-1 bg-gray-100 p-1 rounded-xl max-w-full overflow-x-auto">
             {list.map(s => (
@@ -199,6 +215,19 @@ export default function ClientIncome() {
           <div key={l} className="card p-3"><div className={`text-lg font-black tabular-nums ${c}`}>{rs(v)}</div><div className="text-[11px] text-gray-500">{l} · year so far</div></div>
         ))}
       </div>
+
+      {odd.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-1.5">
+          {odd.map(o => (
+            <div key={`${o.key}-${o.i}`} className="flex flex-wrap items-center gap-2"><AlertTriangle size={15} className="flex-shrink-0" />
+              <span><b>{o.en} — {monthLabel(sel.year, o.i)}</b>: Rs. {o.value.toLocaleString('en-LK')} is much higher than your other months.{o.suggest ? <> Did you mean <b>Rs. {o.suggest.toLocaleString('en-LK')}</b>?</> : ' Please check it.'}
+                <span className="block text-xs text-amber-800">අනෙක් මාසවලට වඩා බොහෝ වැඩියි — දශම තිත (.) නිවැරදිද බලන්න.</span></span>
+              {editable && o.suggest && <button onClick={() => setCell(o.key, o.i, String(o.suggest))} className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold ring-1 ring-amber-300 hover:bg-amber-100">Change to {o.suggest.toLocaleString('en-LK')}</button>}
+              {!o.suggest && <button onClick={() => { setMonth(o.i); setView('month'); }} className="rounded-lg bg-white px-2.5 py-1 text-xs font-semibold ring-1 ring-amber-300 hover:bg-amber-100">Open {MONTHS[o.i]}</button>}
+            </div>
+          ))}
+        </div>
+      )}
 
       {biz && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 flex gap-2"><Briefcase size={16} className="flex-shrink-0 mt-0.5" />

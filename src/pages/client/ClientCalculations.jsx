@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase, fmtRs, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import { Calculator, ChevronDown, ChevronUp, Printer, CheckCircle2, PencilLine } from 'lucide-react';
-import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
+import { Calculator, ChevronDown, ChevronUp, Printer, CheckCircle2, PencilLine, FileSpreadsheet } from 'lucide-react';
+import { downloadReturn } from '../../lib/excelIO';
+import { RETURN_FIELDS } from '../../components/ReturnCalculator';
+import { summarizeCalc, KIND_LABEL, calcKind, computeReturn, annualToReturnInput } from '../../lib/iitCalc';
 import { buildStatementHtml, openStatement } from '../../lib/iitStatement';
 import TaxBalancePayment from '../../components/TaxBalancePayment';
 import { loadBalancePayments } from '../../lib/taxBalance';
@@ -97,7 +99,12 @@ export default function ClientCalculations() {
                 {expanded === calc.id && (
                   <div className="border-t border-gray-100 p-4 bg-gray-50 space-y-3">
                     {!isFinal && <Review calc={calc} onDone={(p) => patch(calc.id, p)} />}
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      {calcKind(calc) !== 'quarterly' && (
+                        <button onClick={() => { const f = calcKind(calc) === 'return' ? calc.input_data || {} : annualToReturnInput(calc.input_data || {}); const y = calc.year || '2025/26';
+                          downloadReturn({ year: y, f, r: computeReturn(y, f), fields: RETURN_FIELDS, client: client ?? {}, label: calc.label || '' }); }}
+                          className="btn-secondary text-xs py-1.5 !text-emerald-700"><FileSpreadsheet size={13} /> Excel</button>
+                      )}
                       <button onClick={() => openStatement(calc, client ?? {})} className="btn-primary text-xs py-1.5">
                         <Printer size={13} /> Download / Print PDF
                       </button>
