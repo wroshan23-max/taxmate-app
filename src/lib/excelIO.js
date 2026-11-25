@@ -10,7 +10,7 @@
 import { downloadXlsx, colName, toIsoDate } from './xlsx';
 import { parseAmount } from './numParse';
 import { MONTHS, ROWS as INCOME_ROWS, groupsFor, cleanAssets } from './incomeSheet';
-import { SECTIONS as AL_SECTIONS, yearInfo, rowsOf } from './assets';
+import { SECTIONS as AL_SECTIONS, yearInfo, rowsOf, fxAllowed, isFx, applyFx, CURRENCIES } from './assets';
 import { INCOME_TYPES, normalize as bizNormalize, newLine, newAsset, newPartner, lineAmt } from './bizAccounts';
 
 const H = (v) => ({ v, s: 'h' });
@@ -133,10 +133,16 @@ export function alBook({ year, data, client = {}, template = false }) {
   for (const s of AL_SECTIONS) {
     const list = template ? [] : rowsOf(data, s.key);
     info.push([alSheetName(s), s.en, list.length]);
-    const rows = [[T(`${s.code}. ${s.en}`)], [s.help || (s.part === 2 ? `During ${y.period}` : `As at ${y.asAt}`)], [], s.cols.map((c) => H(alLabel(c)))];
-    for (const r of list) rows.push(s.cols.map((c) => (c.type === 'money' ? M(r[c.key]) : cellStr(r[c.key]))));
-    if (!list.length && s.cols.some((c) => c.type === 'select')) rows.push(s.cols.map((c) => (c.type === 'select' ? `(${c.options.join(' / ')})` : '')));
-    sheets.push({ name: alSheetName(s), rows, freeze: 4, widths: s.cols.map((c) => (c.wide ? 40 : c.type === 'money' ? 18 : 22)) });
+    // V79: foreign-currency columns — Currency, Rate (Rs. per 1) and each amount in that currency; the Rs. column = amount × rate
+    const fxc = fxAllowed(s) ? s.cols.filter((c) => c.type === 'money') : [];
+    const fxHead = fxc.length ? ['Currency (LKR / USD …)', 'Rate (Rs. per 1 unit)', ...fxc.map((c) => `${c.en.replace(/\s*\(Rs\.\)/, '')} — in currency`)] : [];
+    const rows = [[T(`${s.code}. ${s.en}`)], [s.help || (s.part === 2 ? `During ${y.period}` : `As at ${y.asAt}`)], [], [...s.cols.map((c) => H(alLabel(c))), ...fxHead.map(H)]];
+    for (const r of list) {
+      rows.push([...s.cols.map((c) => (c.type === 'money' ? M(r[c.key]) : cellStr(r[c.key]))),
+        ...(fxc.length ? (isFx(r) ? [r.cur, M(r.rate), ...fxc.map((c) => M(r[`fx_${c.key}`]))] : ['LKR']) : [])]);
+    }
+    if (!list.length && s.cols.some((c) => c.type === 'select')) rows.push([...s.cols.map((c) => (c.type === 'select' ? `(${c.options.join(' / ')})` : '')), ...(fxc.length ? [`(${CURRENCIES.slice(0, 6).join(' / ')} …)`] : [])]);
+    sheets.push({ name: alSheetName(s), rows, freeze: 4, widths: [...s.cols.map((c) => (c.wide ? 40 : c.type === 'money' ? 18 : 22)), ...fxHead.map(() => 18)] });
   }
   return [{ name: 'Read me', rows: info, widths: [30, 50, 10] }, ...sheets];
 }
@@ -166,6 +172,22 @@ export function importAL(sheets, current) {
         else if (c.type === 'year') row[c.key] = (cellStr(v).match(/\d{4}/) || [''])[0];
         else if (c.type === 'select') { const t = cellStr(v); row[c.key] = c.options.find((o) => o.toLowerCase() === t.toLowerCase()) || t; }
         else row[c.key] = cellStr(v).slice(0, c.maxLength ?? 200);
+      }
+      // V79: foreign currency
+      if (fxAllowed(s)) {
+        const ci = head.findIndex((x) => x.startsWith('currency'));
+        const cur = ci >= 0 ? cellStr(r[ci]).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) : '';
+        if (cur && cur !== 'LKR') {
+          const ri2 = head.findIndex((x) => x.startsWith('rate'));
+          row.cur = cur; row.rate = ri2 >= 0 ? parseAmount(r[ri2], false) : '';
+          for (const c of s.cols.filter((x) => x.type === 'money')) {
+            const k = head.findIndex((x) => x === norm(`${c.en.replace(/\s*\(Rs\.\)/, '')} — in currency`) || x === `${norm(c.en)} in currency`);
+            row[`fx_${c.key}`] = k >= 0 ? parseAmount(r[k], !!c.negative) : '';
+          }
+          const fxGiven = s.cols.some((c) => c.type === 'money' && row[`fx_${c.key}`] !== '');
+          if (fxGiven && Number(row.rate) > 0) Object.assign(row, applyFx(s, row));
+          else if (!fxGiven) for (const c of s.cols.filter((x) => x.type === 'money')) row[`fx_${c.key}`] = '';
+        }
       }
       if (s.cols.every((c) => !row[c.key] || row[c.key] === c.default)) continue;
       list.push(row);

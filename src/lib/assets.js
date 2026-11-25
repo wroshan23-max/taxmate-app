@@ -198,6 +198,29 @@ export const moneyCols = (s) => s.cols.filter(c => c.type === 'money');
 
 // ─── Numbers ─────────────────────────────────────────────
 export const num = (v) => amountNum(v);   // V78: "139877,23" = 139,877.23
+
+// ─── V79: foreign-currency entries ───────────────────────
+// A row may be kept in a foreign currency: row.cur ('USD'…), row.rate (Rs. per 1 unit) and the foreign
+// amounts in fx_<moneyKey>. The rupee keys (value, invested, interest…) are always the converted
+// figures, so totals, the statement and the RAMIS draft stay in Rs. (as the IRD return requires).
+export const CURRENCIES = ['LKR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'NZD', 'CHF', 'JPY', 'CNY', 'SGD', 'MYR', 'INR', 'AED', 'SAR', 'QAR', 'KWD', 'OMR', 'BHD', 'KRW'];
+export const fxAllowed = (section) => section.key !== 'business' && section.cols.some(c => c.type === 'money');
+export const isFx = (row) => !!row?.cur && row.cur !== 'LKR';
+const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+/** fill the rupee figures from the foreign amounts × rate */
+export function applyFx(section, row) {
+  if (!isFx(row)) return row;
+  const rate = num(row.rate);
+  const out = { ...row };
+  for (const c of section.cols) {
+    if (c.type !== 'money') continue;
+    const f = String(row[`fx_${c.key}`] ?? '').trim();
+    out[c.key] = f === '' || !rate ? '' : String(r2(num(f) * rate));
+  }
+  return out;
+}
+export const fxNote = (row, key) => (isFx(row) && String(row[`fx_${key}`] ?? '').trim() !== ''
+  ? `${row.cur} ${fmtMoney(num(row[`fx_${key}`]))}${num(row.rate) ? ` @ ${Number(num(row.rate)).toLocaleString('en-LK', { maximumFractionDigits: 4 })}` : ''}` : '');
 export const fmtMoney = (n) => Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // ─── Rows ────────────────────────────────────────────────
@@ -250,7 +273,8 @@ export function carryForward(prevData, prevYear) {
       const prev = {};
       for (const c of moneyCols(s)) prev[c.key] = num(r[c.key]);
       const copy = { ...r, _id: rid(), _cf: prevYear, _prev: prev };
-      if (s.key === 'deposits') copy.interest = '';    // V76: interest is for one year only
+      if (s.key === 'deposits') { copy.interest = ''; copy.fx_interest = ''; }    // V76: interest is for one year only
+      if (isFx(copy)) copy._rateOld = copy.rate;      // V79: last year's rate — update it to the new 31 March
       return copy;
     });
   }
@@ -273,6 +297,10 @@ export function validate(data, year) {
   for (const s of SECTIONS) {
     rowsOf(data, s.key).forEach((r, i) => {
       if (isRowEmpty(s, r)) return;
+      if (isFx(r)) {
+        const anyFx = s.cols.some(c => c.type === 'money' && String(r[`fx_${c.key}`] ?? '').trim() !== '');
+        if (anyFx && !(num(r.rate) > 0)) errs.push({ section: s.key, index: i, col: 'rate', msg: `Exchange rate (Rs. per 1 ${r.cur}) is required` });
+      }
       for (const c of s.cols) {
         const v = r[c.key];
         const blank = v === undefined || v === null || String(v).trim() === '';
@@ -340,7 +368,7 @@ table.d .nil td{color:#aaa;font-style:italic}
 
 function cell(c, r) {
   const v = r[c.key];
-  if (c.type === 'money') return `<td class="r">${String(v ?? '').trim() === '' ? '—' : fmtMoney(num(v))}</td>`;
+  if (c.type === 'money') { const fx = fxNote(r, c.key); return `<td class="r">${String(v ?? '').trim() === '' ? '—' : fmtMoney(num(v))}${fx ? `<br><span class="cf">${esc(fx)}</span>` : ''}</td>`; }
   if (c.type === 'date') return `<td>${esc(fmtD(v))}</td>`;
   return `<td>${esc(v)}</td>`;
 }

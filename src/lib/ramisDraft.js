@@ -155,7 +155,7 @@ export function buildDraft({ year, calc, client = {}, sheet = null, al = null, d
     // V76: cost (1003) and market value (1004) from the A&L sheet; market value = cost when not given
     immovable: alv('immovable').map(x => ({ situation: [x.type, x.location, x.situated === 'Outside Sri Lanka' ? '(outside Sri Lanka)' : ''].filter(Boolean).join(' — ').toUpperCase(), acquired: x.acquired || '', cost: r2(x.value), value: r2(String(x.market ?? '').trim() !== '' ? x.market : x.value) })),
     vehicles: alv('vehicles').map(x => ({ description: [x.type, x.make].filter(Boolean).join(' ').toUpperCase(), regno: (x.regno || '').toUpperCase(), acquired: x.acquired || '', value: r2(x.value) })),
-    deposits: alv('deposits').map(x => ({ bank: (x.bank || '').toUpperCase(), acno: x.acno || '', invested: String(x.invested ?? '').trim() !== '' ? r2(x.invested) : '', interest: String(x.interest ?? '').trim() !== '' ? r2(x.interest) : '', balance: r2(x.value) })),
+    deposits: alv('deposits').map(x => ({ bank: `${x.bank || ''}${x.cur && x.cur !== 'LKR' ? ` (${x.cur} ACCOUNT)` : ''}`.toUpperCase(), acno: x.acno || '', invested: String(x.invested ?? '').trim() !== '' ? r2(x.invested) : '', interest: String(x.interest ?? '').trim() !== '' ? r2(x.interest) : '', balance: r2(x.value) })),
     shares: alv('shares').map(x => ({ company: (x.company || '').toUpperCase(), units: x.units || '', acquired: '', value: r2(x.value), dividend: '' })),
     c1019: r2(alv('cash').reduce((a, x) => a + anum(x.value), 0)),
     c1020: r2(alv('loans_given').reduce((a, x) => a + anum(x.value), 0)),
