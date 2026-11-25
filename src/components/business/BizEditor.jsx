@@ -15,12 +15,14 @@ import {
   collectForReturn, saveAccount, loadBizOffice, saveBizOffice, STATUS, KIND, expenseDefault,
 } from '../../lib/bizAccounts';
 import { openBizStatement } from '../../lib/bizStatement';
+import { parseAmount, typingAmount, amountNum } from '../../lib/numParse';
+import ExcelMenu from '../ExcelMenu';
+import { downloadBiz, importBiz } from '../../lib/excelIO';
 import { supabase } from '../../lib/supabase';
 
-const num = (v) => { const n = Number(String(v ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
+const num = (v) => amountNum(v);
 const fm = (n) => (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-LK', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const rs = (n) => `Rs. ${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const clean = (v, neg) => String(v ?? '').replace(neg ? /[^\d.-]/g : /[^\d.]/g, '');
 
 /** amount box: 1,234,567 when not typing */
 function Amt({ value, onChange, disabled, small, neg, calc = true }) {
@@ -29,8 +31,9 @@ function Amt({ value, onChange, disabled, small, neg, calc = true }) {
   return (
     <div className="relative">
       <input inputMode="decimal" disabled={disabled} value={shown} placeholder="0"
-        onFocus={(e) => { setFocus(true); requestAnimationFrame(() => e.target.select()); }} onBlur={() => setFocus(false)}
-        onChange={(e) => onChange(clean(e.target.value, neg))}
+        onFocus={(e) => { setFocus(true); requestAnimationFrame(() => e.target.select()); }}
+        onBlur={() => { setFocus(false); const n = parseAmount(value, !!neg); if (n !== String(value ?? '')) onChange(n); }}
+        onChange={(e) => onChange(typingAmount(e.target.value, !!neg))}
         className={`w-full rounded-lg border border-gray-200 bg-white text-right tabular-nums focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500 ${small ? 'px-1.5 py-1 text-xs' : `px-2.5 py-2 text-sm ${calc && !disabled ? 'pr-8' : ''}`}`} />
       {!small && calc && !disabled && <TopUpCalc value={value} onUse={onChange} />}
     </div>
@@ -135,6 +138,14 @@ export default function BizEditor({ acc: acc0, role = 'client', client = {}, cli
             ))}
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
+            <ExcelMenu dark onExport={() => downloadBiz({ acc: { ...acc, ...meta }, data, mode, c: admin || acc.status === 'final' ? c : null })}
+              onTemplate={() => downloadBiz({ acc: { ...acc, ...meta }, data, mode, template: true })}
+              onImport={locked ? undefined : (sheets) => {
+                const res = importBiz(sheets, acc, data, mode);
+                if (!window.confirm(`Replace the figures with the file? (${res.lines} lines${res.assets !== null ? ` · ${res.assets} assets` : ''}${res.partners !== null ? ` · ${res.partners} partners` : ''})`)) return '';
+                setData(res.data); if (res.mode !== mode) setMode(res.mode); setDirty(true);
+                return `Imported${res.mode !== mode ? ` (${res.mode === 'monthly' ? 'month by month' : 'annual totals'})` : ''} — check and Save`;
+              }} />
             {!locked && <button type="button" disabled={busy || (!dirty && !odirty)} onClick={doSave} className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-primary-800 disabled:opacity-50">{busy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>}
             {!admin && acc.status === 'open' && <button type="button" disabled={busy} onClick={submit} className="flex items-center gap-1.5 rounded-lg bg-gold-500 px-3 py-1.5 text-xs font-bold text-primary-900"><Send size={13} /> Send to TaxMate</button>}
             {admin && <button type="button" onClick={print} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"><Printer size={13} /> Print</button>}
