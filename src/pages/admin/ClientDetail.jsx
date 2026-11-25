@@ -5,6 +5,7 @@ import { PlanAvatar, PlanBadge } from '../../components/PlanBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Edit2, Save, X, Calculator, FileText, Receipt, Printer, FileCheck2 } from 'lucide-react';
+import IrdCopyMenu from '../../components/IrdCopyMenu';
 import SavedCalculations from '../../components/SavedCalculations';
 import { summarizeCalc, KIND_LABEL } from '../../lib/iitCalc';
 import { openStatement } from '../../lib/iitStatement';
@@ -419,9 +420,7 @@ export default function ClientDetail() {
                           <button onClick={() => openStatement(calc, client)} className="btn-secondary text-xs py-1 px-2.5">
                             <Printer size={13} /> PDF
                           </button>
-                          <button onClick={() => openStatement(calc, client, { clean: true })} className="btn-secondary text-xs py-1 px-2.5" title="Unbranded PDF — no TaxMate header or details. Upload to IRD as a supporting document.">
-                            <FileCheck2 size={13} /> IRD copy
-                          </button>
+                          <IrdCopyMenu onPick={(sign) => openStatement(calc, client, { clean: true, sign })} />
                         </div>
                       )}
                     </div>
