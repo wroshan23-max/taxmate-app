@@ -71,7 +71,9 @@ export const SECTIONS = [
       { key: 'regno', en: 'Registration No.', si: 'ලියාපදිංචි අංකය', type: 'text', required: true, placeholder: 'CAB-1234', upper: true },
       { key: 'mfg_year', en: 'Year of manufacture', si: 'නිෂ්පාදිත වර්ෂය', type: 'year', required: true, placeholder: '2019' },
       { key: 'acquired', en: 'Date acquired', si: 'මිලදී ගත් දිනය', type: 'date' },
-      { ...VALUE, en: 'Cost or value (Rs.)', si: 'පිරිවැය / වටිනාකම (රු.)' },
+      // V80: cost and market value side by side (as for immovable property)
+      { ...VALUE, en: 'Cost (Rs.)', si: 'පිරිවැය (රු.)', hint: 'Price paid (incl. duty / registration).' },
+      { key: 'market', en: 'Market value (Rs.)', si: 'වෙළඳපොළ වටිනාකම (රු.)', type: 'money', hint: 'Estimated value on 31 March. Leave blank if about the same as the cost.' },
     ],
   },
   {
