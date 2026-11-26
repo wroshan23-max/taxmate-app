@@ -18,7 +18,7 @@
 // ═══════════════════════════════════════════════════════════
 import { computeReturn, yearCfg } from './iitCalc';
 import { rowsOf, num as anum, totals as alTotals } from './assets';
-import { rowTotal, sheetTotals } from './incomeSheet';
+import { rowTotal, sheetTotals, salarySplit } from './incomeSheet';
 import { FIRM } from './iitStatement';
 
 // V76: 2023/24 & 2024/25 (late returns) — same RAMIS layout; foreign-currency remittances exempt (cage 210)
@@ -266,7 +266,7 @@ export function checkDraft(year, calc, d, ctx = {}) {
     const chk = [['salary', (f.empPrimary || 0), 'Salary'], ['interest', f.interest || 0, 'Interest'], ['rent', f.rentGross || 0, 'Rent'],
       ['fxEmployment', f.empFx || 0, 'Foreign salary'], ['fxServices', f.bizFx || 0, 'Foreign services'], ['apit', f.apitPrimary || 0, 'APIT'], ['whtInterest', f.whtInterest || 0, 'AIT on interest']];
     for (const [k, v, label] of chk) {
-      const s = rowTotal(sh, k);
+      const s = k === 'salary' ? salarySplit(sh).salary : rowTotal(sh, k);   // V81: after the exempt part
       if ((s || v) && Math.abs(s - v) > Math.max(1, v * 0.01)) add('warn', `${label}: Monthly Income sheet Rs. ${fmt2(s)} vs computation Rs. ${fmt2(v)}.`);
     }
     if (ctx.sheet.status === 'open') add('warn', 'Monthly Income sheet is not submitted yet.');

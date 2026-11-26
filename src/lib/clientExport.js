@@ -76,7 +76,8 @@ function incomeSheet(c, s) {
   }
   const tt = sheetTotals(d, !!s.biz_mode);
   rows.push([], [sub('Totals for the year')],
-    [b('Income in Sri Lanka'), ...Array(12).fill(''), mb(tt.income)],
+    [b('Income in Sri Lanka (taxable)'), ...Array(12).fill(''), mb(tt.income)],
+    [b('Exempt / excluded part of salary'), ...Array(12).fill(''), mb(tt.exempt)],
     [b('Foreign-currency income (Rs.)'), ...Array(12).fill(''), mb(tt.fx)],
     [b('Business income'), ...Array(12).fill(''), mb(tt.bizIncome)],
     [b('Business expenses'), ...Array(12).fill(''), mb(tt.bizExpense)],

@@ -11,12 +11,14 @@ export const monthLabel = (year, i) => {
   return `${MONTHS[i]} ${i < 9 ? s : s + 1}`;
 };
 
-// kind: income | credit | fx | bizIncome | bizExpense
+// kind: income | exempt | credit | fx | bizIncome | bizExpense
 export const GROUPS = [
   {
     key: 'local', en: 'Income in Sri Lanka', si: 'දේශීය ආදායම', rows: [
       { key: 'salary', en: 'Salary & allowances', si: 'වැටුප හා දීමනා', kind: 'income', hint: 'Gross, before APIT / EPF' },
       { key: 'bonus', en: 'Bonus / lump sums', si: 'බෝනස්', kind: 'income' },
+      // V81: the part of the salary / bonus above that is not taxed (shown, then taken out of taxable salary → Cage 210)
+      { key: 'exemptSalary', en: 'Less: exempt / excluded part of salary (not taxed)', si: 'වැටුපෙන් බදු අය නොකෙරෙන / බැහැර කළ කොටස', kind: 'exempt', hint: 'Part of the salary / bonus above that is not taxed (e.g. reimbursed travel or work expenses)' },
       { key: 'rent', en: 'Rent received (gross)', si: 'ලැබුණු කුලිය', kind: 'income' },
       { key: 'interest', en: 'Bank interest (gross)', si: 'බැංකු පොලිය', kind: 'income' },
       { key: 'otherIncome', en: 'Other income', si: 'වෙනත් ආදායම්', kind: 'income' },
@@ -101,18 +103,28 @@ export function rowTotal(data, key) { return (data?.rows?.[key] ?? []).reduce((a
 // biz: freelance income for foreign clients counts as business income (expenses are deducted from it)
 const kindOf = (r, biz) => (biz && r.key === 'fxServices' ? 'bizIncome' : r.kind);
 export function monthTotals(data, i, biz = false) {
-  const t = { income: 0, fx: 0, bizIncome: 0, bizExpense: 0, credit: 0 };
+  const t = { income: 0, exempt: 0, fx: 0, bizIncome: 0, bizExpense: 0, credit: 0 };
   for (const r of ROWS) t[kindOf(r, biz)] += num(cell(data, r.key, i));
+  t.income -= Math.min(Math.max(0, t.exempt), Math.max(0, num(cell(data, 'salary', i)) + num(cell(data, 'bonus', i))));   // V81: taxable local income
   t.bizProfit = t.bizIncome - t.bizExpense;
   return t;
 }
 export function sheetTotals(data, biz = false) {
-  const t = { income: 0, fx: 0, bizIncome: 0, bizExpense: 0, credit: 0 };
+  const t = { income: 0, exempt: 0, fx: 0, bizIncome: 0, bizExpense: 0, credit: 0 };
   for (const r of ROWS) t[kindOf(r, biz)] += rowTotal(data, r.key);
+  const sp = salarySplit(data);   // V81: income = taxable local income (exempt part of salary taken out)
+  t.income -= (rowTotal(data, 'salary') - sp.salary) + (rowTotal(data, 'bonus') - sp.bonus);
   t.bizProfit = t.bizIncome - t.bizExpense;
   t.total = t.income + t.fx + Math.max(0, t.bizProfit);
   t.monthsFilled = MONTHS.filter((_, i) => ROWS.some(r => num(cell(data, r.key, i)) !== 0)).length;
   return t;
+}
+
+/** V81: annual salary / bonus after taking out the exempt / excluded part (salary first, then bonus). */
+export function salarySplit(data) {
+  const sal = rowTotal(data, 'salary'), bon = rowTotal(data, 'bonus'), ex = Math.max(0, rowTotal(data, 'exemptSalary'));
+  const fromSal = Math.min(ex, Math.max(0, sal)), fromBon = Math.min(ex - fromSal, Math.max(0, bon));
+  return { salary: sal - fromSal, bonus: bon - fromBon, exempt: ex };
 }
 
 // Map a sheet onto IIT Return inputs (annual amounts).
@@ -121,8 +133,9 @@ export function sheetTotals(data, biz = false) {
 export function sheetToReturnInput(data, working = null) {
   const s = (k) => Math.round(rowTotal(data, k));
   const t = sheetTotals(data);
+  const sp = salarySplit(data);
   const out = {
-    empPrimary: s('salary'), empBonus: s('bonus'), rentGross: s('rent'), interest: s('interest'), othInc: s('otherIncome'),
+    empPrimary: Math.round(sp.salary), empBonus: Math.round(sp.bonus), othExempt: Math.round(sp.exempt), rentGross: s('rent'), interest: s('interest'), othInc: s('otherIncome'),
     empFx: s('fxEmployment'), bizFx: s('fxServices'), forFx: s('fxOther'),
     bizProfit: Math.max(0, Math.round(t.bizProfit)),
     apitPrimary: s('apit'), whtInterest: s('whtInterest'), whtOther: s('whtOther'),
