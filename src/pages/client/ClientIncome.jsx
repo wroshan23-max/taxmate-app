@@ -211,10 +211,17 @@ export default function ClientIncome() {
       {/* Year summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {(biz ? [['Business & freelance income', t.bizIncome, 'text-emerald-700'], ['Expenses entered (full bills)', t.bizExpense, 'text-orange-600'], ['Other income', t.income + t.fx, 'text-green-700'], ['Tax already deducted', t.credit, 'text-teal-700']]
-          : [['Income (Sri Lanka)', t.income, 'text-green-700'], ['Foreign income', t.fx, 'text-blue-700'], ['Business profit', t.bizProfit, t.bizProfit < 0 ? 'text-red-600' : 'text-orange-600'], ['Tax already deducted', t.credit, 'text-teal-700']]).map(([l, v, c]) => (
+          : [[t.exempt > 0 ? 'Taxable income (Sri Lanka)' : 'Income (Sri Lanka)', t.income, 'text-green-700'], ['Foreign income', t.fx, 'text-blue-700'], ['Business profit', t.bizProfit, t.bizProfit < 0 ? 'text-red-600' : 'text-orange-600'], ['Tax already deducted', t.credit, 'text-teal-700']]).map(([l, v, c]) => (
           <div key={l} className="card p-3"><div className={`text-lg font-black tabular-nums ${c}`}>{rs(v)}</div><div className="text-[11px] text-gray-500">{l} · year so far</div></div>
         ))}
       </div>
+
+      {t.exempt > rowTotal(data, 'salary') + rowTotal(data, 'bonus') && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex gap-2"><AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+          <span>The exempt / excluded part of salary (Rs. {t.exempt.toLocaleString('en-LK')}) is more than the salary and bonus entered. Enter the full salary in <b>Salary &amp; allowances</b> — the exempt line is the part of it that is not taxed.
+            <span className="block text-xs text-amber-800">බදු රහිත කොටස වැටුපට වඩා වැඩියි — සම්පූර්ණ වැටුප "Salary &amp; allowances" හි ලියන්න.</span></span>
+        </div>
+      )}
 
       {odd.length > 0 && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-1.5">
@@ -277,6 +284,12 @@ export default function ClientIncome() {
                   </div>
                 ))}
               </div>
+              {g.key === 'local' && toNum(cell(data, 'exemptSalary', month)) > 0 && (
+                <div className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm font-semibold text-green-800 flex justify-between gap-2">
+                  <span>Taxable salary — {MONTHS[month]} <span className="block text-[11px] font-normal text-green-700">Salary + bonus less the exempt / excluded part · බදු අය වන වැටුප</span></span>
+                  <span className="tabular-nums">{rs(Math.max(0, toNum(cell(data, 'salary', month)) + toNum(cell(data, 'bonus', month)) - toNum(cell(data, 'exemptSalary', month))))}</span>
+                </div>
+              )}
               {g.key === 'expenses' && (mt.bizIncome > 0 || mt.bizExpense > 0) && (
                 <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold flex justify-between ${mt.bizProfit < 0 ? 'bg-red-50 text-red-700' : 'bg-orange-50 text-orange-800'}`}>
                   <span>{biz ? `Income less expenses entered — ${MONTHS[month]}` : `Business ${mt.bizProfit < 0 ? 'loss' : 'profit'} for ${MONTHS[month]}`}</span><span className="tabular-nums">{rs(Math.abs(mt.bizProfit))}</span>
@@ -344,7 +357,8 @@ export default function ClientIncome() {
           <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2"><Send size={18} className="text-primary-600" /><h3 className="font-bold text-primary-800 flex-1">Submit Y/A {sel.year}</h3><button onClick={() => setConfirm(false)} className="text-gray-400"><X size={18} /></button></div>
             <div className="text-sm bg-gray-50 rounded-lg p-3 space-y-1">
-              <div className="flex justify-between"><span>Income in Sri Lanka</span><b>{rs(t.income)}</b></div>
+              <div className="flex justify-between"><span>Income in Sri Lanka{t.exempt > 0 ? ' (taxable)' : ''}</span><b>{rs(t.income)}</b></div>
+              {t.exempt > 0 && <div className="flex justify-between text-gray-500"><span>Exempt / excluded part of salary</span><b>{rs(t.exempt)}</b></div>}
               <div className="flex justify-between"><span>Foreign income</span><b>{rs(t.fx)}</b></div>
               {biz ? <>
                 <div className="flex justify-between"><span>Business &amp; freelance income</span><b>{rs(t.bizIncome)}</b></div>
