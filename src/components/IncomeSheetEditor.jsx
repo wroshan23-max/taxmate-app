@@ -134,10 +134,15 @@ export default function IncomeSheetEditor({ sheet, client, onClose, onSaved }) {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 px-4 pt-3">
-        {[['Income (Sri Lanka)', t.income, 'text-green-700'], ['Foreign income', t.fx, 'text-blue-700'], ['Business profit', t.bizProfit, t.bizProfit < 0 ? 'text-red-600' : 'text-orange-600'], ['Tax already deducted', t.credit, 'text-teal-700']].map(([l, v, c]) => (
+        {[[t.exempt > 0 ? `Taxable income (Sri Lanka) · exempt ${rs(t.exempt)}` : 'Income (Sri Lanka)', t.income, 'text-green-700'], ['Foreign income', t.fx, 'text-blue-700'], ['Business profit', t.bizProfit, t.bizProfit < 0 ? 'text-red-600' : 'text-orange-600'], ['Tax already deducted', t.credit, 'text-teal-700']].map(([l, v, c]) => (
           <div key={l} className="rounded-xl border border-gray-100 p-2.5"><div className={`font-black tabular-nums ${c}`}>{rs(v)}</div><div className="text-[11px] text-gray-500">{l} · {t.monthsFilled}/12 months</div></div>
         ))}
       </div>
+
+      {t.exempt > rowTotal(data, 'salary') + rowTotal(data, 'bonus') && (
+        <div className="mx-4 mt-3 flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900"><AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
+          Exempt / excluded part of salary ({rs(t.exempt)}) is more than salary + bonus ({rs(rowTotal(data, 'salary') + rowTotal(data, 'bonus'))}). The exempt line should be the part of the salary that is not taxed.</div>
+      )}
 
       {odd.length > 0 && (
         <div className="mx-4 mt-3 space-y-1 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">

@@ -209,8 +209,8 @@ export default function ReturnCalculator({ clients, user, initial, onNew, persis
     const keep = Object.fromEntries(Object.entries(f).filter(([k]) => ['solar', 'donCharity', 'donGovt', 'qpOther', 'bizLossBF', 'termBen', 'invGain', 'forExempt', 'othExempt', 'invGain15', 'ftc', 'instalments', 'termTaxDed', 'gainTaxPaid', 'apitSecondary', 'empSecondary', 'empBenefits', 'bizPartner', 'othInv', 'forTaxable'].includes(k)));
     setPeriod('annual');
     setF({ ...keep, ...Object.fromEntries(Object.entries(imp).map(([k, v]) => [k, String(v)])) });
-    setOpen(o => ({ ...o, emp: true, biz: true, inv: true, oth: true, cr: true }));
-    toast.success(`Imported ${data.status === 'open' ? 'draft ' : ''}sheet${bizLoss ? ` — note: business shows a loss of ${rs(bizLoss)}` : ''}`);
+    setOpen(o => ({ ...o, emp: true, biz: true, inv: true, oth: true, cr: true, ex: o.ex || !!imp.othExempt }));
+    toast.success(`Imported ${data.status === 'open' ? 'draft ' : ''}sheet${imp.othExempt ? ` — exempt part of salary ${rs(imp.othExempt)} taken out of salary → Cage 210` : ''}${bizLoss ? ` — note: business shows a loss of ${rs(bizLoss)}` : ''}`);
   };
 
   // V76: sole proprietor / partnership business computations (FINAL) → Schedule 2 + credits 906 / 907
