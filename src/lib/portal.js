@@ -10,6 +10,8 @@ export async function callPortal(action, payload = {}) {
       : error.message;
     throw new Error(msg);
   }
+  // V86: an older portal-admin does not know the new actions yet
+  if (data?.error === 'Unknown action.') throw new Error('The "portal-admin" Edge Function in Supabase is an older version — deploy the V86 version first (Supabase → Edge Functions → portal-admin).');
   if (data?.error) throw new Error(data.error);
   return data;
 }
