@@ -19,7 +19,7 @@ export const DEFAULT_PACKAGES = [
     includes: ['Partnership income tax return', 'Partners\' share of profit', 'Statement of accounts review', 'Filed in RAMIS'] },
   { key: 'company', name: 'Private Limited Company', sub: 'Company income tax', si: 'පුද්ගලික සමාගම', price: 80000, from: true, active: true, group: 'business',
     includes: ['Company income tax return', 'Tax computation from financial statements', 'Capital allowances & deferred items', 'Filed in RAMIS'] },
-  { key: 'nil', name: 'Nil Return File', sub: 'No taxable income', si: 'ශුන්‍ය බදු ප්‍රකාශය', price: 3000, from: false, active: true, group: 'individual',
+  { key: 'nil', name: 'Nil Return File', sub: 'No taxable income', si: 'ශුන්‍ය බදු ප්‍රකාශය', price: 5000, from: false, active: true, group: 'individual',
     includes: ['For income within the tax-free relief', 'Return filed in RAMIS', 'Keeps your IRD record clean'] },
 ];
 const META = Object.fromEntries(DEFAULT_PACKAGES.map((p) => [p.key, p]));
