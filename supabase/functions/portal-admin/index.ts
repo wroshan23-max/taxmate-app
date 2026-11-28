@@ -7,6 +7,8 @@
 //  Public actions (token based):  accept_invite, reset_password
 //  Admin actions (caller must be an admin): list_users, set_role, delete_user
 //  V70: set_role / delete_user need a full admin (not staff)
+//  V86: create_temp_login / reset_temp_password — client login with a one-time (temporary) password;
+//       the client chooses at the first sign-in to set a new password or keep it (profiles.temp_password_at)
 // ═══════════════════════════════════════════════════════════
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 
@@ -18,6 +20,21 @@ const cors = {
 // Always 200 so the app can show our message; failures carry { error }
 const reply = (body: unknown) => new Response(JSON.stringify(body), { headers: { ...cors, 'Content-Type': 'application/json' } });
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// V86: readable random password, e.g. "Kx7m-Q4tz-9Wpe" (no 0/O, 1/l/I); crypto-strong, ~70 bits
+function tempPassword(): string {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const groups: string[] = [];
+  for (let g = 0; g < 3; g++) {
+    const b = crypto.getRandomValues(new Uint32Array(4));
+    let x = '';
+    for (const v of b) x += A[v % A.length];
+    groups.push(x);
+  }
+  // make sure it has a digit, an upper and a lower case letter (some password policies require them)
+  const p = groups.join('-');
+  return /\d/.test(p) && /[A-Z]/.test(p) && /[a-z]/.test(p) ? p : tempPassword();
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -119,6 +136,45 @@ Deno.serve(async (req) => {
         };
       });
       return reply({ ok: true, users });
+    }
+
+    // ── V86: client login with a one-time password (any admin, like sending an invite) ──
+    if (action === 'create_temp_login' || action === 'reset_temp_password') {
+      const { client_id } = body;
+      if (!UUID_RE.test(client_id ?? '')) return reply({ error: 'Invalid request.' });
+      const { error: colErr } = await admin.from('profiles').select('temp_password_at').limit(1);
+      if (colErr) return reply({ error: 'Run the V86 script (temporary password) in Supabase first.' });
+      const { data: c } = await admin.from('clients').select('id, full_name, email, profile_id').eq('id', client_id).maybeSingle();
+      if (!c) return reply({ error: 'Client not found.' });
+      const password = tempPassword();
+      const now = new Date().toISOString();
+
+      if (action === 'create_temp_login') {
+        if (c.profile_id) return reply({ error: 'This client already has a portal login — send a new one-time password instead.' });
+        const email = String(c.email ?? '').trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply({ error: "Add the client's email first (Edit → Email). It becomes their sign-in name." });
+        const { data: created, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: c.full_name ?? email } });
+        if (error || !created?.user) {
+          const exists = /already|registered|exists/i.test(error?.message ?? '');
+          return reply({ error: exists ? 'A login with this email already exists. Link it in Settings → Users, or use a different email.' : (error?.message ?? 'Could not create the login.') });
+        }
+        const uid = created.user.id;
+        await admin.from('profiles').update({ full_name: c.full_name ?? email, temp_password_at: now }).eq('id', uid);
+        await admin.from('clients').update({ profile_id: uid }).eq('id', c.id);
+        await admin.from('portal_invites').update({ revoked_at: now }).eq('client_id', c.id).is('accepted_at', null).is('revoked_at', null);
+        await admin.from('portal_invites').insert({ email, full_name: c.full_name, client_id: c.id, role: 'client', created_by: myId, accepted_at: now, accepted_user_id: uid, method: 'temp_password' });
+        return reply({ ok: true, email, password });
+      }
+
+      // reset_temp_password: only for a client login (never an admin's)
+      if (!c.profile_id) return reply({ error: 'This client has no portal login yet — invite them first.' });
+      const { data: prof } = await admin.from('profiles').select('role').eq('id', c.profile_id).maybeSingle();
+      if (prof?.role !== 'client') return reply({ error: 'This login is not a client login.' });
+      const { data: u, error } = await admin.auth.admin.updateUserById(c.profile_id, { password });
+      if (error) return reply({ error: error.message });
+      await admin.from('profiles').update({ temp_password_at: now }).eq('id', c.profile_id);
+      await admin.from('password_resets').update({ used_at: now }).eq('user_id', c.profile_id).is('used_at', null);
+      return reply({ ok: true, email: u.user?.email, password });
     }
 
     if ((action === 'set_role' || action === 'delete_user') && !isOwner) return reply({ error: 'Only a full admin can change access or remove logins.' });
