@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase, fmtDate } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -60,7 +60,9 @@ export default function Clients() {
       setApps(m);
     }).catch(() => {});
   }, []);
-  const [search, setSearch] = useState('');
+  const location = useLocation();
+  const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');   // V83: ?q= from the top-bar search
+  useEffect(() => { const v = new URLSearchParams(location.search).get('q'); if (v != null) setSearch(v); }, [location.search]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(EMPTY);
