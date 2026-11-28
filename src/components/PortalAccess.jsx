@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { KeyRound, ShieldCheck, Clock, UserX, XCircle, Globe } from 'lucide-react';
+import { KeyRound, ShieldCheck, Clock, UserX, XCircle, Globe, Link2, LockKeyhole } from 'lucide-react';
 import { supabase, fmtDate } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { callPortal, inviteUrl, resetUrl, inviteMessage, resetMessage } from '../lib/portal';
+import { callPortal, inviteUrl, resetUrl, inviteMessage, resetMessage, tempLoginMessage } from '../lib/portal';
+import { logActivity } from '../lib/activity';
 import MessageMenu from './MessageMenu';
 import { recipientsOf } from '../lib/contacts';
 
@@ -16,6 +17,9 @@ export default function PortalAccess({ client, onChange }) {
   const [login, setLogin]     = useState(null);   // profiles row of the linked login
   const [invites, setInvites] = useState([]);
   const [loading, setLoading] = useState(true);
+  // V86: how the client signs in the first time — 'link' (creates own password) or 'temp' (one-time password)
+  const [method, setMethod] = useState(() => { try { return localStorage.getItem('tm_invite_method') || 'link'; } catch { return 'link'; } });
+  const pickMethod = (m) => { setMethod(m); try { localStorage.setItem('tm_invite_method', m); } catch { /* private mode */ } };
 
   const load = async () => {
     const [{ data: inv }, prof] = await Promise.all([
@@ -45,6 +49,33 @@ export default function PortalAccess({ client, onChange }) {
   };
 
   const resendText = async () => inviteMessage({ name: client.full_name, url: inviteUrl(pending.token) });
+
+  // V86: create the login now with a one-time password (Edge Function) and return the message
+  const tempLoginText = async () => {
+    if (!client.email) throw new Error("Add the client's email first (Edit → Email). It becomes their sign-in name.");
+    const r = await callPortal('create_temp_login', { client_id: client.id });
+    logActivity('share', undefined, `portal one-time password (new login) — ${client.full_name}`);
+    toast.success('Login created — send the message now (the password is shown only once)', { duration: 6000 });
+    setTimeout(() => onChange?.(), 1500);
+    return tempLoginMessage({ name: client.full_name, email: r.email, password: r.password });
+  };
+  const tempResetText = async () => {
+    const r = await callPortal('reset_temp_password', { client_id: client.id });
+    logActivity('share', undefined, `portal one-time password (reset) — ${client.full_name}`);
+    return tempLoginMessage({ name: client.full_name, email: r.email, password: r.password, reset: true });
+  };
+  const methodPicker = (
+    <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="How the client signs in the first time">
+      {[['link', Link2, 'Invite link', 'Client opens the link and creates their own password (valid 14 days).'],
+        ['temp', LockKeyhole, 'Link + one-time password', 'Login is ready now. At the first sign-in the client sets a new password or keeps this one.']].map(([k, I, t, d]) => (
+        <button key={k} type="button" role="radio" aria-checked={method === k} onClick={() => pickMethod(k)}
+          className={`flex items-start gap-2 rounded-xl border-2 p-2.5 text-left ${method === k ? 'border-primary-500 bg-primary-50' : 'border-gray-200 hover:border-gray-300'}`}>
+          <I size={16} className={`mt-0.5 flex-shrink-0 ${method === k ? 'text-primary-700' : 'text-gray-400'}`} />
+          <span><b className="block text-xs text-gray-800">{t}</b><span className="text-[11px] leading-tight text-gray-500">{d}</span></span>
+        </button>
+      ))}
+    </div>
+  );
 
   const cancelInvite = async () => {
     if (!window.confirm('Cancel this invitation? The link will stop working.')) return;
@@ -92,6 +123,8 @@ export default function PortalAccess({ client, onChange }) {
           <div className="flex gap-2 flex-wrap">
             <MessageMenu label="Send password reset link" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
               subject={`Reset your portal password — ${client.full_name}`} getText={resetText} />
+            {login?.role !== 'admin' && <MessageMenu label="Send new one-time password" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
+              subject={`Your TaxMate portal — new one-time password`} getText={tempResetText} />}
             <button onClick={removeAccess} className="btn-secondary text-sm text-red-600 border-red-200"><UserX size={14} /> Remove access</button>
           </div>
         </div>
@@ -104,17 +137,21 @@ export default function PortalAccess({ client, onChange }) {
           <div className="flex gap-2 flex-wrap">
             <MessageMenu label="Send invite again" phone={client.mobile} email={pending.email} recipients={recipientsOf(client, { email: pending.email })}
               subject="Your TaxMate client portal" getText={resendText} />
+            <MessageMenu label="Send a one-time password instead" phone={client.mobile} email={pending.email} recipients={recipientsOf(client, { email: pending.email })}
+              subject="Your TaxMate client portal" getText={tempLoginText} />
             <button onClick={cancelInvite} className="btn-secondary text-sm"><XCircle size={14} /> Cancel invite</button>
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-gray-600">
-            Invite {client.full_name?.split(' ').slice(-1)[0] || 'the client'} to the portal. They get a link by WhatsApp or email, set their own password and can then see and confirm their tax calculations.
+            Invite {client.full_name?.split(' ').slice(-1)[0] || 'the client'} to the portal by WhatsApp or email. They can then see and confirm their tax calculations. Choose how they sign in the first time:
           </p>
+          {methodPicker}
           {!client.email && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">Add the client's email first (Edit at the top). It becomes their sign-in name.</p>}
-          <MessageMenu label="Invite to portal" phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
-            subject="Your TaxMate client portal" getText={newInviteText} />
+          <MessageMenu label={method === 'temp' ? 'Create login & send one-time password' : 'Invite to portal'} phone={client.mobile} email={client.email} recipients={recipientsOf(client)}
+            subject="Your TaxMate client portal" getText={method === 'temp' ? tempLoginText : newInviteText} />
+          {method === 'temp' && <p className="text-[11px] text-gray-500">The password is made by the server and shown only in this message — TaxMate does not keep it. Send it straight away; if it is lost, use "Send new one-time password".</p>}
         </div>
       )}
       <p className="text-[11px] text-gray-400 mt-3 flex items-center gap-1"><KeyRound size={11} /> Links are private — send them only to the client.</p>

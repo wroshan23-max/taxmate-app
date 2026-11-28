@@ -15,6 +15,7 @@ import NotificationBell from './NotificationBell';
 import MobileDrawer from './MobileDrawer';
 import { PlanAvatar, PlanBadge } from './PlanBadge';
 import { myActivePlan, myPayrollAccess, planStyle } from '../lib/plans';
+import TempPasswordPrompt from './TempPasswordPrompt';   // V86
 
 const nav = [
   { to: '/client', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -143,6 +144,7 @@ export default function ClientLayout() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <TempPasswordPrompt profile={profile} />
       <aside className="hidden md:flex flex-col w-56 lg:w-64 bg-primary-800 flex-shrink-0">
         <Sidebar />
       </aside>
