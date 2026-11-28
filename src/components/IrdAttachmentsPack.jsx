@@ -3,7 +3,7 @@
 // document the app can make, and one printable pack of everything ticked.
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Paperclip, Eye, Download, Loader2, RotateCcw, PenLine, FolderOpen, CheckSquare, Square, Info } from 'lucide-react';
+import { Paperclip, Eye, Download, Loader2, RotateCcw, PenLine, FileX2, FolderOpen, CheckSquare, Square, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { buildDraft, buildDraftHtml, draftCages } from '../lib/ramisDraft';
 import { buildStatementHtml } from '../lib/iitStatement';
@@ -49,8 +49,8 @@ export default function IrdAttachmentsPack({ client, year, calc, draft, ctx, att
   const overridden = Object.keys(attach).length > 0;
 
   // ─── document builders (withToolbar = false inside the pack) ───
-  const docsFor = (key, tb = true) => {
-    const o = { sign, withToolbar: tb };
+  const docsFor = (key, tb = true, sg = sign) => {
+    const o = { sign: sg, withToolbar: tb };
     const item = RETURN_ITEMS.find((x) => x.key === key);
     if (item) {
       if (!item.sections || !calc || !d) return [];
@@ -82,7 +82,7 @@ export default function IrdAttachmentsPack({ client, year, calc, draft, ctx, att
     if (!list.length) return toast.error('Nothing to show yet');
     const w = window.open('', '_blank');
     if (!w) return toast.error('Allow pop-ups to view');
-    openHtml(list.length === 1 ? list[0].html : buildPackHtml(docsFor(key, false), cover([])), w);
+    openHtml(list.length === 1 ? list[0].html : buildPackHtml(docsFor(key, false), cover([]), { sign }), w);
   };
   const cover = (keys) => ({
     name: client.full_name, tin: client.tin, year,
@@ -91,7 +91,7 @@ export default function IrdAttachmentsPack({ client, year, calc, draft, ctx, att
       { title: 'Verification of attachment / documents', items: DOC_ITEMS.map((x) => ({ sn: x.sn, en: x.en, on: isOn(x.key) })) },
     ] : [],
   });
-  const all = () => {
+  const all = (sg = sign) => {
     const w = window.open('', '_blank');
     if (!w) return toast.error('Allow pop-ups to open the pack');
     setBusy(true);
@@ -102,12 +102,12 @@ export default function IrdAttachmentsPack({ client, year, calc, draft, ctx, att
       if (calc && d && retKeys.length) {
         const sections = RETURN_ITEMS.filter((x) => retKeys.includes(x.key)).flatMap((x) => x.sections);
         const order = ['return', 'sch1', 'sch2', 'sch3', 'sch4', 'sch5', 'sch7', 'sch8', 'sch9', 'sch10', 'decl'];
-        docs.push({ title: `Return of income & schedules (${retKeys.filter((k) => k !== 'return').map((k) => RETURN_ITEMS.find((x) => x.key === k).en.replace('Schedule ', 'Sch. ')).join(', ') || 'no schedules'})`, html: buildDraftHtml({ year, d, calc, client, clean: true, only: order.filter((s) => sections.includes(s)), sign, withToolbar: false }) });
+        docs.push({ title: `Return of income & schedules (${retKeys.filter((k) => k !== 'return').map((k) => RETURN_ITEMS.find((x) => x.key === k).en.replace('Schedule ', 'Sch. ')).join(', ') || 'no schedules'})`, html: buildDraftHtml({ year, d, calc, client, clean: true, only: order.filter((s) => sections.includes(s)), sign: sg, withToolbar: false }) });
       }
-      if (isOn('whtSch') && !retKeys.includes('sch7')) docs.push(...docsFor('whtSch', false));
-      for (const it of DOC_ITEMS) if (isOn(it.key) && canMake(it.key)) docs.push(...docsFor(it.key, false));
+      if (isOn('whtSch') && !retKeys.includes('sch7')) docs.push(...docsFor('whtSch', false, sg));
+      for (const it of DOC_ITEMS) if (isOn(it.key) && canMake(it.key)) docs.push(...docsFor(it.key, false, sg));
       if (!docs.length) { w.close(); toast.error('Tick at least one item the app can make'); return; }
-      openHtml(buildPackHtml(docs, cover(['x'])), w);
+      openHtml(buildPackHtml(docs, cover(['x']), { sign: sg }), w);
     } catch (e) { w.close(); toast.error(e.message); } finally { setBusy(false); }
   };
 
@@ -132,10 +132,16 @@ export default function IrdAttachmentsPack({ client, year, calc, draft, ctx, att
   return (
     <div className="card">
       <div className="card-header flex-wrap gap-2"><Paperclip size={16} /> IRD attachments — RAMIS verification
-        <label className="ml-auto inline-flex items-center gap-1.5 text-xs font-normal text-gray-600"><input type="checkbox" checked={sign} onChange={(e) => setSign(e.target.checked)} /><PenLine size={12} /> With signature lines</label>
+        {/* V87: with / without signature — for View; Download all has both buttons */}
+        <div className="ml-auto flex rounded-lg bg-gray-100 p-0.5 text-xs font-semibold" role="radiogroup" aria-label="Signature">
+          {[[true, 'With signature', PenLine], [false, 'Without signature', FileX2]].map(([v, l, I]) => (
+            <button key={l} type="button" role="radio" aria-checked={sign === v} onClick={() => setSign(v)}
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 ${sign === v ? 'bg-white text-primary-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}><I size={12} /> {l}</button>
+          ))}
+        </div>
       </div>
       <div className="space-y-3 p-4">
-        <p className="text-xs text-gray-500">The two lists RAMIS shows before you submit the return. Items are ticked from the computation, the RAMIS draft, the A&amp;L statement and the business accounts — tick or untick to change. <b>View</b> opens a document ready to save as PDF and upload; <b>Download all</b> makes one file with everything ticked. Documents are unbranded (IRD copies).</p>
+        <p className="text-xs text-gray-500">The two lists RAMIS shows before you submit the return. Items are ticked from the computation, the RAMIS draft, the A&amp;L statement and the business accounts — tick or untick to change. <b>View</b> opens a document ready to save as PDF and upload (with or without signature lines — choose at the top right); <b>Download all</b> makes one file with everything ticked. Documents are unbranded (IRD copies).</p>
         {!calc && <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-900"><Info size={13} /> Choose the IIT return computation above to make the return, schedules and tax computation.</div>}
         {biz.loading ? <div className="py-3 text-center"><Loader2 className="mx-auto animate-spin text-gray-400" /></div> : (
           <div className="grid gap-4 xl:grid-cols-2">
@@ -151,7 +157,8 @@ export default function IrdAttachmentsPack({ client, year, calc, draft, ctx, att
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={all} disabled={busy || biz.loading} className="btn-primary text-xs">{busy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Download all ticked (one PDF)</button>
+          <button type="button" onClick={() => all(true)} disabled={busy || biz.loading} className="btn-primary text-xs">{busy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Download all ticked — with signature</button>
+          <button type="button" onClick={() => all(false)} disabled={busy || biz.loading} className="btn-secondary text-xs"><FileX2 size={13} /> Download all ticked — without signature</button>
           {overridden && onAttach && <button type="button" onClick={() => onAttach({})} className="btn-secondary text-xs"><RotateCcw size={13} /> Back to automatic ticks</button>}
           {!draft && calc && <span className="text-[11px] text-gray-400">Built from the computation — build &amp; save the RAMIS draft above to add certificate numbers, TINs and activity codes.</span>}
           {biz.missing && <span className="text-[11px] text-amber-700">Business accounts are not set up (V76 script).</span>}
