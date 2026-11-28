@@ -7,14 +7,16 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Save, Loader2, Plus, Trash2, Printer, Send, Lock, Unlock, CheckCircle2, AlertTriangle, Info, X, CalendarDays, CalendarRange,
-  TrendingUp, Package, Receipt, Monitor, Users, SlidersHorizontal, Calculator, FileSpreadsheet, Wand2,
+  TrendingUp, Package, Receipt, Monitor, Users, SlidersHorizontal, Calculator, FileSpreadsheet, Wand2, Scale,
 } from 'lucide-react';
 import TopUpCalc from '../TopUpCalc';
 import {
   MONTHS, INCOME_TYPES, CA_CLASSES, guessClass, normalize, lineAmt, newLine, newAsset, newPartner, computeBusiness, resultOf,
-  collectForReturn, saveAccount, loadBizOffice, saveBizOffice, STATUS, KIND, expenseDefault,
+  collectForReturn, saveAccount, loadBizOffice, saveBizOffice, STATUS, KIND, expenseDefault, BS_ASSETS, BS_LIABS,
 } from '../../lib/bizAccounts';
 import { openBizStatement } from '../../lib/bizStatement';
+import { buildAccountsHtml, buildPitHtml, openHtml } from '../../lib/bizDocs';
+import IrdCopyMenu from '../IrdCopyMenu';
 import { parseAmount, typingAmount, amountNum } from '../../lib/numParse';
 import ExcelMenu from '../ExcelMenu';
 import { downloadBiz, importBiz } from '../../lib/excelIO';
@@ -42,7 +44,7 @@ function Amt({ value, onChange, disabled, small, neg, calc = true }) {
 
 const TABS = [
   ['income', 'Income', TrendingUp], ['cos', 'Cost of sales', Package], ['expenses', 'Expenses', Receipt], ['assets', 'Assets', Monitor],
-  ['partners', 'Partners', Users, 'partnership'], ['adjust', 'TaxMate adjustments', SlidersHorizontal, 'admin'], ['result', 'Computation', Calculator],
+  ['partners', 'Partners', Users, 'partnership'], ['bs', 'Balance sheet', Scale], ['adjust', 'TaxMate adjustments', SlidersHorizontal, 'admin'], ['result', 'Computation', Calculator],
 ];
 
 export default function BizEditor({ acc: acc0, role = 'client', client = {}, clients = [], onSaved, onClose }) {
@@ -149,6 +151,10 @@ export default function BizEditor({ acc: acc0, role = 'client', client = {}, cli
             {!locked && <button type="button" disabled={busy || (!dirty && !odirty)} onClick={doSave} className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-primary-800 disabled:opacity-50">{busy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save</button>}
             {!admin && acc.status === 'open' && <button type="button" disabled={busy} onClick={submit} className="flex items-center gap-1.5 rounded-lg bg-gold-500 px-3 py-1.5 text-xs font-bold text-primary-900"><Send size={13} /> Send to TaxMate</button>}
             {admin && <button type="button" onClick={print} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"><Printer size={13} /> Print</button>}
+            {admin && <IrdCopyMenu label="Statement of Accounts" size={13} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20"
+              onPick={(sign) => { if (!openHtml(buildAccountsHtml({ ...acc, ...meta, mode }, c, client, { sign }))) toast.error('Allow pop-ups to view'); }} />}
+            {admin && part && <IrdCopyMenu label="PIT return & schedules" size={13} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/20"
+              onPick={(sign) => { if (!openHtml(buildPitHtml({ ...acc, ...meta, mode }, c, { sign, office: office || {} }))) toast.error('Allow pop-ups to view'); }} />}
             {admin && acc.status !== 'final' && <button type="button" disabled={busy} onClick={finalise} className="flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-600"><Lock size={13} /> Finalise</button>}
             {admin && acc.status !== 'open' && <button type="button" disabled={busy} onClick={reopen} className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold hover:bg-white/20"><Unlock size={13} /> Re-open</button>}
           </div>
@@ -222,6 +228,7 @@ export default function BizEditor({ acc: acc0, role = 'client', client = {}, cli
 
         {tab === 'assets' && <Assets data={data} upd={upd} locked={locked} admin={admin} office={office} setMap={setMap} c={c} year={acc.year} />}
         {tab === 'partners' && part && <Partners data={data} upd={upd} locked={locked} admin={admin} office={office} setMap={setMap} c={c} clients={clients} onReturn={toReturn} final={acc.status === 'final'} />}
+        {tab === 'bs' && <BalanceSheet data={data} upd={upd} locked={locked} c={c} part={part} year={acc.year} />}
         {tab === 'adjust' && admin && <Adjust office={office} setO={setO} part={part} c={c} />}
         {tab === 'result' && <Result c={c} admin={admin} acc={acc} part={part} onPrint={print} onReturn={() => toReturn(acc.client_id, `From ${acc.name} ${acc.year}`)} />}
 
@@ -404,6 +411,95 @@ function Partners({ data, upd, locked, admin, office, setMap, c, clients, onRetu
       <div className="flex flex-wrap items-center gap-2">
         {!locked && <button type="button" onClick={() => upd((d) => ({ ...d, partners: [...d.partners, newPartner()] }))} className="flex items-center gap-1 rounded-lg border border-dashed border-primary-300 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-50"><Plus size={13} /> Add partner</button>}
         <span className={`ml-auto rounded-lg px-3 py-1.5 text-xs font-semibold ${Math.abs((c.shareSum || 0) - 100) < 0.01 ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>Shares total {c.shareSum || 0}%</span>
+      </div>
+    </div>
+  );
+}
+
+// V84 — statement of financial position inputs (1 April and 31 March); stock & fixed assets come from the other tabs
+function BalanceSheet({ data, upd, locked, c, part, year }) {
+  const S = parseInt(year, 10);
+  const b = c.bs;
+  const setV = (w, k, v) => upd((d) => ({ ...d, bs: { ...d.bs, [w]: { ...d.bs[w], [k]: v } } }));
+  const setStockPart = (part2, w, v) => upd((d) => ({ ...d, bs: { ...d.bs, [part2]: { ...d.bs[part2], [w]: v } } }));
+  const setTop = (k, v) => upd((d) => ({ ...d, bs: { ...d.bs, [k]: v } }));
+  const setPC = (pid, k, v) => upd((d) => ({ ...d, bs: { ...d.bs, partnerCap: { ...d.bs.partnerCap, [pid]: { ...(d.bs.partnerCap?.[pid] || {}), [k]: v } } } }));
+  const head = <div className="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-2 px-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 sm:grid-cols-[minmax(0,1fr)_150px_150px]"><span /><span className="text-right">1 April {S}</span><span className="text-right">31 March {S + 1}</span></div>;
+  const Row = ({ it, readOnly }) => (
+    <div className="grid grid-cols-[minmax(0,1fr)_120px_120px] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_150px_150px]">
+      <span className="text-xs text-gray-700">{it.en}{it.cage && <span className="ml-1 rounded bg-gray-100 px-1 text-[9px] text-gray-500">{it.cage}</span>}<span className="block text-[10px] text-gray-400">{it.si}</span></span>
+      {readOnly ? <><span className="text-right text-xs tabular-nums text-gray-600">{fm(readOnly[0])}</span><span className="text-right text-xs tabular-nums text-gray-600">{fm(readOnly[1])}</span></>
+        : ['open', 'close'].map((w) => <Amt key={w} small value={data.bs[w]?.[it.key] ?? ''} disabled={locked} onChange={(v) => setV(w, it.key, v)} />)}
+    </div>
+  );
+  const Tot = ({ l, a, z, strong }) => <div className={`grid grid-cols-[minmax(0,1fr)_120px_120px] gap-2 border-t border-gray-100 pt-1.5 text-xs sm:grid-cols-[minmax(0,1fr)_150px_150px] ${strong ? 'font-black text-primary-900' : 'font-bold text-gray-700'}`}><span>{l}</span><span className="text-right tabular-nums">{fm(a)}</span><span className="text-right tabular-nums">{fm(z)}</span></div>;
+  const balanceWithDrawings = () => {
+    if (part) {
+      const ps = c.partners || [];
+      const sumShare = ps.reduce((s, p) => s + (Number(p.share) || 0), 0) || 1;
+      upd((d) => ({ ...d, bs: { ...d.bs, partnerCap: Object.fromEntries(ps.map((p) => { const cur = d.bs.partnerCap?.[p.id] || {}; return [p.id, { ...cur, drawings: String(Math.round((num(cur.drawings) - b.diff * (Number(p.share) || 0) / sumShare) * 100) / 100) }]; })) } }));
+    } else setTop('drawings', String(Math.round((num(data.bs.drawings) - b.diff) * 100) / 100));
+  };
+  return (
+    <div className="space-y-4">
+      <div><div className="font-bold text-primary-800">Balance sheet — statement of financial position</div>
+        <div className="text-xs text-gray-500">What the business owned and owed at the start (1 April) and the end (31 March) of the year. Stock comes from <b>Cost of sales</b>, equipment from <b>Assets</b> (cost less depreciation). Capital is worked out. Leave a box empty if it does not apply.</div></div>
+
+      <div className="space-y-2 rounded-xl border border-gray-100 p-3">
+        <div className="text-xs font-bold text-gray-700">Assets</div>{head}
+        <Row it={{ en: 'Property, plant & equipment (net book value)', si: 'ස්ථාවර වත්කම් (ශුද්ධ පොත් අගය) — from Assets' }} readOnly={[b.fa.nbvOpen, b.fa.nbvClose]} />
+        <Row it={{ en: 'Stock (inventories)', si: 'තොග — from Cost of sales', cage: '254–256' }} readOnly={[b.open.stock, b.close.stock]} />
+        {(b.open.stock > 0 || b.close.stock > 0) && [['raw', 'of which raw materials', '255'], ['wip', 'of which work in progress', '256']].map(([k, l, cg]) => (
+          <div key={k} className="grid grid-cols-[minmax(0,1fr)_120px_120px] items-center gap-2 pl-4 sm:grid-cols-[minmax(0,1fr)_150px_150px]">
+            <span className="text-[11px] text-gray-500">{l} <span className="rounded bg-gray-100 px-1 text-[9px]">{cg}</span></span>
+            {['open', 'close'].map((w) => <Amt key={w} small value={data.bs[k]?.[w] ?? ''} disabled={locked} onChange={(v) => setStockPart(k, w, v)} />)}
+          </div>
+        ))}
+        {BS_ASSETS.map((it) => <Row key={it.key} it={it} />)}
+        <Tot l="Total assets" a={b.open.assets} z={b.close.assets} />
+      </div>
+
+      <div className="space-y-2 rounded-xl border border-gray-100 p-3">
+        <div className="text-xs font-bold text-gray-700">Liabilities</div>{head}
+        {BS_LIABS.map((it) => <Row key={it.key} it={it} />)}
+        <Tot l="Total liabilities" a={b.open.liabs} z={b.close.liabs} />
+        <Tot l="Net assets (assets − liabilities)" a={b.open.net} z={b.close.net} strong />
+      </div>
+
+      <div className="space-y-2 rounded-xl border border-gray-100 p-3">
+        <div className="text-xs font-bold text-gray-700">{part ? "Partners' capital" : "Owner's capital"}</div>
+        {part ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-xs">
+              <thead><tr className="text-left text-[10px] uppercase text-gray-400"><th className="py-1">Partner</th><th className="text-right">Capital 1 April</th><th className="text-right">Introduced</th><th className="text-right">Share of profit</th><th className="text-right">Drawings</th><th className="text-right">Capital 31 March</th></tr></thead>
+              <tbody>{(c.bs.partners || []).map((p) => (
+                <tr key={p.id} className="border-t border-gray-50">
+                  <td className="py-1 pr-2">{p.name || '—'} <span className="text-gray-400">{p.share}%</span></td>
+                  <td className="w-28 py-1"><Amt small neg value={data.bs.partnerCap?.[p.id]?.open ?? ''} disabled={locked} onChange={(v) => setPC(p.id, 'open', v)} /></td>
+                  <td className="w-28 py-1 pl-1"><Amt small value={data.bs.partnerCap?.[p.id]?.in ?? ''} disabled={locked} onChange={(v) => setPC(p.id, 'in', v)} /></td>
+                  <td className="text-right tabular-nums">{fm(p.profit)}</td>
+                  <td className="w-28 py-1 pl-1"><Amt small value={data.bs.partnerCap?.[p.id]?.drawings ?? ''} disabled={locked} onChange={(v) => setPC(p.id, 'drawings', v)} /></td>
+                  <td className="text-right font-semibold tabular-nums">{fm(p.capClose)}</td>
+                </tr>))}
+                <tr className="border-t border-gray-200 font-bold"><td className="py-1">Total</td><td className="text-right tabular-nums">{fm(b.capOpen)}</td><td className="text-right tabular-nums">{fm(b.capIn)}</td><td className="text-right tabular-nums">{fm(b.profit)}</td><td className="text-right tabular-nums">{fm(b.drawings)}</td><td className="text-right tabular-nums">{fm(b.capClose)}</td></tr>
+              </tbody>
+            </table>
+            <p className="mt-1 text-[10px] text-gray-400">Leave "Capital 1 April" empty to split the opening net assets by profit-sharing %. Share of profit = salary + interest + balance of the accounts profit by ratio.</p>
+          </div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-4">
+            <div className="rounded-lg bg-gray-50 p-2 text-xs"><div className="text-gray-500">Capital 1 April</div><div className="font-bold tabular-nums">{fm(b.capOpen)}</div><div className="text-[10px] text-gray-400">opening net assets</div></div>
+            <label className="text-xs font-semibold text-gray-600">Capital introduced<div className="mt-0.5"><Amt small value={data.bs.capIn} disabled={locked} onChange={(v) => setTop('capIn', v)} /></div></label>
+            <label className="text-xs font-semibold text-gray-600">Drawings (taken for personal use)<div className="mt-0.5"><Amt small value={data.bs.drawings} disabled={locked} onChange={(v) => setTop('drawings', v)} /></div></label>
+            <div className="rounded-lg bg-gray-50 p-2 text-xs"><div className="text-gray-500">Capital 31 March</div><div className="font-bold tabular-nums">{fm(b.capClose)}</div><div className="text-[10px] text-gray-400">+ profit {fm(b.profit)}</div></div>
+          </div>
+        )}
+      </div>
+
+      <div className={`flex flex-wrap items-center gap-2 rounded-xl p-3 text-xs ${b.balanced ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'}`}>
+        {b.balanced ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+        <span className="flex-1">{b.balanced ? 'The balance sheet balances ✓' : <>Does not balance: net assets 31 March <b>{fm(b.close.net)}</b> vs capital <b>{fm(b.capClose)}</b> — difference <b>{fm(b.diff)}</b>.{Math.abs(b.openDiff) >= 0.5 ? <> Opening partners' capital differs from opening net assets by <b>{fm(b.openDiff)}</b>.</> : ''} Usually unrecorded drawings or a missing bank / cash figure.</>}</span>
+        {!b.balanced && !locked && Math.abs(b.openDiff) < 0.5 && Object.values(data.bs.close || {}).some((v) => num(v)) && <button type="button" onClick={balanceWithDrawings} className="rounded-lg bg-white px-2.5 py-1 font-semibold text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100">Treat the difference as drawings</button>}
       </div>
     </div>
   );
