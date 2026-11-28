@@ -5,7 +5,7 @@ import { INCOME_TYPES } from './bizAccounts';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const m = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; const s = Math.abs(v).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return v < 0 ? `(${s})` : s; };
 
-export function buildBizStatementHtml(acc, c, client = {}, { status } = {}) {
+export function buildBizStatementHtml(acc, c, client = {}, { status, clean = false, sign = true, withToolbar = true } = {}) {
   const S = parseInt(acc.year, 10);
   const row = (l, v, cls = '') => `<tr class="${cls}"><td>${l}</td><td class="r">${v === '' ? '' : m(v)}</td></tr>`;
   const row2 = (l, v, w, cls = '') => `<tr class="${cls}"><td>${l}</td><td class="r">${v === '' ? '' : m(v)}</td><td class="r">${w === '' ? '' : m(w)}</td></tr>`;
@@ -58,22 +58,26 @@ export function buildBizStatementHtml(acc, c, client = {}, { status } = {}) {
       ${c.invTotal ? row('Investment income in the accounts — to Schedule 3 (interest / rent / other)', c.invTotal) : ''}</table>`;
   }
 
-  const strip = status === 'final' ? '<div class="st fin">FINAL — computed by TaxMate</div>' : '<div class="st drf">DRAFT — figures may change</div>';
+  // V84: clean = unbranded IRD attachment ("Tax computation"), optional signature block
+  const strip = clean ? (status === 'final' ? '' : '<div class="st drf">DRAFT</div>') : status === 'final' ? '<div class="st fin">FINAL — computed by TaxMate</div>' : '<div class="st drf">DRAFT — figures may change</div>';
+  const firm = clean ? '' : `<div style="text-align:right" class="s"><b style="color:#12294A;font-size:13px">${esc(FIRM.name)}</b><br>${esc(FIRM.phone)}<br>${esc(FIRM.email)}<br>${esc(FIRM.web)}</div>`;
+  const signer = part ? (c.partners || []).map((p) => p.name).filter(Boolean) : [client.full_name || 'Proprietor'];
+  const sigHtml = clean && sign ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:26px 30px;margin-top:34px">${[...signer.map((n) => `${esc(n)} — ${part ? 'Partner' : 'Proprietor'}`), 'Date'].map((x) => `<div style="border-top:1px solid #111;padding-top:4px;font-size:10.5px">${x}</div>`).join('')}</div>` : '';
   return `<!doctype html><html><head><meta charset="utf-8"><title>Business income ${esc(acc.year)} — ${esc(acc.name)}</title>
 <style>*{box-sizing:border-box}body{font:12px/1.45 'Segoe UI',Arial,sans-serif;margin:24px;color:#1f2937}h1{font-size:18px;margin:0;color:#12294A}h2{font-size:13px;margin:18px 0 6px;color:#12294A;border-bottom:1.5px solid #12294A;padding-bottom:3px}
 table{border-collapse:collapse;width:100%;margin-bottom:4px}td,th{border-bottom:1px solid #e5e7eb;padding:4px 6px;text-align:left;vertical-align:top}th{background:#f3f4f6;font-size:11px}.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .t td{font-weight:700;background:#f9fafb}.g td{font-weight:800;background:#12294A;color:#fff}.s{color:#6b7280;font-size:10.5px}.sm td,.sm th{font-size:10.5px}
 .hd{display:flex;justify-content:space-between;gap:12px;border-bottom:3px solid #C9A227;padding-bottom:10px;margin-bottom:10px}.st{display:inline-block;padding:3px 10px;border-radius:6px;font-weight:700;font-size:11px;margin:6px 0}.fin{background:#dcfce7;color:#166534}.drf{background:#fee2e2;color:#991b1b}
 @media print{.np{display:none}body{margin:0}}@page{size:A4;margin:12mm}</style></head><body>
-<div class="np" style="text-align:right;margin-bottom:8px"><button onclick="window.print()" style="background:#12294A;color:#fff;border:0;border-radius:6px;padding:8px 18px;font-weight:700;cursor:pointer">Print / Save as PDF</button></div>
+${withToolbar ? '' : '<!--'}<div class="np" style="text-align:right;margin-bottom:8px"><button onclick="window.print()" style="background:#12294A;color:#fff;border:0;border-radius:6px;padding:8px 18px;font-weight:700;cursor:pointer">Print / Save as PDF</button></div>${withToolbar ? '' : '-->'}
 <div class="hd"><div><h1>Computation of income from business${part ? ' — partnership' : ''}</h1>
 <div>${esc(acc.name)}${acc.tin ? ` · TIN ${esc(acc.tin)}` : ''}${!part && client.full_name ? ` · Proprietor: ${esc(client.full_name)}${client.tin ? ` (TIN ${esc(client.tin)})` : ''}` : ''}</div>
 <div class="s">Year of assessment ${esc(acc.year)} — 1 April ${S} to 31 March ${S + 1} · Inland Revenue Act No. 24 of 2017 (as amended) · figures ${acc.mode === 'monthly' ? 'entered month by month' : 'entered as annual totals'}</div></div>
-<div style="text-align:right" class="s"><b style="color:#12294A;font-size:13px">${esc(FIRM.name)}</b><br>${esc(FIRM.phone)}<br>${esc(FIRM.email)}<br>${esc(FIRM.web)}</div></div>${strip}
+${firm}</div>${strip}
 <h2>1. Income statement (as per the accounts)</h2>${pl}
 <h2>2. Adjustments for income tax</h2>${adj}
 ${ca}${tail}
-<p class="s" style="margin-top:14px">Not allowed: domestic / private expenses, income tax, penalties & fines, entertainment, provisions for losses not yet incurred (s.10). Depreciation is replaced by capital allowances (s.16). Interest and rent are investment income (s.7). Prepared by ${esc(FIRM.name)} from the figures given by the ${part ? 'partnership' : 'proprietor'}.</p>
+<p class="s" style="margin-top:14px">Not allowed: domestic / private expenses, income tax, penalties & fines, entertainment, provisions for losses not yet incurred (s.10). Depreciation is replaced by capital allowances (s.16). Interest and rent are investment income (s.7). ${clean ? '' : `Prepared by ${esc(FIRM.name)} from the figures given by the ${part ? 'partnership' : 'proprietor'}.`}</p>${sigHtml}
 </body></html>`;
 }
 

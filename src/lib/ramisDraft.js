@@ -184,7 +184,7 @@ export function buildDraft({ year, calc, client = {}, sheet = null, al = null, d
       senior: ageAtEnd !== null ? ageAtEnd >= 60 : false,
       birthYear: by,
     },
-    sch1: { emp, term, exempt: [] },
+    sch1: { emp, term, exempt: sh && salarySplit(sh).exempt > 0 ? [{ description: 'Exempt / excluded part of salary (Monthly Income sheet)', amount: r2(salarySplit(sh).exempt) }] : [] },   // V84: Part II → cage 115
     sch2: { sole, partner },
     sch3: { inv },
     sch4: { other },
@@ -297,7 +297,10 @@ export function checkDraft(year, calc, d, ctx = {}) {
 }
 
 // ─── Printable HTML (RAMIS layout) ───────────────────────────────
-export function buildDraftHtml({ year, d, calc, client = {}, checks = [] }) {
+// V84: clean = the return & schedules as an IRD attachment ("Verification of return"): no draft banner, checks,
+// copy bar, TaxMate notes or vault list; only = keep these sections (see DRAFT_SECTIONS); sign = declaration block.
+export const DRAFT_SECTIONS = ['return', 'sch1', 'sch2', 'sch3', 'sch4', 'sch5', 'sch7', 'sch8', 'sch9', 'sch10', 'al', 'decl'];
+export function buildDraftHtml({ year, d, calc, client = {}, checks = [], clean = false, only = null, sign = true, withToolbar = true }) {
   const C = draftCages(year, calc?.input_data || {}, d);
   const Y = fullYear(year);
   const cage = (no, label, val, bold) => `<div class="cg${bold ? ' b' : ''}"><div class="lb">${label}</div><div class="no">${no}</div><div class="v cp" title="Click to copy">${fmt2(val)}</div></div>`;
@@ -309,7 +312,7 @@ export function buildDraftHtml({ year, d, calc, client = {}, checks = [] }) {
   const s5 = d.sch5 ?? {};
   const cr = C.credit;
 
-  return `<!doctype html><html><head><meta charset="utf-8"><title>RAMIS draft — ${esc(d.header?.name)} — Y/A ${esc(Y)}</title>
+  const full = `<!doctype html><html><head><meta charset="utf-8"><title>RAMIS draft — ${esc(d.header?.name)} — Y/A ${esc(Y)}</title>
 <style>
 *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#1f2937;margin:0;background:#f3f4f6;font-size:12.5px}
 .page{max-width:900px;margin:0 auto;background:#fff;padding:28px 34px}
@@ -338,7 +341,7 @@ td.r{text-align:right} tr.tot td{font-weight:700;background:#fafafa} .mut{color:
 ${errs.length ? `<div class="chk e noprint"><b>Fix before filing (${errs.length})</b><ul>${errs.map(c => `<li>${esc(c.msg)}</li>`).join('')}</ul></div>` : ''}
 ${warns.length ? `<div class="chk w noprint"><b>Check (${warns.length})</b><ul>${warns.map(c => `<li>${esc(c.msg)}</li>`).join('')}</ul></div>` : ''}
 
-<h1>Individual income tax — Confirmation (draft)</h1>
+<!--§return--><h1>Individual income tax — ${clean ? 'Return of income' : 'Confirmation (draft)'}</h1>
 <div class="hd"><b>Taxpayer Identification Number (TIN)</b><span class="cp">${esc(d.header?.tin)}</span><b>Name of taxpayer</b><span class="cp">${esc(d.header?.name)}</span><b>Year of assessment</b><span>${esc(Y)}</span><b>Residency</b><span>${d.header?.resident ? '◉ Resident ○ Non-resident' : '○ Resident ◉ Non-resident'}</span><b>Senior citizen</b><span>${d.header?.senior ? '◉ Yes ○ No' : '○ Yes ◉ No'}</span></div>
 
 ${H('Part A - Income liable to tax')}
@@ -350,13 +353,14 @@ ${cage(130, 'Tax on terminal benefits (Rs.)', C.c130)}${cage(140, 'Tax on gain o
 ${H('Part D - Exempt income')}
 ${cage(210, 'Total exempt/excluded income (115+216+317+407) (Rs.)', C.c210)}${cage('210A', 'Foreign Currency Remitted Amounts (406.5)', C.c210A)}
 
-${H('Schedule 1 — Employment income')}
+<!--§sch1-->${H('Schedule 1 — Employment income')}
 ${S('Part I - Details of employment income (Both local & foreign)')}
 ${tbl(['S/N', 'Type', 'Employer/company name', 'TIN of the employer', 'Remuneration (Rs.)'], d.sch1?.emp ?? [], ['#', 'type', 'employer', 'tin', 'amount'], ['Total Remuneration (Cage 105)', sum(d.sch1?.emp, 'amount')])}
 ${tbl(['S/N', 'Type', 'Employer/company name', 'TIN of the employer', 'Terminal benefits (Rs.)'], d.sch1?.term ?? [], ['#', 'type', 'employer', 'tin', 'amount'], ['Total terminal benefits (Cage 110)', sum(d.sch1?.term, 'amount')])}
 ${cage(111, 'Total employment income (cage 105 + cage 110)', r2(sum(d.sch1?.emp, 'amount') + sum(d.sch1?.term, 'amount')))}
+${(d.sch1?.exempt ?? []).length ? `${S('Part II - Exempt / excluded employment income')}${tbl(['S/N', 'Description', 'Amount (Rs.)'], d.sch1.exempt, ['#', 'description', 'amount'], ['Total exempt / excluded employment income (Cage 115) → cage 210', sum(d.sch1.exempt, 'amount')])}` : ''}
 
-${H('Schedule 2 — Business income')}
+<!--§sch2-->${H('Schedule 2 — Business income')}
 ${S('A. Business income from sole proprietorship (Both local & foreign)')}
 ${tbl(['S/N', 'Activity code', 'Nature of the business', 'Gains and profits (Rs.)', 'Turnover (Rs.)'], d.sch2?.sole ?? [], ['#', 'code', 'nature', 'profit', 'turnover'])}
 <table><tbody><tr class="tot"><td>Total business income from sole proprietorship (Cage 204)</td><td class="r cp">${fmt2(sum(d.sch2?.sole, 'profit'))}</td></tr><tr class="tot"><td>Total business turnover from proprietorship (Cage 204A)</td><td class="r cp">${fmt2(sum(d.sch2?.sole, 'turnover'))}</td></tr></tbody></table>
@@ -364,18 +368,18 @@ ${S("B. Partner's business income from partnership")}
 ${tbl(['S/N', 'Activity code', 'Partnership name', 'TIN of the partnership', 'Gains and profits (Rs.)'], d.sch2?.partner ?? [], ['#', 'code', 'name', 'tin', 'profit'], ["Partner's total business income from partnership (Cage 209)", sum(d.sch2?.partner, 'profit')])}
 ${cage(215, 'Total Business income (cage 204 + cage 209 + cage 214)', r2(sum(d.sch2?.sole, 'profit') + sum(d.sch2?.partner, 'profit')))}
 
-${H('Schedule 3 — Investment income')}
+<!--§sch3-->${H('Schedule 3 — Investment income')}
 ${tbl(['S/N', 'Activity code', 'Type of income', 'Gains and profits (Rs.)'], d.sch3?.inv ?? [], ['#', 'code', 'type', 'amount'], ['Total investment income (Cage 304)', sum(d.sch3?.inv, 'amount')])}
 ${cage(315, 'Total investment income (cage 304 + cage 309 + cage 314)', sum(d.sch3?.inv, 'amount'))}${cage(316, 'Relief for rent income (25% of rent)', C.c60)}
 
-${H('Schedule 4 — Other income')}
+<!--§sch4-->${H('Schedule 4 — Other income')}
 ${tbl(['S/N', 'Type of income', 'Gains and profits (Rs.)', 'Turnover (Rs.)'], d.sch4?.other ?? [], ['#', 'type', 'amount', 'turnover'], null)}
 <table><tbody><tr class="tot"><td>Total of other income (Cage 403)</td><td class="r cp">${fmt2(sum(d.sch4?.other, 'amount'))}</td></tr></tbody></table>
 ${S('210A Summary of foreign currency remitted amounts in to Sri Lanka during the year')}
 <div class="grid5"><div class="h"></div><div class="h">Employment a</div><div class="h">Business b</div><div class="h">Investment c</div><div class="h">Other d</div><div class="h">Total e</div>
 ${['Turnover / Income Rs. (404)', 'Gain / Profit Rs. (405)', 'Remitted Amount Rs. (406)'].map(l => `<div class="l">${l}</div>${['a', 'b', 'c', 'd'].map(k => `<div class="cp">${fmt2(C.fxRemit[k])}</div>`).join('')}<div class="cp"><b>${fmt2(C.c210A)}</b></div>`).join('')}</div>
 
-${H('Schedule 5 — Qualifying payments & reliefs')}
+<!--§sch5-->${H('Schedule 5 — Qualifying payments & reliefs')}
 <table><thead><tr><th>Donation made</th><th>Amount paid (Rs.)</th><th>Deductible amount (Rs.)</th></tr></thead><tbody>
 <tr><td>To approved charity (502.1 / 503.1) — max Rs.75,000 or 1/3 of taxable income</td><td class="r cp">${fmt2(s5.charityPaid)}</td><td class="r cp">${fmt2(C.r.donUsed)}</td></tr>
 <tr><td>To the Government (502.2 / 503.2)</td><td class="r cp">${fmt2(s5.govt)}</td><td class="r cp">${fmt2(s5.govt)}</td></tr>
@@ -384,12 +388,13 @@ ${H('Schedule 5 — Qualifying payments & reliefs')}
 ${S('C - Expenditure on solar panel fixing on his premises by resident individual')}
 <table><thead><tr><th>Type</th><th>Total expenditure (511)</th><th>Claimable amount (512) → cage 70</th><th>Carried forward (513)</th></tr></thead><tbody><tr><td>Expenditure on solar panel</td><td class="r cp">${fmt2(s5.solarExp)}</td><td class="r cp">${fmt2(C.c70)}</td><td class="r cp">${fmt2(s5.solarCF)}</td></tr></tbody></table>
 
-${H('Schedule 7 — Withholding tax')}
+<!--§sch7-->${H('Schedule 7 — Withholding tax')}
 ${S('A - Advance income tax / withholding tax deducted by the withholding agent')}
 ${tbl(['S/N', 'Source/type', 'TIN of the Withholding Agent', 'AIT/WHT certificate No.', 'Amount received (Rs.)', 'Date of payment', 'AIT/WHT deducted (Rs.)'], d.sch7?.wht ?? [], ['#', 'source', 'agentTin', 'cert', 'amount', 'date', 'wht'], ['Total AIT/WHT deducted (Total of Cage 706)', sum(d.sch7?.wht, 'wht')])}
 ${cage(707, 'Total AIT/WHT deducted (Total of Cage 706)', sum(d.sch7?.wht, 'wht'))}${cage(708, 'AIT/WHT B/F on advance receipts', n(d.sch7?.bf))}${cage(710, `AIT/WHT claimed for the Y/A ${Y}`, cr['908'] || 0)}
+${cr['907'] ? `${S('C - Advance income tax deducted from the partnership income')}${cage(723, 'AIT deducted from partnership income (share)', cr['907'])}${cage(726, `AIT claimed for the Y/A ${Y} → cage 907`, cr['907'])}` : ''}
 
-${H('Schedule 8 — Tax calculation')}
+<!--§sch8-->${H('Schedule 8 — Tax calculation')}
 ${cage(801, 'Taxable income from cage 120 of the Return', C.c801)}
 <table><thead><tr><th></th><th>Income (Rs.)</th><th>Rate</th><th>Tax (Rs.)</th></tr></thead><tbody>
 <tr><td>Total terminal benefits (802)</td><td class="r cp">${fmt2(C.c802)}</td><td></td><td></td></tr>
@@ -401,15 +406,15 @@ ${cage(801, 'Taxable income from cage 120 of the Return', C.c801)}
 <tr class="tot"><td colspan="3">Tax on total taxable income (810)</td><td class="r cp">${fmt2(C.c810)}</td></tr>
 <tr><td colspan="3">Tax on final withholding payments (WHT not deducted) (811)</td><td class="r cp">0.00</td></tr></tbody></table>
 
-${H('Schedule 9 — Tax credit')}
-${cage(901, 'Foreign tax credit', cr['901'] || 0)}${cage('903A', 'APIT paid on Employment Income - Primary Employment (T-10)', cr['903'] || 0)}${cage('904A', 'APIT paid on Employment Income - Secondary Employment (T-10)', cr['904'] || 0)}${cage(905, 'Tax paid for terminal benefits (T-13)', cr['905'] || 0)}${cage(908, 'Advance income tax credit (Cage 710 of Schedule 7A)', cr['908'] || 0)}${cage(909, 'Tax paid on gain on realization of investment assets (CGT)', cr['909/910'] || 0)}${cage(911, 'Installment payments and AIT/WHT paid by withholdee (Cage 934)', cr['911'] || 0)}${cage(912, 'Total tax credits (Total of cage No. 901 to 911)', C.c912, true)}
+<!--§sch9-->${H('Schedule 9 — Tax credit')}
+${cage(901, 'Foreign tax credit', cr['901'] || 0)}${cage('903A', 'APIT paid on Employment Income - Primary Employment (T-10)', cr['903'] || 0)}${cage('904A', 'APIT paid on Employment Income - Secondary Employment (T-10)', cr['904'] || 0)}${cage(905, 'Tax paid for terminal benefits (T-13)', cr['905'] || 0)}${cr['906'] ? cage(906, "Partner's share of tax paid by the partnership (Schedule 9B)", cr['906']) : ''}${cr['907'] ? cage(907, 'AIT from the partnership (Cage 726 of Schedule 7C)', cr['907']) : ''}${cage(908, 'Advance income tax credit (Cage 710 of Schedule 7A)', cr['908'] || 0)}${cage(909, 'Tax paid on gain on realization of investment assets (CGT)', cr['909/910'] || 0)}${cage(911, 'Installment payments and AIT/WHT paid by withholdee (Cage 934)', cr['911'] || 0)}${cage(912, 'Total tax credits (Total of cage No. 901 to 911)', C.c912, true)}
 ${S('Schedule 9B - Instalment payment and AIT/WHT paid by withholdee')}
 ${tbl(['Instalment', 'Due date', 'Payment date', 'Amount paid (Rs.)'], d.sch9b?.inst ?? [], ['label', 'due', 'date', 'amount'], ['Total self-assessment payment (932)', sum(d.sch9b?.inst, 'amount')])}
 
-${H('Schedule 10 — Loss adjustment')}
+<!--§sch10-->${H('Schedule 10 — Loss adjustment')}
 <p>${n(d.sch10?.lossBF) ? `Business loss brought forward Rs. ${fmt2(d.sch10.lossBF)}; deducted this year Rs. ${fmt2(d.sch10.lossUsed)}; carried forward Rs. ${fmt2(n(d.sch10.lossBF) - n(d.sch10.lossUsed))}. Enter year-wise in Part IB.` : 'No losses.'}</p>
 
-${H(`Statement of assets &amp; liabilities — as at ${yearEndLabel(year)}`)}
+<!--§al-->${H(`Statement of assets &amp; liabilities — as at ${yearEndLabel(year)}`)}
 ${S('A. Immovable properties')}
 ${tbl(['S/N', 'Situation of property', 'Date of acquisition', 'Cost (Rs.)', 'Market value (Rs.)'], a.immovable ?? [], ['#', 'situation', 'acquired', 'cost', 'value'])}
 ${S('B. i. Motor vehicles')}
@@ -429,18 +434,32 @@ ${tbl(['S/N', 'Description of asset', 'Gift/exchange/purchase', 'Date of acquisi
 ${S('B. Disposal of assets including shares (sale/transfer/gift) during the year')}
 ${tbl(['S/N', 'Description', 'Date of disposal', 'Sales proceed (Rs.)', 'Date acquired', 'Cost (Rs.)'], a.disposed ?? [], ['#', 'description', 'date', 'proceeds', 'acquired', 'cost'])}
 
-<div class="decl">I declare to the best of my knowledge and belief that all particulars furnished in this return and schedules are true, correct and complete. I am aware that making an incorrect or false statement or giving false information is an offence.</div>
+<!--§decl--><div class="decl">I declare to the best of my knowledge and belief that all particulars furnished in this return and schedules are true, correct and complete. I am aware that making an incorrect or false statement or giving false information is an offence.</div>
 <p><b>Did return or part of the return prepare by other person:</b> ${d.decl?.preparedByOther ? '◉ Yes ○ No' : '○ Yes ◉ No'}</p>
 ${d.decl?.preparedByOther ? `${S('Part A — Approved accountant / other authorized person')}<div class="kv"><div>Name</div><div class="cp">${esc(d.decl.preparer?.name)}</div><div>Designation</div><div class="cp">${esc(d.decl.preparer?.designation)}</div><div>Telephone</div><div class="cp">${esc(d.decl.preparer?.phone)}</div><div>Mobile</div><div class="cp">${esc(d.decl.preparer?.mobile)}</div><div>Email</div><div class="cp">${esc(d.decl.preparer?.email)}</div><div>Date of the certification</div><div class="cp">${esc(d.decl.preparer?.date)}</div></div>` : ''}
 ${S('Part B — Declarant')}
 <div class="kv"><div>Full name of the declarant</div><div class="cp">${esc(d.decl?.declarant?.name)}</div><div>Telephone</div><div class="cp">${esc(d.decl?.declarant?.phone)}</div><div>Mobile</div><div class="cp">${esc(d.decl?.declarant?.mobile)}</div><div>Email</div><div class="cp">${esc(d.decl?.declarant?.email)}</div><div>NIC of declarant</div><div class="cp">${esc(d.decl?.declarant?.nic)}</div><div>Date</div><div class="cp">${esc(d.decl?.declarant?.date)}</div></div>
 
-${(d.sources?.docs ?? []).length ? `${H('Supporting documents on file (TaxMate document vault)')}<table><thead><tr><th>Type</th><th>Title</th><th>Y/A</th><th>From</th></tr></thead><tbody>${d.sources.docs.map(x => `<tr><td>${esc(x.category)}</td><td>${esc(x.title)}</td><td>${esc(x.year || 'general')}</td><td>${esc(x.by)}</td></tr>`).join('')}</tbody></table>` : ''}
-${d.notes ? `${H('TaxMate notes')}<p style="white-space:pre-wrap">${esc(d.notes)}</p>` : ''}
-<div class="foot">Prepared by ${esc(FIRM.name)} · ${esc(FIRM.phone)} · ${esc(FIRM.email)} — internal draft for client ${esc(client.full_name || '')}. Return due ${returnDueDate(year)}; balance tax payable by ${finalPaymentDate(year)}. Figures follow the IRD guide for Y/A ${esc(Y)}; RAMIS is the final authority.</div>
+<!--§docs-->${(d.sources?.docs ?? []).length ? `${H('Supporting documents on file (TaxMate document vault)')}<table><thead><tr><th>Type</th><th>Title</th><th>Y/A</th><th>From</th></tr></thead><tbody>${d.sources.docs.map(x => `<tr><td>${esc(x.category)}</td><td>${esc(x.title)}</td><td>${esc(x.year || 'general')}</td><td>${esc(x.by)}</td></tr>`).join('')}</tbody></table>` : ''}
+<!--§notes-->${d.notes ? `${H('TaxMate notes')}<p style="white-space:pre-wrap">${esc(d.notes)}</p>` : ''}
+<!--§foot--><div class="foot">Prepared by ${esc(FIRM.name)} · ${esc(FIRM.phone)} · ${esc(FIRM.email)} — internal draft for client ${esc(client.full_name || '')}. Return due ${returnDueDate(year)}; balance tax payable by ${finalPaymentDate(year)}. Figures follow the IRD guide for Y/A ${esc(Y)}; RAMIS is the final authority.</div>
 </div>
 <script>document.addEventListener('click',function(e){var t=e.target.closest('.cp');if(!t)return;var s=(t.innerText||'').trim();if(!s)return;var v=/^[\\d,.\\s/-]+$/.test(s)&&/\\d/.test(s)?s.replace(/,/g,''):s;(navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).catch(function(){}).finally(function(){t.classList.add('copied');setTimeout(function(){t.classList.remove('copied')},700)})});</script>
 </body></html>`;
+  if (!clean) return full;
+  // V84 clean attachment: keep the chosen sections, drop the draft-only parts
+  const keep = new Set(only || DRAFT_SECTIONS);
+  const start = full.indexOf('<!--§return-->'), footAt = full.indexOf('<!--§foot-->');
+  const head = full.slice(0, full.indexOf('</head>'));
+  const parts = full.slice(start, footAt).split(/<!--§(\w+)-->/).slice(1);
+  let body = '';
+  for (let i = 0; i < parts.length; i += 2) if (keep.has(parts[i])) body += parts[i + 1];
+  if (!keep.has('return')) body = `<h1>${esc(d.header?.name)} — TIN ${esc(d.header?.tin)} — Y/A ${esc(Y)}</h1>${body}`;
+  if (sign && keep.has('decl')) body += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:34px"><div style="border-top:1px solid #111;padding-top:4px;font-size:11px">Signature of the declarant</div><div style="border-top:1px solid #111;padding-top:4px;font-size:11px">Date</div></div>`;
+  const title = `${only && only.length === 1 && only[0] !== 'return' ? only[0].replace('sch', 'Schedule_').replace('al', 'Assets_Liabilities') : 'Return_of_Income'}_${String(Y).replace('/', '-')}_${String(d.header?.name || '').replace(/\s+/g, '_')}`;
+  return `${head.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`)}<style>.cp,.cp:hover{cursor:default;background:none}</style></head><body>
+${withToolbar ? '<div class="bar noprint"><b>Return of income &amp; schedules</b><span style="flex:1"></span><button onclick="window.print()">Print / Save PDF</button></div>' : ''}
+<div class="page">${body}</div></body></html>`;
 }
 
 export function openDraft(args, win = null) {

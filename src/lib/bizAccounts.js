@@ -100,9 +100,32 @@ export function emptyData(kind = 'sole') {
     expenses: EXPENSE_DEFAULTS.filter((d) => !d.only || d.only === kind).map((d) => line(d)),
     assets: [],
     partners: kind === 'partnership' ? [{ id: rid(), name: '', nic: '', tin: '', share: '', salary: '', interest: '' }, { id: rid(), name: '', nic: '', tin: '', share: '', salary: '', interest: '' }] : [],
+    bs: emptyBS(),
     notes: '',
   };
 }
+
+// ─── V84: Balance sheet (statement of financial position) inputs — 1 April (opening) and 31 March (closing) ───
+// Stock comes from the Cost of sales tab; fixed assets from the asset register; capital is worked out.
+// cage = Schedule 07 of the partnership return (Asmt_PIT_002, Y/A 2025/26)
+export const BS_ASSETS = [
+  { key: 'receivables', en: 'Trade receivables (debtors)', si: 'ලැබිය යුතු මුදල් (ණයගැතියන්)', cage: '257' },
+  { key: 'related_recv', en: 'Due from related parties', si: 'සම්බන්ධිත පාර්ශ්ව වලින් ලැබිය යුතු', cage: '258' },
+  { key: 'other_ca', en: 'Deposits, advances & prepayments', si: 'තැන්පතු, අත්තිකාරම් හා පෙරගෙවීම්' },
+  { key: 'bank', en: 'Cash at bank (business accounts)', si: 'බැංකුවේ මුදල්' },
+  { key: 'cash', en: 'Cash in hand', si: 'අතැති මුදල්' },
+];
+export const BS_LIABS = [
+  { key: 'payables', en: 'Trade payables (creditors)', si: 'ගෙවිය යුතු මුදල් (ණයහිමියන්)', cage: '259' },
+  { key: 'related_pay', en: 'Payable to related parties', si: 'සම්බන්ධිත පාර්ශ්වවලට ගෙවිය යුතු', cage: '260' },
+  { key: 'accruals', en: 'Accrued expenses & other payables', si: 'උපචිත වියදම් හා වෙනත් ගෙවිය යුතු' },
+  { key: 'overdraft', en: 'Bank overdraft', si: 'බැංකු අයිරාව' },
+  { key: 'loans', en: 'Bank loans & leases', si: 'බැංකු ණය හා ලීසිං' },
+];
+const BS_KEYS = [...BS_ASSETS, ...BS_LIABS].map((x) => x.key);
+export const emptyBS = () => ({ open: {}, close: {}, raw: { open: '', close: '' }, wip: { open: '', close: '' }, capIn: '', drawings: '', partnerCap: {} });
+export const bsUsed = (bs) => !!bs && (BS_KEYS.some((k) => num(bs.open?.[k]) || num(bs.close?.[k])) || !!num(bs.capIn) || !!num(bs.drawings)
+  || Object.values(bs.partnerCap || {}).some((p) => num(p?.open) || num(p?.in) || num(p?.drawings)));
 export const newLine = (label = '', extra = {}) => ({ id: rid(), key: null, label, ...extra, a: '', m: Array(12).fill('') });
 export const newAsset = () => ({ id: rid(), item: '', date: '', cost: '', work: 'full', disposed: false, disposedOn: '', proceeds: '', depRate: '' });
 export const newPartner = () => ({ id: rid(), name: '', nic: '', tin: '', share: '', salary: '', interest: '' });
@@ -112,6 +135,8 @@ export function normalize(data, kind) {
   const d = { ...emptyData(kind), ...(data || {}) };
   for (const k of ['income', 'cos', 'expenses', 'assets', 'partners']) d[k] = Array.isArray(d[k]) ? d[k] : [];
   d.stock = { opening: '', closing: '', ...(d.stock || {}) };
+  const b = d.bs || {};
+  d.bs = { ...emptyBS(), ...b, open: { ...(b.open || {}) }, close: { ...(b.close || {}) }, raw: { open: '', close: '', ...(b.raw || {}) }, wip: { open: '', close: '', ...(b.wip || {}) }, partnerCap: { ...(b.partnerCap || {}) } };
   for (const ln of [...d.income, ...d.cos, ...d.expenses]) { if (!Array.isArray(ln.m) || ln.m.length !== 12) ln.m = Array(12).fill(''); }
   return d;
 }
@@ -136,6 +161,85 @@ export function bookDepreciation(a, year) {
   const yearly = cost * rate;
   const done = Math.min(cost, (yearly * before) / 12);
   return r2(Math.max(0, Math.min(cost - done, (yearly * monthsBetween(from, to)) / 12)));
+}
+
+/** V84: accumulated book depreciation at 1 April (before this year) — same straight-line method as bookDepreciation */
+export function bookAccumulatedBefore(a, year) {
+  const rate = num(a.depRate) / 100, cost = num(a.cost), bought = ymd(a.date);
+  if (!rate || !cost || !bought) return 0;
+  const S = parseInt(year, 10);
+  const ys = new Date(Date.UTC(S, 3, 1));
+  if (bought >= ys) return 0;
+  return r2(Math.min(cost, (cost * rate * monthsBetween(bought, new Date(Date.UTC(S, 2, 31)))) / 12));
+}
+
+/** V84: statement of financial position, fixed-asset movement and capital account(s) */
+export function computeBalanceSheet(c, d, year) {
+  const bs = d.bs || emptyBS();
+  const S = parseInt(year, 10);
+  const ys = new Date(Date.UTC(S, 3, 1)), ye = new Date(Date.UTC(S + 1, 2, 31));
+  // fixed assets (asset register): cost & accumulated depreciation b/f, additions, disposals; charge = P&L depreciation line
+  const fa = { costOpen: 0, additions: 0, disposalsCost: 0, accOpen: 0, accDisposals: 0, rows: [] };
+  for (const a of d.assets) {
+    const cost = r2(num(a.cost)), bought = ymd(a.date);
+    if (!cost || !bought || bought > ye) continue;
+    const sold = a.disposed ? (ymd(a.disposedOn) || ye) : null;
+    if (sold && sold < ys) continue;                                   // gone before this year
+    const acc = bookAccumulatedBefore(a, year);
+    const isNew = bought >= ys, isSold = !!sold && sold <= ye;
+    if (isNew) fa.additions += cost; else { fa.costOpen += cost; fa.accOpen += acc; }
+    if (isSold) { fa.disposalsCost += cost; fa.accDisposals += acc; }
+    fa.rows.push({ id: a.id, item: a.item, date: a.date, cost, accOpen: isNew ? 0 : acc, isNew, isSold, depRate: num(a.depRate) });
+  }
+  const deprLine = c.expenses.filter((x) => x.key === 'depreciation').reduce((s, x) => s + x.amount, 0);
+  fa.charge = r2(deprLine);
+  for (const k of ['costOpen', 'additions', 'disposalsCost', 'accOpen', 'accDisposals']) fa[k] = r2(fa[k]);
+  fa.costClose = r2(fa.costOpen + fa.additions - fa.disposalsCost);
+  fa.accClose = r2(fa.accOpen + fa.charge - fa.accDisposals);
+  fa.nbvOpen = r2(fa.costOpen - fa.accOpen);
+  fa.nbvClose = r2(fa.costClose - fa.accClose);
+
+  const side = (w) => {
+    const v = Object.fromEntries(BS_KEYS.map((k) => [k, r2(num(bs[w]?.[k]))]));
+    const stock = w === 'open' ? c.opening : c.closing;
+    const raw = r2(num(bs.raw?.[w])), wip = r2(num(bs.wip?.[w]));
+    const nbv = w === 'open' ? fa.nbvOpen : fa.nbvClose;
+    const ca = r2(stock + BS_ASSETS.reduce((s, x) => s + v[x.key], 0));
+    const assets = r2(nbv + ca);
+    const liabs = r2(BS_LIABS.reduce((s, x) => s + v[x.key], 0));
+    return { ...v, stock, raw, wip, stockTrade: r2(Math.max(0, stock - raw - wip)), nbv, ca, assets, cl: r2(v.payables + v.related_pay + v.accruals + v.overdraft), ncl: v.loans, liabs, net: r2(assets - liabs) };
+  };
+  const open = side('open'), close = side('close');
+  const part = c.kind === 'partnership';
+  const out = { fa, open, close, used: bsUsed(bs) || !!c.opening || !!c.closing || d.assets.length > 0 };
+  if (part) {
+    // appropriation: profit per the accounts + partners' pay charged as an expense → salaries & interest first, balance by ratio
+    const ps = d.partners.filter((p) => p.name || num(p.share));
+    const shareSum = ps.reduce((s, p) => s + num(p.share), 0);
+    const charged = r2(c.expenses.filter((x) => x.key === 'partnerpay').reduce((s, x) => s + x.amount, 0));
+    const available = r2(c.netProfit + charged);
+    const pays = r2(ps.reduce((s, p) => s + num(p.salary) + num(p.interest), 0));
+    const residual = r2(available - pays);
+    const pc = bs.partnerCap || {};
+    const anyOpen = ps.some((p) => String(pc[p.id]?.open ?? '').trim() !== '');
+    const partners = ps.map((p) => {
+      const sh = shareSum ? num(p.share) / shareSum : 0;
+      const capOpen = anyOpen ? r2(num(pc[p.id]?.open)) : r2(open.net * sh);
+      const capIn = r2(num(pc[p.id]?.in)), drawings = r2(num(pc[p.id]?.drawings));
+      const profit = r2(num(p.salary) + num(p.interest) + residual * sh);
+      return { id: p.id, name: p.name, share: num(p.share), salary: r2(num(p.salary)), interest: r2(num(p.interest)), residual: r2(residual * sh), profit, capOpen, capIn, drawings, capClose: r2(capOpen + capIn + profit - drawings) };
+    });
+    const sum = (k) => r2(partners.reduce((s, p) => s + p[k], 0));
+    Object.assign(out, { charged, available, pays, residual, partners, capOpen: sum('capOpen'), capIn: sum('capIn'), drawings: sum('drawings'), profit: sum('profit'), capClose: sum('capClose') });
+    out.openDiff = r2(open.net - out.capOpen);
+  } else {
+    out.capOpen = open.net; out.capIn = r2(num(bs.capIn)); out.drawings = r2(num(bs.drawings)); out.profit = c.netProfit;
+    out.capClose = r2(out.capOpen + out.capIn + c.netProfit - out.drawings);
+    out.openDiff = 0;
+  }
+  out.diff = r2(close.net - out.capClose);          // ≠ 0 → the balance sheet does not balance
+  out.balanced = Math.abs(out.diff) < 0.5 && Math.abs(out.openDiff) < 0.5;
+  return out;
 }
 
 // ─── The computation ─────────────────────────────────────
@@ -202,6 +306,9 @@ export function computeBusiness(acc, office = {}) {
   };
   if (kind === 'partnership') Object.assign(out, partnershipTax(out, d, office));
   else Object.assign(out, soleResult(out));
+  out.bs = computeBalanceSheet(out, d, year);
+  out.exemptIncome = r2(income.filter((x) => x.type === 'exempt').reduce((s, x) => s + x.amount, 0));
+  if (out.bs.used && bsUsed(d.bs) && !out.bs.balanced) out.issues = [...out.issues, `The balance sheet does not balance — difference Rs. ${Math.abs(out.bs.diff).toLocaleString('en-LK')}${Math.abs(out.bs.openDiff) >= 0.5 ? ` (opening partners' capital differs by Rs. ${Math.abs(out.bs.openDiff).toLocaleString('en-LK')})` : ''}. Check the Balance sheet tab.`];
   return out;
 }
 
