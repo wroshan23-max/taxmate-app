@@ -135,7 +135,10 @@ export function buildDraft({ year, calc, client = {}, sheet = null, al = null, d
   if (f.othInv) inv.push({ code: '', type: 'Other investment income', amount: r2(f.othInv) });
 
   const other = [];
-  if (f.othInc) other.push({ type: 'Other income', amount: r2(f.othInc), turnover: r2(f.othInc) });
+  // V85: solar power sold to CEB / LECO (Monthly Income sheet) shown as its own Schedule 4 line
+  const solar = sh ? Math.min(r2(rowTotal(sh, 'solarIncome')), r2(f.othInc || 0)) : 0;
+  if (solar > 0) other.push({ type: 'Solar power sold to CEB / LECO', amount: solar, turnover: solar });
+  if (r2((f.othInc || 0) - solar) > 0) other.push({ type: 'Other income', amount: r2(f.othInc - solar), turnover: r2(f.othInc - solar) });
   if (f.forTaxable) other.push({ type: 'Foreign income (not remitted through a bank)', amount: r2(f.forTaxable), turnover: r2(f.forTaxable) });
   if (f.forFx && !C.r.fxExempt) other.push({ type: 'Foreign currency income remitted through a bank', amount: r2(f.forFx), turnover: r2(f.forFx) });
 

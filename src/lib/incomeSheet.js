@@ -21,6 +21,8 @@ export const GROUPS = [
       { key: 'exemptSalary', en: 'Less: exempt / excluded part of salary (not taxed)', si: 'වැටුපෙන් බදු අය නොකෙරෙන / බැහැර කළ කොටස', kind: 'exempt', hint: 'Part of the salary / bonus above that is not taxed (e.g. reimbursed travel or work expenses)' },
       { key: 'rent', en: 'Rent received (gross)', si: 'ලැබුණු කුලිය', kind: 'income' },
       { key: 'interest', en: 'Bank interest (gross)', si: 'බැංකු පොලිය', kind: 'income' },
+      // V85: rooftop solar — what CEB / LECO pays for the electricity sent to the grid (net plus / net accounting)
+      { key: 'solarIncome', en: 'Solar power sold to CEB / LECO', si: 'CEB / LECO වෙත විකුණූ සූර්ය විදුලිය', kind: 'income', hint: 'Amount CEB / LECO paid for electricity sent to the grid — from the monthly bill / bank credit' },
       { key: 'otherIncome', en: 'Other income', si: 'වෙනත් ආදායම්', kind: 'income' },
     ],
   },
@@ -135,7 +137,7 @@ export function sheetToReturnInput(data, working = null) {
   const t = sheetTotals(data);
   const sp = salarySplit(data);
   const out = {
-    empPrimary: Math.round(sp.salary), empBonus: Math.round(sp.bonus), othExempt: Math.round(sp.exempt), rentGross: s('rent'), interest: s('interest'), othInc: s('otherIncome'),
+    empPrimary: Math.round(sp.salary), empBonus: Math.round(sp.bonus), othExempt: Math.round(sp.exempt), rentGross: s('rent'), interest: s('interest'), othInc: s('otherIncome') + s('solarIncome'),   // V85: solar sales → other income (Schedule 4)
     empFx: s('fxEmployment'), bizFx: s('fxServices'), forFx: s('fxOther'),
     bizProfit: Math.max(0, Math.round(t.bizProfit)),
     apitPrimary: s('apit'), whtInterest: s('whtInterest'), whtOther: s('whtOther'),
