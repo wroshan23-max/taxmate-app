@@ -12,21 +12,24 @@ import InstallAppCard from '../../components/InstallAppCard';
 import TaxPaymentsDue from '../../components/TaxPaymentsDue';
 import { summarizeCalc } from '../../lib/iitCalc';
 import { loadBalancePayments } from '../../lib/taxBalance';
+import { loadPackages } from '../../lib/packages';
 
 // V69: engagement letter / missing documents waiting for the client
 // V74: no tax package chosen for the filing year yet → invite the client to choose one
 function PackagePrompt({ clientId }) {
   const [show, setShow] = useState(null);
+  const [from, setFrom] = useState(null);   // lowest active package price (Settings → Packages)
   const year = filingYear();
   useEffect(() => {
     if (!clientId) return;
     supabase.from('client_packages').select('id').eq('year', year).limit(1).then(({ data, error }) => setShow(!error && !(data ?? []).length), () => {});
+    loadPackages().then((l) => { const p = l.filter((x) => x.active !== false && x.price != null && x.price !== '').map((x) => Number(x.price)).filter((x) => x > 0); setFrom(p.length ? Math.min(...p) : null); }, () => {});
   }, [clientId, year]);
   if (!show) return null;
   return (
     <Link to="/client/packages" className="flex items-center gap-3 rounded-2xl border border-gold-500/50 bg-gradient-to-r from-primary-800 to-primary-900 p-4 text-white hover:shadow-md">
       <span className="text-2xl">📦</span>
-      <span className="flex-1"><b className="block">Choose your Y/A {year} tax package</b><span className="text-xs text-primary-200">From LKR 3,000 · TaxMate prepares &amp; files everything · ඔබට ගැලපෙන පැකේජය තෝරන්න</span></span>
+      <span className="flex-1"><b className="block">Choose your Y/A {year} tax package</b><span className="text-xs text-primary-200">{from ? `From LKR ${from.toLocaleString('en-LK')} · ` : ''}TaxMate prepares &amp; files everything · ඔබට ගැලපෙන පැකේජය තෝරන්න</span></span>
       <ChevronRight size={18} className="text-gold-500" />
     </Link>
   );
