@@ -14,7 +14,7 @@ export default function Login() {
   // The page that sent the user here (e.g. a WhatsApp link to /client/assets).
   // Admins go straight back to it; clients always start on the Dashboard, which offers a "Continue" link.
   const from = location.state?.from;
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => new URLSearchParams(location.search).get('email') || '');   // V86: from the one-time password message
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
