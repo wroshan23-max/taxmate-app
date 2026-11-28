@@ -1,5 +1,5 @@
 // TaxMate service worker: app shell cache + offline page. Never caches API / Supabase traffic.
-const VERSION = 'tm-v34';
+const VERSION = 'tm-v35';   // V82: new cache — drops build files saved by mistake as an HTML page
 const SHELL = ['/offline.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -19,11 +19,17 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/')) {
-    // hashed build files: cache first
-    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
-      if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
-      return res;
-    })));
+    // hashed build files: cache first. V82: never keep an HTML page in place of a build file (a missing file
+    // used to come back as the app page → saved → "Failed to load module" → endless reloads).
+    const isPage = (res) => /text\/html/i.test(res.headers.get('content-type') || '');
+    e.respondWith(caches.match(req).then((hit) => {
+      if (hit && !isPage(hit)) return hit;
+      if (hit) caches.open(VERSION).then(c => c.delete(req));
+      return fetch(req).then((res) => {
+        if (res.ok && !isPage(res)) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); }
+        return res;
+      });
+    }));
   }
 });
 
