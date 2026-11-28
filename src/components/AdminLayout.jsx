@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { logActivity } from '../lib/activity';
 import { useUnreadMessages } from '../lib/messages';
 import MobileDrawer from './MobileDrawer';
+import QuickClientSearch from './QuickClientSearch';
 import { supabase } from '../lib/supabase';
 import { loadPayFlag } from '../lib/share';
 import {
@@ -137,8 +138,9 @@ export default function AdminLayout() {
           >
             <Menu size={20} />
           </button>
-          <div className="flex-1" />
-          <div className="text-xs text-gray-500 hidden sm:block">
+          {/* V83: quick client search, on the same line as the date */}
+          <div className="flex min-w-0 flex-1"><QuickClientSearch /></div>
+          <div className="text-xs text-gray-500 hidden md:block whitespace-nowrap">
             {new Date().toLocaleDateString('en-LK', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </header>
