@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { FileSpreadsheet, Loader2, RefreshCw, Save, Printer, Plus, Trash2, AlertTriangle, CheckCircle2, XCircle, ChevronDown, Lock } from 'lucide-react';
 import { supabase, fmtDate } from '../lib/supabase';
+import IrdAttachmentsPack from './IrdAttachmentsPack';
 import { DRAFT_YEARS, DRAFT_STATUS, buildDraft, checkDraft, draftCages, openDraft, fmt2, r2 } from '../lib/ramisDraft';
 
 // ─── Column sets for the editable tables ─────────────────────────
@@ -100,6 +101,7 @@ export default function RamisDraftAdmin({ client, calculations }) {
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [localAttach, setLocalAttach] = useState({});   // V84: ticks before a draft is saved
 
   const calc = calculations.find(c => c.id === calcId) ?? null;
 
@@ -152,7 +154,10 @@ export default function RamisDraftAdmin({ client, calculations }) {
   };
   const ed = (path) => (v) => { setData(d => setIn(d, path, v)); setDirty(true); };
 
+  const onAttach = (a) => { if (data) { setData((d) => ({ ...d, attach: a })); setDirty(true); } else setLocalAttach(a); };
+
   return (
+    <div className="space-y-4">
     <div className="card">
       <div className="card-header flex-wrap gap-2"><FileSpreadsheet size={16} /> RAMIS filing draft
         <span className="text-[10px] font-bold uppercase tracking-wide bg-gray-800 text-white rounded px-1.5 py-0.5 inline-flex items-center gap-1"><Lock size={9} /> Admin only</span>
@@ -269,6 +274,8 @@ export default function RamisDraftAdmin({ client, calculations }) {
           </>}
         </>}
       </div>
+    </div>
+    {!loading && <IrdAttachmentsPack client={client} year={year} calc={calc} draft={data} ctx={ctx} attach={data ? (data.attach || {}) : localAttach} onAttach={onAttach} />}
     </div>
   );
 }
