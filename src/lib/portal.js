@@ -31,6 +31,20 @@ export function inviteMessage({ name, url, role = 'client' }) {
        'Thank you,', FIRM.name, FIRM.phone].join('\n');
 }
 
+// V86: login created with a one-time password — link + email + password in one message
+export const loginUrl = (email) => `${window.location.origin}/login${email ? `?email=${encodeURIComponent(email)}` : ''}`;
+export function tempLoginMessage({ name, email, password, reset = false }) {
+  return [`Dear ${firstName(name)},`, '',
+    reset ? `Here is a new one-time password for your ${FIRM.name} client portal.`
+      : `Your ${FIRM.name} client portal is ready. You can see your tax calculations, returns and invoices, and confirm drafts online.`, '',
+    `1. Open: ${loginUrl(email)}`,
+    `2. Email: ${email}`,
+    `3. One-time password: ${password}`, '',
+    'When you sign in you can set your own password, or keep this one.',
+    'ඇතුළු වූ පසු ඔබේම password එකක් දාන්න හෝ මෙම password එකම දිගටම පාවිච්චි කරන්න පුළුවන්.', '',
+    'Please keep this password private.', '', 'Thank you,', FIRM.name, FIRM.phone].join('\n');
+}
+
 export function resetMessage({ name, url }) {
   return [`Dear ${firstName(name)},`, '', `Use this link to set a new password for your ${FIRM.name} portal (valid for 3 days):`, url, '',
     'If you did not ask for this, you can ignore this message.', '', 'Thank you,', FIRM.name].join('\n');
