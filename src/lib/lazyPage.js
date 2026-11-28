@@ -5,15 +5,14 @@ import { lazy } from 'react';
 const RELOAD_KEY = 'tm-chunk-reload';
 const isChunkError = (e) => /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|ChunkLoadError|Loading chunk/i.test(String(e?.message || e));
 
+// V82: remember WHEN we last reloaded (not just "once") — a page that loads fine must not clear the guard,
+// otherwise one broken background file reloads the app again and again.
 function withRetry(loader) {
-  return () => loader().then((m) => {
-    try { sessionStorage.removeItem(RELOAD_KEY); } catch { /* private mode */ }
-    return m;
-  }).catch((e) => {
-    let reloaded = false;
-    try { reloaded = sessionStorage.getItem(RELOAD_KEY) === '1'; } catch { /* private mode */ }
-    if (isChunkError(e) && !reloaded) {
-      try { sessionStorage.setItem(RELOAD_KEY, '1'); } catch { /* private mode */ }
+  return () => loader().catch((e) => {
+    let last = 0;
+    try { last = Number(sessionStorage.getItem(RELOAD_KEY)) || 0; } catch { /* private mode */ }
+    if (isChunkError(e) && Date.now() - last > 5 * 60 * 1000) {
+      try { sessionStorage.setItem(RELOAD_KEY, String(Date.now())); } catch { /* private mode */ }
       window.location.reload();
       return new Promise(() => {});           // keep showing the loader until the reload happens
     }
