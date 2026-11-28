@@ -88,17 +88,17 @@ export function splitDoc(html) {
 /**
  * docs = [{ title, html }] — html built WITHOUT a toolbar. cover = { name, tin, year, lists: [{ title, items: [{ sn, en, on }] }] }
  */
-export function buildPackHtml(docs, cover) {
+export function buildPackHtml(docs, cover, { sign = true } = {}) {
   const payload = JSON.stringify(docs.map((x) => ({ title: x.title, ...splitDoc(x.html) }))).replace(/</g, '\\u003c');
   const lists = (cover.lists || []).map((l) => `<h3>${esc(l.title)}</h3><table><tr><th>S/N</th><th>Description</th><th>Relevant</th></tr>${l.items.map((x) => `<tr><td>${x.sn}</td><td>${esc(x.en)}</td><td style="text-align:center">${x.on ? '☑' : '☐'}</td></tr>`).join('')}</table>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>IRD_Attachments_${esc(String(cover.year).replace('/', '-'))}_${esc(String(cover.name || '').replace(/\s+/g, '_'))}</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>IRD_Attachments_${esc(String(cover.year).replace('/', '-'))}_${esc(String(cover.name || '').replace(/\s+/g, '_'))}${sign ? '' : '_without_signature'}</title>
 <style>*{box-sizing:border-box}body{margin:0;background:#e5e7eb;font:12px Arial,Helvetica,sans-serif;color:#111}
 .bar{position:sticky;top:0;z-index:5;background:#12294A;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center}.bar button{background:#C9A227;color:#12294A;border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer}
 .sheet{background:#fff;max-width:900px;margin:14px auto;padding:22px 30px;box-shadow:0 1px 4px rgba(0,0,0,.15)}.doc{display:block}
 .cover h1{font-size:18px;margin:0 0 4px}.cover table{border-collapse:collapse;width:100%;margin:6px 0 12px}.cover td,.cover th{border:1px solid #c9c3a9;padding:5px 8px;text-align:left}.cover th{background:#faf8ef}
 .cover h3{margin:14px 0 4px;font-size:13px}.toc li{margin:2px 0}
 @media print{body{background:#fff}.bar{display:none}.sheet{box-shadow:none;margin:0;max-width:none;padding:0}.sheet+.sheet{break-before:page}}@page{size:A4;margin:12mm}</style></head><body>
-<div class="bar"><b>IRD attachments</b><span style="opacity:.85">${esc(cover.name)} · Y/A ${esc(cover.year)} · ${docs.length} document${docs.length === 1 ? '' : 's'}</span><span style="flex:1"></span><button onclick="window.print()">Print / Save as PDF</button></div>
+<div class="bar"><b>IRD attachments</b><span style="opacity:.85">${esc(cover.name)} · Y/A ${esc(cover.year)} · ${docs.length} document${docs.length === 1 ? '' : 's'} · ${sign ? 'with signature lines' : 'without signature'}</span><span style="flex:1"></span><button onclick="window.print()">Print / Save as PDF</button></div>
 <div class="sheet cover"><h1>Documents attached to the return of income</h1><div>${esc(cover.name)}${cover.tin ? ` · TIN ${esc(cover.tin)}` : ''} · Year of assessment ${esc(cover.year)}</div>
 ${lists}<h3>Documents in this file</h3><ol class="toc">${docs.map((x) => `<li>${esc(x.title)}</li>`).join('')}</ol></div>
 <div id="docs"></div>
